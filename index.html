@@ -856,29 +856,98 @@ function getDB(){
   return _db;
 }
 
-const STORAGE_KEY = 'pricedesk_v2'; // bumped to v2 — clears old cached data on all browsers
-// On first load with v2, old v1 data is ignored and fresh defaults load correctly
+const STORAGE_KEY = 'pricedesk_v2';
 
-// ── Save: Supabase first, localStorage as fallback ────
+// ── Ensure table exists (creates it if missing) ───────
+async function ensureTable(){
+  const db = getDB();
+  if(!db) return false;
+  try{
+    // Try a simple select — if table doesn't exist this errors
+    const {error} = await db.from('app_data').select('key').limit(1);
+    if(!error) return true;
+    // Table missing — show setup message
+    showDbSetupBanner();
+    return false;
+  } catch(e){ return false; }
+}
+
+function showDbSetupBanner(){
+  // Only show once
+  if(document.getElementById('db-setup-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'db-setup-banner';
+  b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9998;background:#1a0a0a;border-bottom:2px solid var(--re);padding:12px 20px;display:flex;align-items:center;gap:14px;font-size:13px';
+  b.innerHTML = `
+    <span style="color:var(--re);font-size:18px">⚠</span>
+    <div style="flex:1">
+      <strong style="color:var(--tx)">Database table not set up.</strong>
+      <span style="color:var(--tx2);margin-left:8px">Go to Supabase → SQL Editor → paste and run the setup SQL → then reload.</span>
+    </div>
+    <button onclick="showSqlSetupModal()" style="background:var(--re);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;flex-shrink:0">Run Setup SQL →</button>
+    <span onclick="this.parentElement.remove()" style="cursor:pointer;color:var(--tx3);font-size:20px;line-height:1;flex-shrink:0">×</span>`;
+  document.body.prepend(b);
+}
+
+function showSqlSetupModal(){
+  const sql = `-- Run this in Supabase → SQL Editor → New Query → Run
+CREATE TABLE IF NOT EXISTS app_data (
+  key         TEXT PRIMARY KEY,
+  value       JSONB NOT NULL,
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE app_data ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_read"   ON app_data FOR SELECT USING (true);
+CREATE POLICY "allow_insert" ON app_data FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_update" ON app_data FOR UPDATE USING (true);`;
+  setModal(`<div class="mhdr"><div class="mtl">🗄 Database Setup — Run this SQL</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="info mb12">Copy everything below → go to <strong style="color:var(--ac)">supabase.com</strong> → your project → <strong>SQL Editor</strong> → New Query → paste → click <strong>Run</strong></div>
+      <div style="background:#0a0c12;border:1px solid var(--bd);border-radius:6px;padding:14px;font-family:monospace;font-size:12px;color:var(--gr);line-height:1.7;white-space:pre;overflow-x:auto">${sql}</div>
+      <button onclick="navigator.clipboard.writeText(\`${sql}\`).then(()=>toast('SQL copied!','green'))" class="btn bg bsm" style="margin-top:12px">📋 Copy SQL</button>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg" onclick="closeModal()">Close</button>
+      <button class="btn bp" onclick="closeModal();window.open('https://supabase.com/dashboard/project/fcmesdnagvrdmjzzuwue/sql/new','_blank')">Open Supabase SQL Editor →</button>
+    </div>`);
+}
+
+// ── Save: Supabase PRIMARY, localStorage as backup ────
 async function save(){
-  // Include email/supabase config in main payload so it persists everywhere
   const cfgStored = JSON.parse(localStorage.getItem(CFG_KEY)||'{}');
   const payload = {
     skuDB, brands, users, THRESHOLDS,
     COMM_MYNTRA, COMM_AJIO_PPMP, COMM_AJIO_CC, COMM_AMAZON,
-    _cfg: cfgStored
+    _cfg: cfgStored,
+    savedAt: new Date().toISOString()
   };
+  // Always save to localStorage immediately as instant backup
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch(e){}
+  // Save to Supabase (primary permanent storage)
   const db = getDB();
   if(db){
     updateSyncBadge(false);
-    const {error} = await db.from('app_data').upsert({
-      key: STORAGE_KEY,
-      value: payload,
-      updated_at: new Date().toISOString()
-    },{onConflict:'key'});
-    if(error) console.warn('Supabase save error:', error.message);
-    else updateSyncBadge(true);
+    try{
+      const {error} = await db.from('app_data').upsert({
+        key: STORAGE_KEY,
+        value: payload,
+        updated_at: new Date().toISOString()
+      },{onConflict:'key'});
+      if(error){
+        console.warn('Supabase save error:', error.message);
+        updateSyncBadge(false, 'Error: '+error.message);
+        if(error.message.includes('does not exist') || error.code === '42P01'){
+          showDbSetupBanner();
+        }
+      } else {
+        updateSyncBadge(true);
+        // Remove setup banner if save succeeded
+        document.getElementById('db-setup-banner')?.remove();
+      }
+    } catch(e){
+      console.warn('Supabase save exception:', e);
+      updateSyncBadge(false, 'Connection error');
+    }
   }
 }
 
@@ -887,15 +956,34 @@ async function loadFromStorage(){
   const db = getDB();
   if(db){
     try{
-      const {data,error} = await db.from('app_data').select('value').eq('key',STORAGE_KEY).single();
-      if(!error && data?.value){ applyData(data.value); updateSyncBadge(true); return true; }
+      const {data, error} = await db.from('app_data').select('value').eq('key',STORAGE_KEY).single();
+      if(!error && data?.value){
+        applyData(data.value);
+        updateSyncBadge(true);
+        console.log('Loaded from Supabase ✓');
+        return true;
+      }
+      if(error && (error.message.includes('does not exist') || error.code === '42P01')){
+        showDbSetupBanner();
+      }
+      // No data in Supabase yet — first time setup
+      if(error?.code === 'PGRST116'){
+        console.log('No data in Supabase yet — will save on first change');
+      }
     } catch(e){ console.warn('Supabase load error:', e); }
   }
+  // Fallback to localStorage
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){ applyData(JSON.parse(raw)); updateSyncBadge(false); return true; }
+    if(raw){
+      applyData(JSON.parse(raw));
+      updateSyncBadge(false, 'Local only — push to cloud');
+      // Auto-push localStorage data to Supabase so it's never lost again
+      setTimeout(()=>save(), 2000);
+      return true;
+    }
   } catch(e){}
-  updateSyncBadge(false);
+  updateSyncBadge(false, 'No saved data');
   return false;
 }
 
@@ -931,16 +1019,26 @@ function applyData(d){
   });
 }
 
-function updateSyncBadge(synced){
+function updateSyncBadge(synced, msg){
   const b = document.getElementById('sync-badge');
   if(!b) return;
   b.style.display = '';
-  if(getDB()){
-    b.innerHTML = synced ? '&#9729; Synced' : '&#9729; Saving&hellip;';
-    b.style.color = synced ? 'var(--gr)' : 'var(--ac)';
+  b.style.cursor = synced ? 'default' : 'pointer';
+  if(msg && !synced){
+    b.innerHTML = '&#9888; ' + msg;
+    b.style.color = 'var(--re)';
+    b.title = msg;
+    b.onclick = () => showSqlSetupModal();
+  } else if(synced){
+    b.innerHTML = '&#9729; Synced';
+    b.style.color = 'var(--gr)';
+    b.title = 'Data saved to Supabase database';
+    b.onclick = null;
   } else {
-    b.innerHTML = '&#128190; Local only';
-    b.style.color = 'var(--tx3)';
+    b.innerHTML = '&#9729; Saving&hellip;';
+    b.style.color = 'var(--ac)';
+    b.title = 'Saving to database...';
+    b.onclick = null;
   }
 }
 
@@ -2551,6 +2649,9 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   try{ _db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
   catch(e){ console.warn('Supabase init failed:', e); }
   loadConfig();
+  // Check table exists before loading
+  const tableOk = await ensureTable();
+  if(!tableOk){ console.warn('app_data table missing — showing setup guide'); }
   await loadFromStorage();
   populateFilters();
   renderBrandSummary();
