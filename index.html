@@ -1162,6 +1162,45 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 const SUPABASE_URL  = 'https://fcmesdnagvrdmjzzuwue.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbWVzZG5hZ3ZyZG1qenp1d3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxNjM4NTgsImV4cCI6MjA4OTczOTg1OH0.fS1ecV898Dmrka6hr3R0RE6gcKlneWUPbDyDPv30_qU';
 
+// ═══════════════════════════════════════════════════════
+// SECURITY HELPERS
+// ═══════════════════════════════════════════════════════
+// HTML-escape to prevent XSS in innerHTML
+function esc(s){
+  if(s==null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+// Escape for use inside single-quoted JS strings in onclick/onchange attributes
+function escAttr(s){
+  if(s==null) return '';
+  return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/</g,'\\x3c').replace(/>/g,'\\x3e');
+}
+// Sanitize formula expressions — allow only safe math/variable tokens
+function sanitizeExpr(expr){
+  if(!expr) return '0';
+  // Allow: numbers, decimals, operators, parens, commas, spaces, Math.*, known variable names
+  // Block: assignment, function calls to non-Math, property access beyond Math, semicolons, brackets
+  const blocked = /[;{}\[\]\\]|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|alert|prompt|confirm|setTimeout|setInterval|setImmediate)\b)/;
+  if(blocked.test(expr)){
+    console.warn('Blocked unsafe expression:', expr);
+    return '0';
+  }
+  return expr;
+}
+// Login rate limiter
+const _loginAttempts = {};
+function checkLoginRate(email){
+  const now = Date.now();
+  const rec = _loginAttempts[email] || { count:0, firstAttempt:now, lockedUntil:0 };
+  if(now < rec.lockedUntil) return { allowed:false, waitSec: Math.ceil((rec.lockedUntil - now)/1000) };
+  // Reset window after 15 minutes
+  if(now - rec.firstAttempt > 15*60*1000){ rec.count=0; rec.firstAttempt=now; }
+  rec.count++;
+  if(rec.count > 5){ rec.lockedUntil = now + 60*1000; _loginAttempts[email]=rec; return { allowed:false, waitSec:60 }; }
+  _loginAttempts[email]=rec;
+  return { allowed:true };
+}
+
 let _db = null;
 function getDB(){
   // Keys are hardcoded — always connects regardless of cache or localStorage
@@ -1588,7 +1627,7 @@ function renderMyntra(){
   const br=(v.profit)<(THRESHOLDS[d.cat]||0);
   const t=el('ct-myntra');if(!t)return;
   t.innerHTML=`
-    <tr class="sh"><td colspan="2">Pricing — Category: ${d.cat}</td></tr>
+    <tr class="sh"><td colspan="2">Pricing — Category: ${esc(d.cat)}</td></tr>
     <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.myntra.cost=+this.value;renderMyntra()"></td></tr>
     <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.myntra.markup=+this.value;renderMyntra()"></td></tr>
     <tr class="cform"><td>MRP = Cost × (1+Markup%) → round to ₹50</td><td class="mono" style="color:var(--bl)">₹${v.mrp.toLocaleString('en-IN')}</td></tr>
@@ -1626,7 +1665,7 @@ function renderAjioPPMP(){
   const payout=sp-commAmt-gstAmt-fwd-ret-platFee-retProv;const profRs=(payout-d.cost).toFixed(0);
   const pp=((payout-d.cost)/sp*100).toFixed(1);const br=(payout-d.cost)<(THRESHOLDS[d.cat]||0);
   const t=el('ct-ajio-ppmp');if(!t)return;
-  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${d.cat}</td></tr>
+  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${esc(d.cat)}</td></tr>
     <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.ajioppmp.cost=+this.value;renderAjioPPMP()"></td></tr>
     <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.ajioppmp.markup=+this.value;renderAjioPPMP()"></td></tr>
     <tr class="cform"><td>MRP</td><td class="mono" style="color:var(--bl)">₹${mrp.toLocaleString('en-IN')}</td></tr>
@@ -1650,7 +1689,7 @@ function renderAjioCC(){
   const commAmt=sp*eff/100;const gstAmt=commAmt*gst;const payout=sp-commAmt-gstAmt;
   const profRs=(payout-d.cost).toFixed(0);const pp=((payout-d.cost)/sp*100).toFixed(1);const br=(payout-d.cost)<(THRESHOLDS[d.cat]||0);
   const t=el('ct-ajio-cc');if(!t)return;
-  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${d.cat}</td></tr>
+  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${esc(d.cat)}</td></tr>
     <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.ajiocc.cost=+this.value;renderAjioCC()"></td></tr>
     <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.ajiocc.markup=+this.value;renderAjioCC()"></td></tr>
     <tr class="cform"><td>MRP</td><td class="mono" style="color:var(--bl)">₹${mrp.toLocaleString('en-IN')}</td></tr>
@@ -1673,7 +1712,7 @@ function renderAmazon(){
   const payout=sp-allFees-gstAmt-d.ads-retProv;const profRs=(payout-d.cost).toFixed(0);
   const pp=((payout-d.cost)/sp*100).toFixed(1);const br=(payout-d.cost)<(THRESHOLDS[d.cat]||0);
   const t=el('ct-amazon');if(!t)return;
-  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${d.cat}</td></tr>
+  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${esc(d.cat)}</td></tr>
     <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.amazon.cost=+this.value;renderAmazon()"></td></tr>
     <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.amazon.markup=+this.value;renderAmazon()"></td></tr>
     <tr class="cform"><td>MRP</td><td class="mono" style="color:var(--bl)">₹${mrp.toLocaleString('en-IN')}</td></tr>
@@ -1708,25 +1747,25 @@ function buildCommMyntra(){
   const t=el('comm-myntra-table');if(!t)return;
   let h=`<thead><tr><th>Category</th>${SLABS.map(s=>`<th>${s.label}</th>`).join('')}</tr></thead><tbody>`;
   CATS.forEach(cat=>{const sl=COMM_MYNTRA[cat]||[0,0,18.88,18.88,18.88];
-    h+=`<tr><td>${cat}</td>${sl.map((v,i)=>`<td><input class="ci" value="${v}" onchange="COMM_MYNTRA['${cat}'][${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
+    h+=`<tr><td>${esc(cat)}</td>${sl.map((v,i)=>`<td><input class="ci" value="${v}" onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 function buildCommAjioPPMP(){
   const t=el('comm-ajio-ppmp-table');if(!t)return;
   let h='<thead><tr><th>Category</th><th>Commission %</th></tr></thead><tbody>';
-  CATS.forEach(cat=>{h+=`<tr><td>${cat}</td><td><input class="ci" value="${COMM_AJIO_PPMP[cat]||18.88}" onchange="COMM_AJIO_PPMP['${cat}']=+this.value;triggerRecalc()"></td></tr>`;});
+  CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AJIO_PPMP[cat]||18.88}" onchange="COMM_AJIO_PPMP['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 function buildCommAjioCC(){
   const t=el('comm-ajio-cc-table');if(!t)return;
   let h='<thead><tr><th>Category</th><th>Commission %</th></tr></thead><tbody>';
-  CATS.forEach(cat=>{h+=`<tr><td>${cat}</td><td><input class="ci" value="${COMM_AJIO_CC[cat]||18.88}" onchange="COMM_AJIO_CC['${cat}']=+this.value;triggerRecalc()"></td></tr>`;});
+  CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AJIO_CC[cat]||18.88}" onchange="COMM_AJIO_CC['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 function buildCommAmazon(){
   const t=el('comm-amazon-table');if(!t)return;
   let h='<thead><tr><th>Category</th><th>Referral Fee %</th></tr></thead><tbody>';
-  CATS.forEach(cat=>{h+=`<tr><td>${cat}</td><td><input class="ci" value="${COMM_AMAZON[cat]||17}" onchange="COMM_AMAZON['${cat}']=+this.value;triggerRecalc()"></td></tr>`;});
+  CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AMAZON[cat]||17}" onchange="COMM_AMAZON['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 function saveComm(){triggerRecalc();renderSKUs();save('comm_myntra');save('comm_ppmp');save('comm_cc');save('comm_amazon');toast('✓ Commission saved to database','green');}
@@ -1741,12 +1780,12 @@ function renderThresholds(){
     const status=breachedSKUs.length?`<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(245,87,92,.12);color:var(--re)">${breachedSKUs.length} breach${breachedSKUs.length>1?'es':''}</span>`:`<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(45,212,160,.12);color:var(--gr)">✓ OK</span>`;
     return`<div class="thr-row">
       <div style="flex:1">
-        <strong>${cat}</strong>
+        <strong>${esc(cat)}</strong>
         <div class="st" style="margin-top:2px">${skuDB.filter(s=>s.category===cat).length} SKUs</div>
       </div>
       <div class="flex gap8" style="align-items:center">
         <span style="font-size:13px;color:var(--ac)">₹</span>
-        <input class="thr-input" type="number" data-cat="${cat}" value="${THRESHOLDS[cat]||0}" min="0" oninput="THRESHOLDS['${cat}']=+this.value;updateAlerts();renderBreachList()">
+        <input class="thr-input" type="number" data-cat="${esc(cat)}" value="${THRESHOLDS[cat]||0}" min="0" oninput="THRESHOLDS['${escAttr(cat)}']=+this.value;updateAlerts();renderBreachList()">
       </div>
       ${status}
     </div>`;
@@ -1786,7 +1825,7 @@ function updateAlerts(){
   if(dashAlerts){
     dashAlerts.innerHTML=breached.slice(0,5).map(s=>{
       const c=calcSKU(s);const brand=brands.find(b=>b.id===s.brandId);
-      return`<div class="aitem"><div style="font-size:15px">⚠️</div><div><div style="font-size:13px"><strong style="color:var(--re)">Threshold Breach</strong> — <strong>${s.styleId}</strong> · ${brand?.name||''} · ${s.category}</div><div class="st" style="margin-top:3px">Net Profit: <span style="color:var(--re);font-family:var(--mono)">₹${c.profitRs.toFixed(0)}</span> · Threshold: ₹${c.threshold} · <a href="#" onclick="toggleIgnore('${s.id}');return false" style="color:var(--ac);text-decoration:none">Ignore this SKU →</a></div></div></div>`;
+      return`<div class="aitem"><div style="font-size:15px">⚠️</div><div><div style="font-size:13px"><strong style="color:var(--re)">Threshold Breach</strong> — <strong>${esc(s.styleId)}</strong> · ${esc(brand?.name)} · ${esc(s.category)}</div><div class="st" style="margin-top:3px">Net Profit: <span style="color:var(--re);font-family:var(--mono)">₹${c.profitRs.toFixed(0)}</span> · Threshold: ₹${c.threshold} · <a href="#" onclick="toggleIgnore('${escAttr(s.id)}');return false" style="color:var(--ac);text-decoration:none">Ignore this SKU →</a></div></div></div>`;
     }).join('');
     if(breached.length>5)dashAlerts.innerHTML+=`<div class="st" style="padding:8px 14px">…and ${breached.length-5} more. <a href="#" onclick="nav('thresholds');return false" style="color:var(--ac)">View all →</a></div>`;
   }
@@ -1817,15 +1856,15 @@ function renderBrands(){
     return`<div class="brand-card">
       <div class="flexb mb12">
         <div>
-          <div style="font-size:14px;font-weight:700">${b.name}</div>
+          <div style="font-size:14px;font-weight:700">${esc(b.name)}</div>
           <div class="flex gap8" style="margin-top:5px;flex-wrap:wrap">
-            <span class="tag ${mpTags[b.model]||'ta'}">${b.marketplace}</span>
-            <span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${modelLabels[b.model]}</span>
+            <span class="tag ${mpTags[b.model]||'ta'}">${esc(b.marketplace)}</span>
+            <span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${esc(modelLabels[b.model])}</span>
           </div>
         </div>
         <div class="flex gap8">
-          <button class="btn bg bxs" onclick="openBrandModal('${b.id}')">✎</button>
-          <button class="btn br bxs" onclick="deleteBrand('${b.id}')">✕</button>
+          <button class="btn bg bxs" onclick="openBrandModal('${escAttr(b.id)}')">✎</button>
+          <button class="btn br bxs" onclick="deleteBrand('${escAttr(b.id)}')">✕</button>
         </div>
       </div>
       ${b.commOverride!=null?`<div class="st mb8">🔒 Commission override: <span class="mono" style="color:var(--ac)">${b.commOverride}%</span></div>`:'<div class="st mb8">Auto commission from settings</div>'}
@@ -1845,15 +1884,15 @@ function renderBrandSummary(){
   const modelLabels={'myntra':'Standard','ajio-ppmp':'PPMP','ajio-cc':'CC','amazon':'Fixed'};
   t.innerHTML=brands.map(b=>{
     const skus=skuDB.filter(s=>s.brandId===b.id);
-    if(!skus.length)return`<tr><td><strong>${b.name}</strong></td><td><span class="tag ${mpTags[b.model]||'ta'}">${b.marketplace}</span></td><td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${modelLabels[b.model]}</span></td><td class="mono st">0</td><td>—</td><td>—</td><td><span class="tag bs">No SKUs</span></td></tr>`;
+    if(!skus.length)return`<tr><td><strong>${esc(b.name)}</strong></td><td><span class="tag ${mpTags[b.model]||'ta'}">${esc(b.marketplace)}</span></td><td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${esc(modelLabels[b.model])}</span></td><td class="mono st">0</td><td>—</td><td>—</td><td><span class="tag bs">No SKUs</span></td></tr>`;
     const calcs=skus.map(s=>calcSKU(s));
     const avgComm=(calcs.reduce((a,c)=>a+c.comm,0)/calcs.length).toFixed(1);
     const avgProfit=(calcs.reduce((a,c)=>a+c.profitRs,0)/calcs.length).toFixed(0);
     const breached=calcs.filter((c,i)=>!skus[i].ignoreThreshold&&c.isBreach).length;
     return`<tr>
-      <td><strong>${b.name}</strong></td>
-      <td><span class="tag ${mpTags[b.model]||'ta'}">${b.marketplace}</span></td>
-      <td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${modelLabels[b.model]}</span></td>
+      <td><strong>${esc(b.name)}</strong></td>
+      <td><span class="tag ${mpTags[b.model]||'ta'}">${esc(b.marketplace)}</span></td>
+      <td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${esc(modelLabels[b.model])}</span></td>
       <td class="mono">${skus.length}</td>
       <td class="mono">${avgComm}%</td>
       <td class="mono" style="color:${parseFloat(avgProfit)>0?'var(--gr)':'var(--re)'}">₹${avgProfit}</td>
@@ -1869,7 +1908,7 @@ function openBrandModal(id){
   const mpOpts=['Myntra','Ajio','Amazon'].map(m=>`<option ${b.marketplace===m?'selected':''}>${m}</option>`).join('');
   setModal(`<div class="mhdr"><div class="mtl">${isEdit?'✎ Edit Brand':'+ New Brand'}</div><span class="mclose" onclick="closeModal()">×</span></div>
     <div class="mbody">
-      <div class="fg"><label class="fl">Brand Name</label><input class="fi" id="bn-name" placeholder="e.g. Fusionic — Ajio CC" value="${b.name}"></div>
+      <div class="fg"><label class="fl">Brand Name</label><input class="fi" id="bn-name" placeholder="e.g. Fusionic — Ajio CC" value="${esc(b.name)}"></div>
       <div class="frow">
         <div class="fg"><label class="fl">Marketplace</label><select class="fi" id="bn-mp" style="appearance:none">${mpOpts}</select></div>
         <div class="fg"><label class="fl">Commission Model</label>
@@ -1888,9 +1927,9 @@ function openBrandModal(id){
       <div class="info" id="bn-model-note" style="margin-top:0"></div>
     </div>
     <div class="mfoot">
-      ${isEdit?`<button class="btn br bsm" onclick="if(deleteBrand('${b.id}'))closeModal()" style="margin-right:auto">Delete</button>`:''}
+      ${isEdit?`<button class="btn br bsm" onclick="if(deleteBrand('${escAttr(b.id)}'))closeModal()" style="margin-right:auto">Delete</button>`:''}
       <button class="btn bg" onclick="closeModal()">Cancel</button>
-      <button class="btn bp" onclick="saveBrand('${isEdit?b.id:''}')">Save Brand</button>
+      <button class="btn bp" onclick="saveBrand('${isEdit?escAttr(b.id):''}')">Save Brand</button>
     </div>`);
   updateBrandModelNote();
 }
@@ -1960,7 +1999,7 @@ function renderActiveFilterChips(){
     const e=el(fid);
     if(e&&e.value){
       const text=e.options[e.selectedIndex]?.text||e.value;
-      chips.push(`<span class="af-chip" onclick="el('${fid}').value='';renderSKUs()">${labels[fid]}: ${text} ✕</span>`);
+      chips.push(`<span class="af-chip" onclick="el('${escAttr(fid)}').value='';renderSKUs()">${esc(labels[fid])}: ${esc(text)} ✕</span>`);
     }
   });
   const sc=el('active-filter-chips');
@@ -1988,15 +2027,15 @@ function renderSKUs(){
     const profColor=pp<0?'var(--re)':c.isBreach?'var(--ac)':'var(--gr)';
     // Status icon
     let statusIcon='';
-    if(s.ignoreThreshold) statusIcon=`<span class="ico-ignore" title="Threshold ignored — click to re-enable" onclick="toggleIgnore('${s.id}')">🔕</span>`;
-    else if(c.isBreach) statusIcon=`<span class="ico-breach" title="Threshold breached! Net profit ₹${c.profitRs.toFixed(0)} < ₹${c.threshold}">⚠️</span>`;
+    if(s.ignoreThreshold) statusIcon=`<span class="ico-ignore" title="Threshold ignored — click to re-enable" onclick="toggleIgnore('${escAttr(s.id)}')">🔕</span>`;
+    else if(c.isBreach) statusIcon=`<span class="ico-breach" title="Threshold breached! Net profit ₹${c.profitRs.toFixed(0)} &lt; ₹${c.threshold}">⚠️</span>`;
     else statusIcon=`<span class="ico-healthy" title="Healthy ✓">✅</span>`;
     return`<tr>
-      <td><div onclick="openImgModal('${s.id}')" style="cursor:pointer" title="Click to set image">${s.img?`<img src="${fixImg(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">🖼</div>`}</div></td>
-      <td class="mono" style="font-size:11px;font-weight:600">${s.styleId}</td>
-      <td>${brand?`<div style="font-size:12px;font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${brand.name}">${brand.name}</div><span class="bdg ${brand.model==='ajio-ppmp'?'bppmp':brand.model==='ajio-cc'?'bcc':'bi'}" style="font-size:10px">${modelLabels[brand.model]||'?'}</span>`:'<span class="st">—</span>'}</td>
-      <td><span class="tag tb" style="font-size:10px">${s.category}</span></td>
-      <td>${brand?.model==='myntra'?`<span class="bdg bi" style="font-size:10px">${s.level}</span>`:
+      <td><div onclick="openImgModal('${escAttr(s.id)}')" style="cursor:pointer" title="Click to set image">${s.img?`<img src="${esc(fixImg(s.img))}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">🖼</div>`}</div></td>
+      <td class="mono" style="font-size:11px;font-weight:600">${esc(s.styleId)}</td>
+      <td>${brand?`<div style="font-size:12px;font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(brand.name)}">${esc(brand.name)}</div><span class="bdg ${brand.model==='ajio-ppmp'?'bppmp':brand.model==='ajio-cc'?'bcc':'bi'}" style="font-size:10px">${esc(modelLabels[brand.model]||'?')}</span>`:'<span class="st">—</span>'}</td>
+      <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
+      <td>${brand?.model==='myntra'?`<span class="bdg bi" style="font-size:10px">${esc(s.level)}</span>`:
               `<span class="st" style="font-size:10px">N/A</span>`}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
@@ -2007,12 +2046,12 @@ function renderSKUs(){
       <td class="av" style="color:${profColor}">₹${c.profitRs.toFixed(0)}</td>
       <td>
         <div class="flex gap8" style="flex-wrap:wrap">
-          <button class="ignore-toggle ${s.ignoreThreshold?'active':''}" onclick="toggleIgnore('${s.id}')" title="${s.ignoreThreshold?'Click to re-enable threshold':'Click to ignore threshold for this SKU'}">
+          <button class="ignore-toggle ${s.ignoreThreshold?'active':''}" onclick="toggleIgnore('${escAttr(s.id)}')" title="${s.ignoreThreshold?'Click to re-enable threshold':'Click to ignore threshold for this SKU'}">
             ${s.ignoreThreshold?'🔕':'🔔'}
           </button>
           ${statusIcon}
-          <button class="btn bg bxs" onclick="startEdit('${s.id}')" title="Edit">✎</button>
-          <button class="btn br bxs" onclick="delSKU('${s.id}')" title="Delete">✕</button>
+          <button class="btn bg bxs" onclick="startEdit('${escAttr(s.id)}')" title="Edit">✎</button>
+          <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Delete">✕</button>
         </div>
       </td>
     </tr>`;
@@ -2169,14 +2208,14 @@ const ROLE_ACCESS={admin:'Full access — edit everything',manager:'Edit pricing
 function renderUsers(){
   const t=el('users-table-body');if(!t)return;
   t.innerHTML=users.map(u=>`<tr>
-    <td><strong>${u.name}</strong></td>
-    <td class="mono st">${u.email}</td>
-    <td><span class="bdg ${ROLE_COLORS[u.role]}">${ROLE_LABELS[u.role]}</span></td>
-    <td class="st">${u.added}</td>
+    <td><strong>${esc(u.name)}</strong></td>
+    <td class="mono st">${esc(u.email)}</td>
+    <td><span class="bdg ${ROLE_COLORS[u.role]}">${esc(ROLE_LABELS[u.role])}</span></td>
+    <td class="st">${esc(u.added)}</td>
     <td><div class="flex gap8">
-      <button class="btn bg bxs" onclick="openUserModal('${u.id}')">✎ Edit</button>
-      <button class="btn bg bxs" onclick="resetUserPassword('${u.id}')" title="Reset password">🔑</button>
-      ${u.id!=='u0'&&u.id!=='u1'?`<button class="btn br bxs" onclick="deleteUser('${u.id}')">✕ Remove</button>`:''}
+      <button class="btn bg bxs" onclick="openUserModal('${escAttr(u.id)}')">✎ Edit</button>
+      <button class="btn bg bxs" onclick="resetUserPassword('${escAttr(u.id)}')" title="Reset password">🔑</button>
+      ${u.id!=='u0'&&u.id!=='u1'?`<button class="btn br bxs" onclick="deleteUser('${escAttr(u.id)}')">✕ Remove</button>`:''}
     </div></td>
   </tr>`).join('');
 }
@@ -2185,11 +2224,11 @@ function openUserModal(id){
   const _udefault={id:'',name:'',email:'',role:'viewer',added:new Date().toISOString().slice(0,10)};
   const u=id?(users.find(x=>x.id===id)||_udefault):_udefault;
   const isEdit=!!(id&&u.id);
-  const roleOpts=ROLES.map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${ROLE_LABELS[r]} — ${ROLE_ACCESS[r]}</option>`).join('');
+  const roleOpts=ROLES.map(r=>`<option value="${esc(r)}" ${u.role===r?'selected':''}>${esc(ROLE_LABELS[r])} — ${esc(ROLE_ACCESS[r])}</option>`).join('');
   setModal(`<div class="mhdr"><div class="mtl">${isEdit?'✎ Edit User':'+ Add User'}</div><span class="mclose" onclick="closeModal()">×</span></div>
     <div class="mbody">
-      <div class="fg"><label class="fl">Full Name *</label><input class="fi" id="u-name" placeholder="e.g. Priya Sharma" value="${u.name}"></div>
-      <div class="fg"><label class="fl">Email Address *</label><input class="fi" id="u-email" type="email" placeholder="priya@yourcompany.com" value="${u.email}"></div>
+      <div class="fg"><label class="fl">Full Name *</label><input class="fi" id="u-name" placeholder="e.g. Priya Sharma" value="${esc(u.name)}"></div>
+      <div class="fg"><label class="fl">Email Address *</label><input class="fi" id="u-email" type="email" placeholder="priya@yourcompany.com" value="${esc(u.email)}"></div>
       <div class="fg">
         <label class="fl">Role *</label>
         <select class="fi" id="u-role" style="appearance:none">${roleOpts}</select>
@@ -2199,9 +2238,9 @@ function openUserModal(id){
       </div>
     </div>
     <div class="mfoot">
-      ${isEdit&&id!=='u0'&&id!=='u1'?`<button class="btn br bsm" onclick="deleteUser('${id}').then(ok=>{if(ok)closeModal()})" style="margin-right:auto">Remove User</button>`:''}
+      ${isEdit&&id!=='u0'&&id!=='u1'?`<button class="btn br bsm" onclick="deleteUser('${escAttr(id)}').then(ok=>{if(ok)closeModal()})" style="margin-right:auto">Remove User</button>`:''}
       <button class="btn bg" onclick="closeModal()">Cancel</button>
-      <button class="btn bp" onclick="saveUser('${isEdit?id:''}')">${isEdit?'Update User':'Add User'}</button>
+      <button class="btn bp" onclick="saveUser('${isEdit?escAttr(id):''}')">${isEdit?'Update User':'Add User'}</button>
     </div>`);
 }
 
@@ -2324,7 +2363,7 @@ function renderWFBuilder(){
       ? `<span title="${r.desc||'Protected row'}" style="font-size:13px;opacity:.5;flex-shrink:0;cursor:default">🔒</span>`
       : `<span style="color:var(--tx3);cursor:pointer;font-size:14px;margin-left:4px;opacity:.4;flex-shrink:0"
            onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4"
-           onclick="WF['${m}'].splice(${idx},1);renderWFBuilder();save('wireframe')">✕</span>`;
+           onclick="WF['${escAttr(m)}'].splice(${idx},1);renderWFBuilder();save('wireframe')">✕</span>`;
     let actionRow = '';
     if(isLookup){
       actionRow = `<div style="margin-top:4px;margin-left:22px;display:flex;align-items:center;gap:8px">
@@ -2335,7 +2374,7 @@ function renderWFBuilder(){
       actionRow = `<div style="margin-top:5px;margin-left:22px;display:flex;align-items:center;gap:10px">
         ${!isLocked
           ? `<button style="padding:3px 12px;border-radius:5px;border:1px solid var(--ac);background:rgba(245,166,35,.1);color:var(--ac);font-size:11px;cursor:pointer;font-weight:600"
-               onclick="event.stopPropagation();openFB('${m}',${idx})">✎ Edit Formula</button>`
+               onclick="event.stopPropagation();openFB('${escAttr(m)}',${idx})">✎ Edit Formula</button>`
           : `<span style="font-size:10px;color:var(--tx3);opacity:.6">🔒 Protected</span>`}
         <span style="font-size:10px;font-family:var(--mono);color:var(--tx3);opacity:.7">${(r.expr||'').substring(0,60)}${(r.expr||'').length>60?'…':''}</span>
       </div>`;
@@ -2345,13 +2384,13 @@ function renderWFBuilder(){
       ondragstart="${isLocked?'':('wfDragStart(event,'+idx+')')}"
       ondragover="${isLocked?'':'wfDragOver(event)'}"
       ondragleave="${isLocked?'':'wfDragLeave(event)'}"
-      ondrop="${isLocked?'':`wfDrop(event,'${m}',${idx})`}"
+      ondrop="${isLocked?'':`wfDrop(event,'${escAttr(m)}',${idx})`}"
       ondragend="${isLocked?'':'wfDragEnd(event)'}">
       <div style="display:flex;align-items:center;width:100%;gap:6px">
         <span style="color:${isLocked?'var(--tx3)':'var(--ac)'};cursor:${isLocked?'default':'grab'};font-size:16px;user-select:none;flex-shrink:0;opacity:${isLocked?'.3':'1'}">⠿</span>
         <input style="flex:1;background:transparent;border:none;color:${isLocked?'var(--tx2)':'var(--tx)'};font-size:12px;font-family:var(--sans);outline:none"
           value="${r.l.replace(/"/g,'&quot;')}"
-          onchange="WF['${m}'][${idx}].l=this.value;save('wireframe')"
+          onchange="WF['${escAttr(m)}'][${idx}].l=this.value;save('wireframe')"
           onclick="event.stopPropagation()" ${isLocked?'readonly':''}>
         ${r.var ? `<span style="font-size:9px;color:var(--tx3);font-family:var(--mono);flex-shrink:0">[${r.var}]</span>` : ''}
         ${previewVal}
@@ -2582,7 +2621,7 @@ function previewImport(input){
       if(btn)btn.style.display=importRows.length?'':'none';
     } catch(err){
       const prev=document.getElementById('xi-preview');
-      if(prev)prev.innerHTML=`<div class="warn">Error reading file: ${err.message}</div>`;
+      if(prev)prev.innerHTML=`<div class="warn">Error reading file: ${esc(err.message)}</div>`;
     }
   };
   if(file.name.endsWith('.csv')) reader.readAsText(file);
@@ -2613,9 +2652,9 @@ function openImgModal(skuId){
   setModal(`<div class="mhdr"><div class="mtl">📷 Set Product Image</div><span class="mclose" onclick="closeModal()">×</span></div>
     <div class="mbody">
       ${fixed ? `<div style="text-align:center;margin-bottom:16px">
-        <img src="${fixed}" id="img-modal-preview" style="width:130px;height:130px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2);cursor:zoom-in" onclick="zoomImg('${fixed}')" onerror="this.style.display='none'">
+        <img src="${esc(fixed)}" id="img-modal-preview" style="width:130px;height:130px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2);cursor:zoom-in" onclick="zoomImg('${escAttr(fixed)}')" onerror="this.style.display='none'">
         <div style="margin-top:8px;display:flex;gap:8px;justify-content:center">
-          <button class="btn bg bsm" onclick="zoomImg('${fixed}')">🔍 Zoom</button>
+          <button class="btn bg bsm" onclick="zoomImg('${escAttr(fixed)}')">🔍 Zoom</button>
           <button class="btn br bsm" onclick="removeImgFromModal()">✕ Remove</button>
         </div>
       </div>` : ''}
@@ -2945,23 +2984,29 @@ const WARN_BEFORE    = 5  * 60 * 1000;  // warn 5 min before
 let _sessionTimer = null, _warnTimer = null, _countdownInterval = null;
 let currentUser = null;
 
-function doLogin(){
+async function doLogin(){
   const email = document.getElementById('login-email')?.value.trim().toLowerCase();
   const pass  = document.getElementById('login-pass')?.value;
-  const errEl = document.getElementById('login-err');
   if(!email||!pass){ showLoginErr('Please fill in both fields.'); return; }
-  // Find user in users array
+  // Rate limiting — block after 5 failed attempts
+  const rateCheck = checkLoginRate(email);
+  if(!rateCheck.allowed){ showLoginErr(`Too many attempts. Try again in ${rateCheck.waitSec}s.`); return; }
+  // Find user — use generic error to avoid email enumeration
   const user = users.find(u => u.email.toLowerCase()===email);
-  if(!user){ showLoginErr('No account found with that email.'); return; }
+  if(!user){ showLoginErr('Invalid email or password.'); return; }
   // Password check — stored as hash or plain (first login uses default password)
   const storedHash = user.passwordHash || null;
   const defaultPass = 'pricedesk123'; // default for new users
-  const inputHash = simpleHash(pass);
-  if(storedHash && storedHash !== inputHash){ showLoginErr('Incorrect password.'); return; }
-  if(!storedHash && pass !== defaultPass){ showLoginErr('Incorrect password. Default: pricedesk123'); return; }
-  // Set user password hash on first login
+  if(storedHash){
+    const valid = await verifyPassword(pass, storedHash);
+    if(!valid){ showLoginErr('Invalid email or password.'); return; }
+  } else {
+    if(pass !== defaultPass){ showLoginErr('Invalid email or password.'); return; }
+  }
+  // Set user password hash on first login (upgrade to SHA-256)
   const isFirstLogin = !storedHash;
-  if(isFirstLogin){ user.passwordHash = inputHash; save('users'); }
+  const needsUpgrade = storedHash && !storedHash.startsWith('sha256:');
+  if(isFirstLogin || needsUpgrade){ user.passwordHash = await secureHash(pass); await save('users'); }
   // Start session
   currentUser = user;
   sessionStorage.setItem(SESSION_KEY, JSON.stringify({userId:user.id, loginTime:Date.now()}));
@@ -2969,7 +3014,7 @@ function doLogin(){
   updateSidebarUser(user);
   startSessionTimer();
   if(isFirstLogin) sendWelcomeEmail(user);
-  toast(`Welcome back, ${user.name.split(' ')[0]}!`,'green');
+  toast(`Welcome back, ${esc(user.name.split(' ')[0])}!`,'green');
 }
 
 function showLoginErr(msg){
@@ -2999,7 +3044,7 @@ function openForgotPassword(){
   setTimeout(()=>document.getElementById('forgot-email')?.focus(), 100);
 }
 
-function doForgotPassword(){
+async function doForgotPassword(){
   const email = document.getElementById('forgot-email')?.value.trim().toLowerCase();
   const errEl = document.getElementById('forgot-err');
   const okEl  = document.getElementById('forgot-ok');
@@ -3009,26 +3054,26 @@ function doForgotPassword(){
   }
   const user = users.find(u=>u.email.toLowerCase()===email);
   if(!user){
-    // Don't reveal if email exists — show same success msg for security
-    if(errEl){errEl.textContent='No account found with that email address.';errEl.style.display='block';}
+    // Don't reveal if email exists — show generic success message
+    if(okEl){okEl.textContent='If an account exists with that email, a reset link has been sent.';okEl.style.display='block';}
+    if(errEl) errEl.style.display='none';
     return;
   }
-  // Generate temp password
-  const tempPass = 'PD-' + Math.random().toString(36).slice(2,8).toUpperCase();
-  user.passwordHash = simpleHash(tempPass);
-  save('users');
+  // Generate temp password using crypto-safe random
+  const tempPass = 'PD-'+crypto.getRandomValues(new Uint8Array(4)).reduce((s,b)=>s+b.toString(36),'').toUpperCase().slice(0,8);
+  user.passwordHash = await secureHash(tempPass);
+  await save('users');
   // Try to send email
   if(emailReady()){
     sendEmail(EMAIL_CONFIG.templateReset,{
       to_name: user.name, to_email: user.email,
       temp_password: tempPass, login_url: window.location.href
     });
-    if(okEl){okEl.innerHTML=`✓ Reset email sent to <strong>${email}</strong>. Check your inbox.`;okEl.style.display='block';}
+    if(okEl){okEl.textContent='✓ Reset email sent. Check your inbox.';okEl.style.display='block';}
   } else {
-    if(okEl){okEl.innerHTML=`✓ Temporary password: <strong style="font-family:monospace;color:var(--ac);letter-spacing:1px">${tempPass}</strong><br><span style="font-size:11px;color:var(--tx3)">Email not configured — copy this password manually.</span>`;okEl.style.display='block';}
+    if(okEl){okEl.innerHTML=`✓ Temporary password: <strong style="font-family:monospace;color:var(--ac);letter-spacing:1px">${esc(tempPass)}</strong><br><span style="font-size:11px;color:var(--tx3)">Email not configured — copy this password manually.</span>`;okEl.style.display='block';}
   }
   if(errEl) errEl.style.display='none';
-  // Auto close after 8 seconds if email was sent
   if(emailReady()) setTimeout(()=>document.getElementById('forgot-overlay')?.remove(), 8000);
 }
 
@@ -3101,12 +3146,30 @@ function updateSidebarUser(user){
   if(role) role.textContent = ROLE_LABELS[user.role]||user.role;
 }
 
-function simpleHash(str){
-  // Simple deterministic hash — not cryptographic, but works for this app
+// Synchronous fallback hash (for backwards compat with existing hashes)
+function _legacyHash(str){
   let hash = 0;
   for(let i=0;i<str.length;i++){ hash = ((hash<<5)-hash)+str.charCodeAt(i); hash|=0; }
   return 'h'+Math.abs(hash).toString(36);
 }
+// SHA-256 hash using Web Crypto API
+async function secureHash(str){
+  try{
+    const data = new TextEncoder().encode(str);
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return 'sha256:'+Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }catch(e){ return _legacyHash(str); }
+}
+// Verify password against stored hash (supports both legacy and SHA-256)
+async function verifyPassword(pass, storedHash){
+  if(!storedHash) return false;
+  if(storedHash.startsWith('sha256:')){
+    return storedHash === await secureHash(pass);
+  }
+  return storedHash === _legacyHash(pass);
+}
+// For new hashes, always use SHA-256
+function simpleHash(str){ return secureHash(str); }
 
 // Check existing session on load
 function checkSession(){
@@ -3186,11 +3249,11 @@ function sendThresholdAlertEmail(breachedList, alertEmail){
 async function resetUserPassword(userId){
   const user = users.find(u=>u.id===userId);
   if(!user) return;
-  const tempPass = 'PD-'+Math.random().toString(36).slice(2,8).toUpperCase();
-  user.passwordHash = simpleHash(tempPass);
+  const tempPass = 'PD-'+crypto.getRandomValues(new Uint8Array(4)).reduce((s,b)=>s+b.toString(36),'').toUpperCase().slice(0,8);
+  user.passwordHash = await secureHash(tempPass);
   await save('users');
   const sent = sendPasswordResetEmail(user, tempPass);
-  toast(`Temp password: ${tempPass} — ${emailReady()?'Email sent to '+user.email:'Copy this and share manually'}`, 'green');
+  toast(`Temp password: ${esc(tempPass)} — ${emailReady()?'Email sent to '+esc(user.email):'Copy this and share manually'}`, 'green');
 }
 
 // ── SKU EXCEL EXPORT ──────────────────────────────────
@@ -3248,9 +3311,9 @@ function renderGTTable(){
   if(!tbody) return;
   tbody.innerHTML = GT_LEVELS.map(lvl => {
     const vals = GT_DATA[lvl] || [0,1,0,0,0,0,0];
-    return `<tr>${['<td><strong>'+lvl+'</strong></td>',
+    return `<tr>${['<td><strong>'+esc(lvl)+'</strong></td>',
       ...vals.map((v,i) => `<td><input class="ci" style="width:58px;${i===6?'border-color:var(--ac)':''}"
-        value="${v}" oninput="GT_DATA['${lvl}'][${i}]=+this.value">`+'</td>')
+        value="${v}" oninput="GT_DATA['${escAttr(lvl)}'][${i}]=+this.value">`+'</td>')
     ].join('')}</tr>`;
   }).join('');
 }
@@ -3260,9 +3323,9 @@ function renderRetTable(){
   if(!tbody) return;
   tbody.innerHTML = GT_LEVELS.map(lvl => {
     const v = REVERSE_FEES[lvl] || 0;
-    return `<tr><td><strong>${lvl}</strong></td>
+    return `<tr><td><strong>${esc(lvl)}</strong></td>
       <td><input class="ci" style="width:80px" value="${v}"
-        oninput="REVERSE_FEES['${lvl}']=+this.value"></td>
+        oninput="REVERSE_FEES['${escAttr(lvl)}']=+this.value"></td>
       <td class="st">Half: ₹${(v/2).toFixed(1)}</td></tr>`;
   }).join('');
 }
@@ -3376,7 +3439,7 @@ function runWFEngine(marketplace, inputs){
     try{
       const keys = Object.keys(ctx);
       const vals = Object.values(ctx);
-      const fn = new Function(...keys, `"use strict"; return (${row.expr});`);
+      const fn = new Function(...keys, `"use strict"; return (${sanitizeExpr(row.expr)});`);
       const result = fn(...vals);
       ctx[row.var] = typeof result === 'number' ? result : result;
     } catch(e){
@@ -3578,7 +3641,7 @@ function renderFBParts(){
     // Evaluate final result
     const keys = Object.keys(preview);
     const vals = Object.values(preview);
-    const fn = new Function(...keys, `"use strict"; return (${expr||0});`);
+    const fn = new Function(...keys, `"use strict"; return (${sanitizeExpr(expr)||0});`);
     const result = fn(...vals);
     const lv = el('fb-live-val');
     if(lv){
@@ -3592,7 +3655,7 @@ function renderFBParts(){
     const lv = el('fb-live-val');
     if(lv){ lv.className='fb-preview-err'; lv.textContent='Error: '+e.message; }
     const stepsEl = el('fb-steps');
-    if(stepsEl) stepsEl.innerHTML = `<span style="color:var(--re)">Formula error: ${e.message}</span>`;
+    if(stepsEl) stepsEl.innerHTML = `<span style="color:var(--re)">Formula error: ${esc(e.message)}</span>`;
   }
 }
 
@@ -3646,7 +3709,7 @@ function fbPreviewRaw(val){
     const preview = runWFEngine(_fb.marketplace, sampleCtx);
     const keys = Object.keys(preview);
     const vals = Object.values(preview);
-    const fn = new Function(...keys, '"use strict"; return ('+val+');');
+    const fn = new Function(...keys, '"use strict"; return ('+sanitizeExpr(val)+');');
     const result = fn(...vals);
     const display = typeof result==='number'
       ? (result%1===0?'₹'+result.toLocaleString('en-IN'):'₹'+result.toFixed(2))
@@ -3655,7 +3718,7 @@ function fbPreviewRaw(val){
     box.innerHTML = '<span style="color:var(--gr)">✓ Preview: <strong>'+display+'</strong></span>';
   } catch(e){
     box.style.display='';
-    box.innerHTML = '<span style="color:var(--re)">Error: '+e.message+'</span>';
+    box.innerHTML = '<span style="color:var(--re)">Error: '+esc(e.message)+'</span>';
   }
 }
 
@@ -3668,7 +3731,7 @@ function fbSetRawExpr(){
     const preview = runWFEngine(_fb.marketplace, sampleCtx);
     const keys = Object.keys(preview);
     const vals = Object.values(preview);
-    const fn = new Function(...keys, '"use strict"; return ('+val+');');
+    const fn = new Function(...keys, '"use strict"; return ('+sanitizeExpr(val)+');');
     fn(...vals); // test run — throws if invalid
   } catch(e){
     toast('Formula error: '+e.message,'red');
