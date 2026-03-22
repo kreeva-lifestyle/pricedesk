@@ -646,8 +646,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   <div class="ch" style="background:var(--s);border:1px solid var(--bd);border-radius:var(--r) var(--r) 0 0;padding:13px 17px">
     <div style="font-size:13px;font-weight:600">Profit by Brand & Commission Model</div>
   </div>
-  <div class="card" style="border-radius:0 0 var(--r) var(--r);border-top:none">
-    <table class="dt"><thead><tr><th>Brand</th><th>Marketplace</th><th>Model</th><th>SKUs</th><th>Avg Commission</th><th>Avg Net Profit (₹)</th><th>Status</th></tr></thead><tbody id="brand-summary-body"></tbody></table>
+  <div class="card" style="border-radius:0 0 var(--r) var(--r);border-top:none;overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table class="dt" style="min-width:600px"><thead><tr><th>Brand</th><th>Marketplace</th><th>Model</th><th>SKUs</th><th>Avg Commission</th><th>Avg Net Profit (₹)</th><th>Status</th></tr></thead><tbody id="brand-summary-body"></tbody></table>
   </div>
 </div>
 
@@ -1473,8 +1473,6 @@ let brands=[
 let users=[
   {id:'u0',name:'Owner',       email:'owner@aryadesigns.co.in', role:'admin',   added:'2026-01-01'},
   {id:'u1',name:'Admin User',  email:'admin@yourcompany.com',   role:'admin',   added:'2026-01-01'},
-  {id:'u2',name:'Priya Sharma',email:'priya@yourcompany.com',   role:'manager', added:'2026-02-10'},
-  {id:'u3',name:'Rahul Patel', email:'rahul@yourcompany.com',   role:'viewer',  added:'2026-03-05'},
 ];
 
 // ═══════════════════════════════════════════════════════
@@ -2201,13 +2199,13 @@ function openUserModal(id){
       </div>
     </div>
     <div class="mfoot">
-      ${isEdit&&id!=='u0'&&id!=='u1'?`<button class="btn br bsm" onclick="if(deleteUser('${id}'))closeModal()" style="margin-right:auto">Remove User</button>`:''}
+      ${isEdit&&id!=='u0'&&id!=='u1'?`<button class="btn br bsm" onclick="deleteUser('${id}').then(ok=>{if(ok)closeModal()})" style="margin-right:auto">Remove User</button>`:''}
       <button class="btn bg" onclick="closeModal()">Cancel</button>
       <button class="btn bp" onclick="saveUser('${isEdit?id:''}')">${isEdit?'Update User':'Add User'}</button>
     </div>`);
 }
 
-function saveUser(eid){
+async function saveUser(eid){
   const name=el('u-name')?.value.trim();const email=el('u-email')?.value.trim();const role=el('u-role')?.value;
   if(!name){toast('Name required','red');return;}
   if(!email||!email.includes('@')){toast('Valid email required','red');return;}
@@ -2217,15 +2215,15 @@ function saveUser(eid){
     if(users.find(u=>u.email===email)){toast('Email already exists','red');return;}
     users.push({id:'u'+Date.now(),name,email,role,added:new Date().toISOString().slice(0,10)});toast(`✓ ${name} added`,'green');
   }
-  closeModal();renderUsers();save('users');
+  closeModal();renderUsers();await save('users');
   // Send onboarding email to new users
   if(!eid){ const newUser=users[users.length-1]; sendEmail(EMAIL_CONFIG.templateWelcome,{to_name:newUser.name,to_email:newUser.email,role:newUser.role,temp_password:'pricedesk123',login_url:window.location.href}); }
 }
 
-function deleteUser(id){
+async function deleteUser(id){
   if(id==='u0'||id==='u1'){toast('Cannot remove default admin accounts','red');return false;}
   const u=users.find(x=>x.id===id);if(!u||!confirm(`Remove "${u.name}"?`))return false;
-  users=users.filter(x=>x.id!==id);renderUsers();save('users');toast(`${u.name} removed`,'red');return true;
+  users=users.filter(x=>x.id!==id);renderUsers();await save('users');toast(`${u.name} removed`,'red');return true;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3185,12 +3183,12 @@ function sendThresholdAlertEmail(breachedList, alertEmail){
 }
 
 // ── Password reset from User Access page ─────────────
-function resetUserPassword(userId){
+async function resetUserPassword(userId){
   const user = users.find(u=>u.id===userId);
   if(!user) return;
   const tempPass = 'PD-'+Math.random().toString(36).slice(2,8).toUpperCase();
   user.passwordHash = simpleHash(tempPass);
-  save('users');
+  await save('users');
   const sent = sendPasswordResetEmail(user, tempPass);
   toast(`Temp password: ${tempPass} — ${emailReady()?'Email sent to '+user.email:'Copy this and share manually'}`, 'green');
 }
