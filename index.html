@@ -891,15 +891,30 @@ async function loadFromStorage(){
   return false;
 }
 
+// Default users always seeded — never overwritten by localStorage
+const DEFAULT_USERS = [
+  {id:'u0',name:'Owner',       email:'owner@aryadesigns.co.in', role:'admin',   added:'2026-01-01'},
+  {id:'u1',name:'Admin User',  email:'admin@yourcompany.com',   role:'admin',   added:'2026-01-01'},
+];
+
 function applyData(d){
   if(d.skuDB)          skuDB          = d.skuDB;
   if(d.brands)         brands         = d.brands;
-  if(d.users)          users          = d.users;
   if(d.THRESHOLDS)     THRESHOLDS     = d.THRESHOLDS;
   if(d.COMM_MYNTRA)    COMM_MYNTRA    = d.COMM_MYNTRA;
   if(d.COMM_AJIO_PPMP) COMM_AJIO_PPMP = d.COMM_AJIO_PPMP;
   if(d.COMM_AJIO_CC)   COMM_AJIO_CC   = d.COMM_AJIO_CC;
   if(d.COMM_AMAZON)    COMM_AMAZON    = d.COMM_AMAZON;
+  // Merge users: start with saved users, then add any DEFAULT_USERS missing from saved
+  if(d.users) users = d.users;
+  DEFAULT_USERS.forEach(def=>{
+    const exists = users.find(u=>u.email.toLowerCase()===def.email.toLowerCase());
+    if(!exists) users.unshift({...def}); // add missing default users at top
+    else {
+      // Always keep the default user's role as admin (prevents accidental downgrade)
+      if(exists.role !== def.role) exists.role = def.role;
+    }
+  });
 }
 
 function updateSyncBadge(synced){
@@ -963,8 +978,10 @@ let brands=[
 // USERS
 // ═══════════════════════════════════════════════════════
 let users=[
-  {id:'u0',name:'Owner',       email:'owner@aryadesigns.co.in',  role:'admin',   added:'2026-01-01'},
-  {id:'u1',name:'Admin User',  email:'owner@aryadesigns.co.in',  role:'admin',   added:'2026-01-01'},
+  {id:'u0',name:'Owner',       email:'owner@aryadesigns.co.in', role:'admin',   added:'2026-01-01'},
+  {id:'u1',name:'Admin User',  email:'admin@yourcompany.com',   role:'admin',   added:'2026-01-01'},
+  {id:'u2',name:'Priya Sharma',email:'priya@yourcompany.com',   role:'manager', added:'2026-02-10'},
+  {id:'u3',name:'Rahul Patel', email:'rahul@yourcompany.com',   role:'viewer',  added:'2026-03-05'},
 ];
 
 // ═══════════════════════════════════════════════════════
@@ -2263,7 +2280,7 @@ function openForgotPassword(){
       <div id="forgot-err" style="background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--re);margin-bottom:14px;display:none"></div>
       <div id="forgot-ok" style="background:rgba(45,212,160,.08);border:1px solid rgba(45,212,160,.2);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--gr);margin-bottom:14px;display:none"></div>
       <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px">Email Address</label>
-      <input id="forgot-email" class="fi" type="email" placeholder="owner@aryadesigns.com" style="margin-bottom:16px" onkeydown="if(event.key==='Enter')doForgotPassword()">
+      <input id="forgot-email" class="fi" type="email" placeholder="owner@aryadesigns.co.in" style="margin-bottom:16px" onkeydown="if(event.key==='Enter')doForgotPassword()">
       <div style="display:flex;gap:10px">
         <button class="btn bg" style="flex:1" onclick="document.getElementById('forgot-overlay').remove()">Cancel</button>
         <button class="btn bp" style="flex:1" onclick="doForgotPassword()">Send Reset</button>
