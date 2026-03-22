@@ -294,6 +294,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   .movl{align-items:flex-end}
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -318,7 +319,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="nav-item" data-page="users" onclick="nav('users')"><span class="ni">◉</span> User Access</div>
   </nav>
   <div class="sb-btm">
-    <div class="flex gap8"><div class="ava">A</div><div><div style="font-size:12px;color:var(--tx2)">Admin User</div><div style="font-size:10px;color:var(--tx3)">Administrator</div></div></div>
+    <div class="flex gap8" style="margin-bottom:10px"><div class="ava" id="sb-ava">A</div><div><div style="font-size:12px;color:var(--tx2)" id="sb-uname">Admin User</div><div style="font-size:10px;color:var(--tx3)">Administrator</div></div></div>
+    <div style="display:flex;gap:6px">
+      <button onclick="exportData()" style="flex:1;background:transparent;border:1px solid var(--bd2);border-radius:5px;color:var(--tx3);font-size:11px;padding:5px 0;cursor:pointer" title="Export all data as JSON backup">⬇ Export</button>
+      <button onclick="importDataPrompt()" style="flex:1;background:transparent;border:1px solid var(--bd2);border-radius:5px;color:var(--tx3);font-size:11px;padding:5px 0;cursor:pointer" title="Import a backup JSON">⬆ Import</button>
+    </div>
   </div>
 </div>
 
@@ -331,6 +336,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <div class="pt" id="pageTitle">Dashboard</div>
     </div>
     <div class="flex gap12">
+      <span id="sync-badge" style="font-size:11px;display:none"></span>
       <div id="alert-badge" style="background:var(--re);color:#fff;border-radius:12px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;animation:pulse 2s infinite;display:none" onclick="nav('thresholds')"></div>
       <button class="btn bp bsm" onclick="nav('skus')">+ Add SKU</button>
     </div>
@@ -677,6 +683,84 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
 <script>
 // ═══════════════════════════════════════════════════════
+// SUPABASE CONFIG — paste your keys here after setup
+// ═══════════════════════════════════════════════════════
+const SUPABASE_URL  = 'https://fcmesdnagvrdmjzzuwue.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbWVzZG5hZ3ZyZG1qenp1d3VlIiwicm9sZSI6ImFub24iLCJpYXQiOj';
+
+let _db = null;
+function getDB(){
+  if(!_db && SUPABASE_URL !== 'https://fcmesdnagvrdmjzzuwue.supabase.co'){
+    try{ _db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
+    catch(e){ console.warn('Supabase init failed:', e); }
+  }
+  return _db;
+}
+
+const STORAGE_KEY = 'pricedesk_v1';
+
+// ── Save: Supabase first, localStorage as fallback ────
+async function save(){
+  const payload = {
+    skuDB, brands, users, THRESHOLDS,
+    COMM_MYNTRA, COMM_AJIO_PPMP, COMM_AJIO_CC, COMM_AMAZON
+  };
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch(e){}
+  const db = getDB();
+  if(db){
+    updateSyncBadge(false);
+    const {error} = await db.from('app_data').upsert({
+      key: STORAGE_KEY,
+      value: payload,
+      updated_at: new Date().toISOString()
+    },{onConflict:'key'});
+    if(error) console.warn('Supabase save error:', error.message);
+    else updateSyncBadge(true);
+  }
+}
+
+// ── Load: Supabase first, localStorage as fallback ────
+async function loadFromStorage(){
+  const db = getDB();
+  if(db){
+    try{
+      const {data,error} = await db.from('app_data').select('value').eq('key',STORAGE_KEY).single();
+      if(!error && data?.value){ applyData(data.value); updateSyncBadge(true); return true; }
+    } catch(e){ console.warn('Supabase load error:', e); }
+  }
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){ applyData(JSON.parse(raw)); updateSyncBadge(false); return true; }
+  } catch(e){}
+  updateSyncBadge(false);
+  return false;
+}
+
+function applyData(d){
+  if(d.skuDB)          skuDB          = d.skuDB;
+  if(d.brands)         brands         = d.brands;
+  if(d.users)          users          = d.users;
+  if(d.THRESHOLDS)     THRESHOLDS     = d.THRESHOLDS;
+  if(d.COMM_MYNTRA)    COMM_MYNTRA    = d.COMM_MYNTRA;
+  if(d.COMM_AJIO_PPMP) COMM_AJIO_PPMP = d.COMM_AJIO_PPMP;
+  if(d.COMM_AJIO_CC)   COMM_AJIO_CC   = d.COMM_AJIO_CC;
+  if(d.COMM_AMAZON)    COMM_AMAZON    = d.COMM_AMAZON;
+}
+
+function updateSyncBadge(synced){
+  const b = document.getElementById('sync-badge');
+  if(!b) return;
+  b.style.display = '';
+  if(getDB()){
+    b.innerHTML = synced ? '&#9729; Synced' : '&#9729; Saving&hellip;';
+    b.style.color = synced ? 'var(--gr)' : 'var(--ac)';
+  } else {
+    b.innerHTML = '&#128190; Local only';
+    b.style.color = 'var(--tx3)';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // CATEGORY → LEVEL MAP (Myntra only)
 // ═══════════════════════════════════════════════════════
 const CAT_LEVEL = {
@@ -933,7 +1017,7 @@ function buildCommAmazon(){
   CATS.forEach(cat=>{h+=`<tr><td>${cat}</td><td><input class="ci" value="${COMM_AMAZON[cat]||17}" onchange="COMM_AMAZON['${cat}']=+this.value;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
-function saveComm(){triggerRecalc();renderSKUs();toast('✓ Commission saved','green');}
+function saveComm(){triggerRecalc();renderSKUs();save();toast('✓ Commission saved','green');}
 
 // ═══════════════════════════════════════════════════════
 // THRESHOLD (in ₹)
@@ -970,7 +1054,7 @@ function renderBreachList(){
     }).join('')+'</tbody></table>';
 }
 
-function saveThr(){triggerRecalc();renderSKUs();updateAlerts();toast('✓ Thresholds saved','green');renderBreachList();}
+function saveThr(){triggerRecalc();renderSKUs();updateAlerts();save();toast('✓ Thresholds saved','green');renderBreachList();}
 
 function updateAlerts(){
   const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
@@ -989,8 +1073,7 @@ function updateAlerts(){
 function toggleIgnore(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   s.ignoreThreshold=!s.ignoreThreshold;
-  renderSKUs();updateAlerts();renderBreachList();renderBrands();
-  // Also refresh threshold page if it's currently open
+  renderSKUs();updateAlerts();renderBreachList();renderBrands();save();
   if(el('page-thresholds')?.classList.contains('active')) renderThresholds();
   toast(s.ignoreThreshold?`🔕 ${s.styleId} threshold ignored`:`⚠️ ${s.styleId} threshold re-enabled`,'green');
 }
@@ -1103,9 +1186,9 @@ function saveBrand(eid){
   if(!name){toast('Brand name required','red');return;}
   if(eid){const b=brands.find(x=>x.id===eid);if(b)Object.assign(b,{name,marketplace:mp,model,commOverride:comm});toast(`✓ ${name} updated`,'green');}
   else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm});toast(`✓ ${name} added`,'green');}
-  closeModal();renderBrands();populateFilters();renderSKUs();
+  closeModal();renderBrands();populateFilters();renderSKUs();save();
 }
-function deleteBrand(id){if(!confirm('Delete brand? SKUs assigned to this brand will still exist.'))return false;brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();toast('Brand deleted','red');return true;}
+function deleteBrand(id){if(!confirm('Delete brand? SKUs assigned to this brand will still exist.'))return false;brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();save();toast('Brand deleted','red');return true;}
 
 // ═══════════════════════════════════════════════════════
 // SKU SHEET
@@ -1334,7 +1417,7 @@ function saveNew(){
   if(!mkp||mkp<=0){toast('Markup % required (must be > 0)','red');return;}
   if(skuDB.find(x=>x.styleId===sid)){toast('Style ID already exists','red');return;}
   skuDB.push({id:'s'+Date.now(),styleId:sid,brandId,category:cat,level:lvl,cost,markup:mkp,img:newImg||'',ignoreThreshold:false});
-  newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();toast(`✓ ${sid} added`,'green');
+  newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();save();toast(`✓ ${sid} added`,'green');
 }
 
 function saveEdit(id){
@@ -1342,12 +1425,12 @@ function saveEdit(id){
   const sid=el('e-sid')?.value.trim(),cost=parseFloat(el('e-cost')?.value)||0,mkp=parseFloat(el('e-mkp')?.value)||0;
   if(!sid||!cost){toast('Fill required fields','red');return;}
   Object.assign(s,{styleId:sid,brandId:el('e-brand')?.value,category:el('e-cat')?.value,level:el('e-lvl')?.value,cost,markup:mkp});
-  editId=null;renderSKUs();renderBrands();updateAlerts();toast(`✓ ${sid} updated`,'green');
+  editId=null;renderSKUs();renderBrands();updateAlerts();save();toast(`✓ ${sid} updated`,'green');
 }
 
 function delSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s||!confirm(`Delete "${s.styleId}"?`))return;
-  skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();toast(`${s.styleId} deleted`,'red');
+  skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();save();toast(`${s.styleId} deleted`,'red');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1406,13 +1489,13 @@ function saveUser(eid){
     if(users.find(u=>u.email===email)){toast('Email already exists','red');return;}
     users.push({id:'u'+Date.now(),name,email,role,added:new Date().toISOString().slice(0,10)});toast(`✓ ${name} added`,'green');
   }
-  closeModal();renderUsers();
+  closeModal();renderUsers();save();
 }
 
 function deleteUser(id){
   if(id==='u1'){toast('Cannot remove the admin account','red');return false;}
   const u=users.find(x=>x.id===id);if(!u||!confirm(`Remove "${u.name}"?`))return false;
-  users=users.filter(x=>x.id!==id);renderUsers();toast(`${u.name} removed`,'red');return true;
+  users=users.filter(x=>x.id!==id);renderUsers();save();toast(`${u.name} removed`,'red');return true;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1616,14 +1699,55 @@ function confirmImport(){
   const count=importRows.length;
   importRows=[];
   closeModal();
-  renderSKUs();renderBrands();updateAlerts();
+  renderSKUs();renderBrands();updateAlerts();save();
   toast(`✓ Imported ${count} SKU${count>1?'s':''}`, 'green');
+}
+
+// ═══════════════════════════════════════════════════════
+// DATA EXPORT / IMPORT (JSON backup)
+// ═══════════════════════════════════════════════════════
+function exportData(){
+  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,exportedAt:new Date().toISOString()},null,2);
+  const a=document.createElement('a');
+  a.href='data:application/json,'+encodeURIComponent(data);
+  a.download='pricedesk_backup_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  toast('✓ Backup downloaded','green');
+}
+
+function importDataPrompt(){
+  const input=document.createElement('input');
+  input.type='file';input.accept='.json';
+  input.onchange=function(){
+    const file=input.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        if(!confirm('This will replace all current data with the backup. Continue?'))return;
+        const d=JSON.parse(e.target.result);
+        if(d.skuDB)      skuDB=d.skuDB;
+        if(d.brands)     brands=d.brands;
+        if(d.users)      users=d.users;
+        if(d.THRESHOLDS) THRESHOLDS=d.THRESHOLDS;
+        if(d.COMM_MYNTRA)    COMM_MYNTRA=d.COMM_MYNTRA;
+        if(d.COMM_AJIO_PPMP) COMM_AJIO_PPMP=d.COMM_AJIO_PPMP;
+        if(d.COMM_AJIO_CC)   COMM_AJIO_CC=d.COMM_AJIO_CC;
+        if(d.COMM_AMAZON)    COMM_AMAZON=d.COMM_AMAZON;
+        save();populateFilters();renderBrands();renderSKUs();updateAlerts();renderUsers();
+        toast('✓ Backup restored successfully','green');
+      }catch(err){toast('Error reading backup file','red');}
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',()=>{
+  // Load saved data first, then init UI
+  loadFromStorage();
   populateFilters();
   renderBrandSummary();
   renderWFPreviews();
