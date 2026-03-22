@@ -3107,7 +3107,6 @@ async function doForgotPassword(){
 }
 
 async function doLogout(){
-  if(!confirm('Sign out of PriceDesk?')) return;
   // Clear session token from DB before logging out
   if(currentUser) await clearSessionToken(currentUser.id);
   _forceLogout();
