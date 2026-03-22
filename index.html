@@ -1197,6 +1197,7 @@ const DB_KEYS = {
   wireframe:      'pd_wireframe',
   email_cfg:      'pd_email_config',
   alert:          'pd_alert_settings',
+  sessions:       'pd_sessions',
 };
 
 // ── Save a single key to DB ────────────────────────────
@@ -2967,8 +2968,66 @@ async function confirmClearData(){
 const SESSION_KEY = 'pricedesk_session';
 const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour
 const WARN_BEFORE    = 5  * 60 * 1000;  // warn 5 min before
+const SESSION_CHECK_INTERVAL = 15000;   // check every 15 seconds
 let _sessionTimer = null, _warnTimer = null, _countdownInterval = null;
+let _sessionCheckTimer = null;
 let currentUser = null;
+
+// ── Single-device session enforcement ────────────────
+function generateSessionToken(){
+  return 'st_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);
+}
+
+async function registerSessionToken(userId, token){
+  const db = getDB(); if(!db) return;
+  try{
+    // Load existing sessions map
+    const sessions = await dbGet(DB_KEYS.sessions) || {};
+    sessions[userId] = { token, ts: Date.now(), ua: navigator.userAgent.slice(0,80) };
+    await dbSet(DB_KEYS.sessions, sessions);
+  } catch(e){ console.warn('registerSessionToken error:', e); }
+}
+
+async function clearSessionToken(userId){
+  const db = getDB(); if(!db) return;
+  try{
+    const sessions = await dbGet(DB_KEYS.sessions) || {};
+    delete sessions[userId];
+    await dbSet(DB_KEYS.sessions, sessions);
+  } catch(e){ console.warn('clearSessionToken error:', e); }
+}
+
+async function validateSessionToken(userId, localToken){
+  const db = getDB(); if(!db) return true; // allow offline usage
+  try{
+    const sessions = await dbGet(DB_KEYS.sessions) || {};
+    const remote = sessions[userId];
+    if(!remote) return true; // no remote session = OK
+    return remote.token === localToken;
+  } catch(e){ return true; } // allow on network error
+}
+
+function startSessionCheck(){
+  clearInterval(_sessionCheckTimer);
+  _sessionCheckTimer = setInterval(async ()=>{
+    if(!currentUser) return;
+    const sess = JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');
+    if(!sess?.sessionToken) return;
+    const valid = await validateSessionToken(currentUser.id, sess.sessionToken);
+    if(!valid){
+      clearInterval(_sessionCheckTimer);
+      _forceLogout();
+      // Show persistent alert instead of toast
+      const msg = document.createElement('div');
+      msg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--s);border:2px solid var(--re);border-radius:12px;padding:28px 32px;z-index:99999;text-align:center;max-width:380px;box-shadow:0 8px 40px rgba(0,0,0,.6)';
+      msg.innerHTML = `<div style="font-size:28px;margin-bottom:12px">🔒</div>
+        <div style="font-size:15px;font-weight:600;color:var(--tx);margin-bottom:8px">Signed out</div>
+        <div style="font-size:13px;color:var(--tx2);margin-bottom:18px">Your account was logged in from another device. Only one active session is allowed per user.</div>
+        <button class="btn bp" onclick="this.parentElement.remove()" style="width:100%">OK</button>`;
+      document.body.appendChild(msg);
+    }
+  }, SESSION_CHECK_INTERVAL);
+}
 
 async function doLogin(){
   const email = document.getElementById('login-email')?.value.trim().toLowerCase();
@@ -2993,12 +3052,15 @@ async function doLogin(){
   const isFirstLogin = !storedHash;
   const needsUpgrade = storedHash && !storedHash.startsWith('sha256:');
   if(isFirstLogin || needsUpgrade){ user.passwordHash = await secureHash(pass); await save('users'); }
-  // Start session
+  // Start session with unique token for single-device enforcement
   currentUser = user;
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify({userId:user.id, loginTime:Date.now()}));
+  const sessionToken = generateSessionToken();
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({userId:user.id, loginTime:Date.now(), sessionToken}));
+  await registerSessionToken(user.id, sessionToken);
   document.getElementById('login-screen').style.display='none';
   updateSidebarUser(user);
   startSessionTimer();
+  startSessionCheck();
   if(isFirstLogin) sendWelcomeEmail(user);
   toast(`Welcome back, ${esc(user.name.split(' ')[0])}!`,'green');
 }
@@ -3063,8 +3125,10 @@ async function doForgotPassword(){
   if(emailReady()) setTimeout(()=>document.getElementById('forgot-overlay')?.remove(), 8000);
 }
 
-function doLogout(){
+async function doLogout(){
   if(!confirm('Sign out of PriceDesk?')) return;
+  // Clear session token from DB before logging out
+  if(currentUser) await clearSessionToken(currentUser.id);
   _forceLogout();
 }
 
@@ -3074,6 +3138,7 @@ function _forceLogout(){
   clearTimeout(_sessionTimer);
   clearTimeout(_warnTimer);
   clearInterval(_countdownInterval);
+  clearInterval(_sessionCheckTimer);
   document.getElementById('session-warn').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('login-email').value='';
@@ -3158,16 +3223,25 @@ async function verifyPassword(pass, storedHash){
 function simpleHash(str){ return secureHash(str); }
 
 // Check existing session on load
-function checkSession(){
+async function checkSession(){
   try{
     const sess = JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');
     if(sess && (Date.now()-sess.loginTime < SESSION_TIMEOUT)){
       const user = users.find(u=>u.id===sess.userId);
       if(user){
+        // Validate session token against DB (single-device check)
+        if(sess.sessionToken){
+          const valid = await validateSessionToken(user.id, sess.sessionToken);
+          if(!valid){
+            sessionStorage.removeItem(SESSION_KEY);
+            return false;
+          }
+        }
         currentUser = user;
         document.getElementById('login-screen').style.display='none';
         updateSidebarUser(user);
         startSessionTimer();
+        startSessionCheck();
         return true;
       }
     }
@@ -4151,8 +4225,8 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   renderGTTable();
   renderRetTable();
   populateLogisticsInputs();
-  // Check if already logged in
-  if(!checkSession()){
+  // Check if already logged in (validates session token against DB)
+  if(!(await checkSession())){
     document.getElementById('login-screen').style.display='flex';
   }
   // Init EmailJS if configured
