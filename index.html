@@ -397,7 +397,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         <div style="font-size:15px;font-weight:600" id="fb-title">Edit Formula</div>
         <div style="font-size:12px;color:var(--tx3);margin-top:2px" id="fb-subtitle">Build your formula by adding parts below</div>
       </div>
-      <span onclick="closeFB()" style="cursor:pointer;color:var(--tx3);font-size:22px;line-height:1">×</span>
+      <span onclick="closeFB()" style="cursor:pointer;color:var(--tx3);font-size:22px;line-height:1" role="button" aria-label="Close formula builder">×</span>
     </div>
     <div class="fb-body">
 
@@ -581,7 +581,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
 <!-- ═══ IMAGE ZOOM OVERLAY ═══ -->
 <div id="img-zoom-overlay" onclick="if(event.target===this)closeZoom()">
-  <span class="zoom-close" onclick="closeZoom()">×</span>
+  <span class="zoom-close" onclick="closeZoom()" role="button" aria-label="Close zoom">×</span>
   <img id="img-zoom-img" src="" alt="">
 </div>
 
@@ -653,7 +653,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
 <!-- ═══ PRICING TABLES ═══ -->
 <div class="page" id="page-pricing">
-  <div class="info">💡 Commission auto-fetched from category slab. GST auto: 5% if SP &lt; ₹2,500 / 18% if SP ≥ ₹2,500. Ajio CC = commission only, no logistics.</div>
+  <div class="info">GST: 5% if SP &lt; ₹2,500 · 18% if SP ≥ ₹2,500. Ajio CC = commission only.</div>
   <div class="tabs">
     <div class="tab tm-t active" onclick="switchMP('myntra',this)"><span class="tdot" style="background:var(--mn)"></span>Myntra</div>
     <div class="tab taj-t" onclick="switchMP('ajio-ppmp',this)"><span class="tdot" style="background:var(--aj)"></span>Ajio — PPMP</div>
@@ -729,8 +729,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600">Alert Settings</div></div>
         <div class="cb">
-          <div class="info" style="margin-bottom:12px">📧 <strong style="color:var(--tx)">Email alerts require EmailJS setup</strong> — free 200 emails/month. See deployment guide for instructions.</div>
-          <div class="fg"><label class="fl">Alert Email Address</label><input class="fi" id="alert-email-input" type="email" value="admin@yourcompany.com" placeholder="admin@yourcompany.com"></div>
+          <div class="fg"><label class="fl">Alert Email Address</label><input class="fi" id="alert-email-input" type="email" value="" placeholder="admin@company.com"></div>
           <div class="fg"><label class="fl">Alert Frequency</label>
             <select class="fi" id="alert-freq-select" style="appearance:none">
               <option>Immediately on breach</option>
@@ -752,7 +751,6 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
 <!-- ═══ BRANDS ═══ -->
 <div class="page" id="page-brands">
-  <div class="info">Brands group SKUs. Each brand links to a marketplace and commission model. Ajio brands specify PPMP or CC. Set a commission override per brand if needed.</div>
   <div class="flexb mb16">
     <div class="st" id="brand-count"></div>
     <button class="btn bp bsm" onclick="openBrandModal()">+ Add Brand</button>
@@ -762,7 +760,6 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
 <!-- ═══ COMMISSION SETTINGS ═══ -->
 <div class="page" id="page-commission">
-  <div class="info">Commission rates auto-fetched when selecting category in SKU sheet. Changes update all calculators instantly.</div>
   <div class="tabs">
     <div class="tab tm-t active" onclick="switchCommTab('myntra',this)"><span class="tdot" style="background:var(--mn)"></span>Myntra (Category + Slab)</div>
     <div class="tab taj-t" onclick="switchCommTab('ajio',this)"><span class="tdot" style="background:var(--aj)"></span>Ajio (PPMP &amp; CC)</div>
@@ -795,7 +792,6 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
 <!-- ═══ LOGISTICS ═══ -->
 <div class="page" id="page-logistics">
-  <div class="info">Set logistics per marketplace. Level-based uses Myntra's GT Charges / Reverse Fee slabs.</div>
   <div class="tabs">
     <div class="tab tm-t active" onclick="switchLogTab('myntra',this)"><span class="tdot" style="background:var(--mn)"></span>Myntra</div>
     <div class="tab taj-t" onclick="switchLogTab('ajio',this)"><span class="tdot" style="background:var(--aj)"></span>Ajio (PPMP only)</div>
@@ -808,7 +804,6 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Fixed</label>
       </div></div>
       <div id="mfwd-level">
-        <div class="info" style="margin-bottom:10px;font-size:11px">Edit any value and click Save — changes apply to all calculators immediately.</div>
         <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:520px" id="gt-table">
           <thead><tr>
             <th>Level</th><th>0–1</th><th>2–99</th><th>100–300</th><th>300–500</th><th>500–1000</th><th>1000–2000</th><th style="color:var(--ac)">&gt;2000 ★</th>
@@ -1071,13 +1066,6 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
           <button class="btn bp bsm" onclick="saveEmailSettings()">✓ Save & Activate</button>
         </div>
         <div class="cb">
-          <div class="info mb16">
-            <strong style="color:var(--tx)">How to get these keys:</strong><br>
-            1. Go to <strong style="color:var(--ac)">emailjs.com</strong> → free account<br>
-            2. Connect your Gmail → copy <strong>Service ID</strong><br>
-            3. Create 3 templates → copy each <strong>Template ID</strong><br>
-            4. Account page → copy <strong>Public Key</strong>
-          </div>
           <div class="fg"><label class="fl">Service ID</label><input class="fi" id="cfg-service-id" placeholder="service_xxxxxxx" spellcheck="false"></div>
           <div class="fg"><label class="fl">Welcome Template ID</label><input class="fi" id="cfg-tpl-welcome" placeholder="template_xxxxxxx" spellcheck="false"></div>
           <div class="fg"><label class="fl">Password Reset Template ID</label><input class="fi" id="cfg-tpl-reset" placeholder="template_xxxxxxx" spellcheck="false"></div>
@@ -1089,10 +1077,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600">🧪 Test Emails</div></div>
         <div class="cb">
-          <div class="warn" style="margin-bottom:14px">
-            ⚠ <strong>If test emails go to the wrong address:</strong> In EmailJS → open each template → find the <strong>"To Email"</strong> field at the top → make sure it says <code style="background:var(--s3);padding:1px 6px;border-radius:3px;font-family:monospace;color:var(--gr)">{{to_email}}</code> — NOT a fixed email address like <code style="background:var(--s3);padding:1px 6px;border-radius:3px;font-family:monospace;color:var(--re)">someone@example.com</code>. Save the template. Then test again.
-          </div>
-          <div class="fg"><label class="fl">Send test to this email</label><input class="fi" id="cfg-test-email" type="email" placeholder="manthankreeva@gmail.com"></div>
+          <div class="fg"><label class="fl">Send test to this email</label><input class="fi" id="cfg-test-email" type="email" placeholder="test@example.com"></div>
           <div style="display:flex;flex-direction:column;gap:9px">
             <div class="flex gap12"><button class="btn bg bsm" style="width:170px" onclick="testEmail('welcome')">📨 Test Welcome Email</button><span class="st">Sent when a new user is added</span></div>
             <div class="flex gap12"><button class="btn bg bsm" style="width:170px" onclick="testEmail('reset')">🔑 Test Reset Email</button><span class="st">Sent on password reset</span></div>
@@ -1105,30 +1090,15 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <div class="card mb16">
         <div class="ch">
           <div>
-            <div style="font-size:13px;font-weight:600">☁ Database Settings (Supabase)</div>
+            <div style="font-size:13px;font-weight:600">☁ Database (Supabase)</div>
             <div class="st" style="margin-top:2px">Cloud sync across all devices</div>
           </div>
-          <button class="btn bp bsm" onclick="saveSupabaseSettings()">✓ Save & Connect</button>
         </div>
         <div class="cb">
           <div class="success" style="margin-bottom:0">
-            ✓ <strong style="color:var(--tx)">Supabase is hardcoded and always connected.</strong><br>
-            Your database: <span style="font-family:monospace;color:var(--ac)">fcmesdnagvrdmjzzuwue.supabase.co</span><br>
-            All data saves automatically. Clearing cache will never affect your data.
+            ✓ Connected — all data saves automatically.
           </div>
           <div id="sb-cfg-status" style="margin-top:14px;display:none"></div>
-        </div>
-      </div>
-      <div class="card mb16">
-        <div class="ch"><div style="font-size:13px;font-weight:600">🌐 Custom Domain Guide</div></div>
-        <div class="cb">
-          <div class="info" style="margin-bottom:0;line-height:1.9">
-            <strong style="color:var(--ac)">Step 1</strong> — GitHub → repo → Settings → Pages → Custom domain → enter your domain<br>
-            <strong style="color:var(--ac)">Step 2</strong> — Open your domain registrar (GoDaddy / Namecheap)<br>
-            <strong style="color:var(--ac)">Step 3</strong> — Add a CNAME record:<br>
-            &nbsp;&nbsp;Name: <span style="font-family:monospace;color:#2dd4a0">pricing</span> &nbsp; Value: <span style="font-family:monospace;color:#2dd4a0">your-username.github.io</span><br>
-            <strong style="color:var(--ac)">Step 4</strong> — Wait 10–30 min → live on your domain
-          </div>
         </div>
       </div>
       <div class="card">
@@ -1142,7 +1112,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
           <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn bg bsm" onclick="exportData()">⬇ Backup</button>
             <button class="btn bg bsm" onclick="importDataPrompt()">⬆ Restore</button>
-            <button class="btn br bsm" onclick="confirmClearData()">✕ Clear All Data</button>
+            <button class="btn br bsm" onclick="confirmClearData()" aria-label="Clear all data">✕ Clear All Data</button>
           </div>
         </div>
       </div>
@@ -1298,9 +1268,9 @@ DROP POLICY IF EXISTS "allow_insert" ON app_data;
 DROP POLICY IF EXISTS "allow_update" ON app_data;
 DROP POLICY IF EXISTS "allow_upsert" ON app_data;
 CREATE POLICY "allow_all" ON app_data FOR ALL USING (true) WITH CHECK (true);`;
-  setModal(`<div class="mhdr"><div class="mtl">🗄 Database Setup — Run this SQL</div><span class="mclose" onclick="closeModal()">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">🗄 Database Setup — Run this SQL</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
-      <div class="info mb12">Copy everything below → go to <strong style="color:var(--ac)">supabase.com</strong> → your project → <strong>SQL Editor</strong> → New Query → paste → click <strong>Run</strong></div>
+      <div class="info mb12">Run this in your Supabase SQL Editor:</div>
       <div style="background:#0a0c12;border:1px solid var(--bd);border-radius:6px;padding:14px;font-family:monospace;font-size:12px;color:var(--gr);line-height:1.7;white-space:pre;overflow-x:auto">${sql}</div>
       <button onclick="navigator.clipboard.writeText(\`${sql}\`).then(()=>toast('SQL copied!','green'))" class="btn bg bsm" style="margin-top:12px">📋 Copy SQL</button>
     </div>
@@ -1863,8 +1833,8 @@ function renderBrands(){
           </div>
         </div>
         <div class="flex gap8">
-          <button class="btn bg bxs" onclick="openBrandModal('${escAttr(b.id)}')">✎</button>
-          <button class="btn br bxs" onclick="deleteBrand('${escAttr(b.id)}')">✕</button>
+          <button class="btn bg bxs" onclick="openBrandModal('${escAttr(b.id)}')" aria-label="Edit brand">✎</button>
+          <button class="btn br bxs" onclick="deleteBrand('${escAttr(b.id)}')" aria-label="Delete brand">✕</button>
         </div>
       </div>
       ${b.commOverride!=null?`<div class="st mb8">🔒 Commission override: <span class="mono" style="color:var(--ac)">${b.commOverride}%</span></div>`:'<div class="st mb8">Auto commission from settings</div>'}
@@ -1906,7 +1876,7 @@ function openBrandModal(id){
   const b=id?(brands.find(x=>x.id===id)||_default):_default;
   const isEdit=!!(id&&b.id);
   const mpOpts=['Myntra','Ajio','Amazon'].map(m=>`<option ${b.marketplace===m?'selected':''}>${m}</option>`).join('');
-  setModal(`<div class="mhdr"><div class="mtl">${isEdit?'✎ Edit Brand':'+ New Brand'}</div><span class="mclose" onclick="closeModal()">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">${isEdit?'✎ Edit Brand':'+ New Brand'}</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div class="fg"><label class="fl">Brand Name</label><input class="fi" id="bn-name" placeholder="e.g. Fusionic — Ajio CC" value="${esc(b.name)}"></div>
       <div class="frow">
@@ -2050,8 +2020,8 @@ function renderSKUs(){
             ${s.ignoreThreshold?'🔕':'🔔'}
           </button>
           ${statusIcon}
-          <button class="btn bg bxs" onclick="startEdit('${escAttr(s.id)}')" title="Edit">✎</button>
-          <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Delete">✕</button>
+          <button class="btn bg bxs" onclick="startEdit('${escAttr(s.id)}')" title="Edit" aria-label="Edit SKU">✎</button>
+          <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Delete" aria-label="Delete SKU">✕</button>
         </div>
       </td>
     </tr>`;
@@ -2213,8 +2183,8 @@ function renderUsers(){
     <td><span class="bdg ${ROLE_COLORS[u.role]}">${esc(ROLE_LABELS[u.role])}</span></td>
     <td class="st">${esc(u.added)}</td>
     <td><div class="flex gap8">
-      <button class="btn bg bxs" onclick="openUserModal('${escAttr(u.id)}')">✎ Edit</button>
-      <button class="btn bg bxs" onclick="resetUserPassword('${escAttr(u.id)}')" title="Reset password">🔑</button>
+      <button class="btn bg bxs" onclick="openUserModal('${escAttr(u.id)}')" aria-label="Edit user">✎ Edit</button>
+      <button class="btn bg bxs" onclick="resetUserPassword('${escAttr(u.id)}')" title="Reset password" aria-label="Reset password">🔑</button>
       ${u.id!=='u0'&&u.id!=='u1'?`<button class="btn br bxs" onclick="deleteUser('${escAttr(u.id)}')">✕ Remove</button>`:''}
     </div></td>
   </tr>`).join('');
@@ -2225,10 +2195,10 @@ function openUserModal(id){
   const u=id?(users.find(x=>x.id===id)||_udefault):_udefault;
   const isEdit=!!(id&&u.id);
   const roleOpts=ROLES.map(r=>`<option value="${esc(r)}" ${u.role===r?'selected':''}>${esc(ROLE_LABELS[r])} — ${esc(ROLE_ACCESS[r])}</option>`).join('');
-  setModal(`<div class="mhdr"><div class="mtl">${isEdit?'✎ Edit User':'+ Add User'}</div><span class="mclose" onclick="closeModal()">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">${isEdit?'✎ Edit User':'+ Add User'}</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div class="fg"><label class="fl">Full Name *</label><input class="fi" id="u-name" placeholder="e.g. Priya Sharma" value="${esc(u.name)}"></div>
-      <div class="fg"><label class="fl">Email Address *</label><input class="fi" id="u-email" type="email" placeholder="priya@yourcompany.com" value="${esc(u.email)}"></div>
+      <div class="fg"><label class="fl">Email Address *</label><input class="fi" id="u-email" type="email" placeholder="name@company.com" value="${esc(u.email)}"></div>
       <div class="fg">
         <label class="fl">Role *</label>
         <select class="fi" id="u-role" style="appearance:none">${roleOpts}</select>
@@ -2547,7 +2517,7 @@ function dlTemplate(){
 }
 
 function openImport(){
-  setModal(`<div class="mhdr"><div class="mtl">⬆ Bulk Import SKUs</div><span class="mclose" onclick="closeModal()">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">⬆ Bulk Import SKUs</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div style="background:var(--s2);border:2px dashed var(--bd2);border-radius:8px;padding:28px;text-align:center;cursor:pointer" onclick="document.getElementById('xi').click()">
         <div style="font-size:32px;margin-bottom:10px">📊</div>
@@ -2649,7 +2619,7 @@ function openImgModal(skuId){
   const s = skuId === 'new' ? {img: newImg||''} : skuDB.find(x=>x.id===skuId);
   const currentUrl = s?.img || '';
   const fixed = fixImg(currentUrl);
-  setModal(`<div class="mhdr"><div class="mtl">📷 Set Product Image</div><span class="mclose" onclick="closeModal()">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">📷 Set Product Image</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       ${fixed ? `<div style="text-align:center;margin-bottom:16px">
         <img src="${esc(fixed)}" id="img-modal-preview" style="width:130px;height:130px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2);cursor:zoom-in" onclick="zoomImg('${escAttr(fixed)}')" onerror="this.style.display='none'">
@@ -3034,7 +3004,7 @@ function openForgotPassword(){
       <div id="forgot-err" style="background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--re);margin-bottom:14px;display:none"></div>
       <div id="forgot-ok" style="background:rgba(45,212,160,.08);border:1px solid rgba(45,212,160,.2);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--gr);margin-bottom:14px;display:none"></div>
       <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px">Email Address</label>
-      <input id="forgot-email" class="fi" type="email" placeholder="owner@aryadesigns.co.in" style="margin-bottom:16px" onkeydown="if(event.key==='Enter')doForgotPassword()">
+      <input id="forgot-email" class="fi" type="email" placeholder="your@email.com" style="margin-bottom:16px" onkeydown="if(event.key==='Enter')doForgotPassword()">
       <div style="display:flex;gap:10px">
         <button class="btn bg" style="flex:1" onclick="document.getElementById('forgot-overlay').remove()">Cancel</button>
         <button class="btn bp" style="flex:1" onclick="doForgotPassword()">Send Reset</button>
