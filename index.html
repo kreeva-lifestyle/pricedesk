@@ -171,7 +171,33 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .role-admin{background:rgba(245,166,35,.15);color:var(--ac)}
 .role-manager{background:rgba(78,142,247,.15);color:var(--bl)}
 .role-viewer{background:rgba(139,154,191,.1);color:var(--tx2)}
-/* ── HAMBURGER ──────────────────────────────────────── */
+/* ── LOGIN SCREEN ───────────────────────────────────── */
+#login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center}
+.login-box{background:var(--s);border:1px solid var(--bd2);border-radius:16px;width:380px;padding:36px 32px;text-align:center}
+.login-logo{font-size:22px;font-weight:700;color:var(--ac);font-family:var(--mono);margin-bottom:4px}
+.login-sub{font-size:12px;color:var(--tx3);letter-spacing:2px;text-transform:uppercase;margin-bottom:28px}
+.login-err{background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--re);margin-bottom:14px;display:none}
+.login-footer{font-size:11px;color:var(--tx3);margin-top:16px}
+/* ── IMAGE MODAL (zoom) ─────────────────────────────── */
+#img-zoom-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:500;display:none;align-items:center;justify-content:center;cursor:zoom-out;backdrop-filter:blur(6px)}
+#img-zoom-overlay.active{display:flex}
+#img-zoom-overlay img{max-width:90vw;max-height:88vh;border-radius:10px;box-shadow:0 8px 48px rgba(0,0,0,.8);object-fit:contain}
+#img-zoom-overlay .zoom-close{position:absolute;top:18px;right:22px;color:#fff;font-size:28px;cursor:pointer;opacity:.7;line-height:1}
+#img-zoom-overlay .zoom-close:hover{opacity:1}
+/* ── IMAGE UPLOAD MODAL ─────────────────────────────── */
+.dropzone{border:2px dashed var(--bd2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .15s;position:relative}
+.dropzone:hover,.dropzone.drag-over{border-color:var(--ac);background:rgba(245,166,35,.05)}
+.dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.img-preview-wrap{position:relative;display:inline-block;margin-top:12px}
+.img-preview-wrap img{width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2);display:block}
+.img-remove-btn{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:var(--re);color:#fff;border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700}
+/* ── IGNORE THRESHOLD TOGGLE (inline SKU table) ─────── */
+.ignore-toggle{display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;padding:3px 7px;border-radius:4px;border:1px solid var(--bd2);background:transparent;color:var(--tx3);transition:all .12s;white-space:nowrap}
+.ignore-toggle:hover{border-color:var(--ac);color:var(--ac)}
+.ignore-toggle.active{background:rgba(245,166,35,.12);border-color:var(--ac);color:var(--ac)}
+/* ── AUTO-LOGOUT WARNING ────────────────────────────── */
+#session-warn{position:fixed;bottom:70px;right:22px;background:var(--s);border:1px solid var(--re);border-radius:var(--r);padding:12px 16px;font-size:13px;z-index:998;display:none;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+
 .hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;background:transparent;border:none;cursor:pointer;padding:6px;border-radius:6px;flex-shrink:0}
 .hamburger:hover{background:var(--s2)}
 .hamburger span{display:block;height:2px;background:var(--tx2);border-radius:2px;transition:all .2s}
@@ -295,8 +321,34 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
+
+<!-- ═══ LOGIN SCREEN ═══ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">PriceDesk</div>
+    <div class="login-sub">Marketplace Pricing</div>
+    <div class="login-err" id="login-err"></div>
+    <div class="fg"><label class="fl" style="text-align:left">Email</label><input class="fi" id="login-email" type="email" placeholder="you@company.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="fg" style="margin-bottom:20px"><label class="fl" style="text-align:left">Password</label><input class="fi" id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn bp" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button>
+    <div class="login-footer">Forgot password? Contact your admin to reset.</div>
+  </div>
+</div>
+
+<!-- ═══ IMAGE ZOOM OVERLAY ═══ -->
+<div id="img-zoom-overlay" onclick="closeZoom()">
+  <span class="zoom-close" onclick="closeZoom()">×</span>
+  <img id="img-zoom-img" src="" alt="">
+</div>
+
+<!-- ═══ SESSION EXPIRY WARNING ═══ -->
+<div id="session-warn">
+  ⚠ You'll be logged out in <strong id="session-countdown">5:00</strong> due to inactivity.
+  <button onclick="resetSession()" class="btn bp bsm" style="margin-left:10px">Stay logged in</button>
+</div>
 
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 
@@ -317,13 +369,15 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="nav-sec">Admin</div>
     <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni">⊠</span> Wireframe Builder</div>
     <div class="nav-item" data-page="users" onclick="nav('users')"><span class="ni">◉</span> User Access</div>
+    <div class="nav-item" data-page="settings" onclick="nav('settings')"><span class="ni">⚙</span> App Settings</div>
   </nav>
   <div class="sb-btm">
-    <div class="flex gap8" style="margin-bottom:10px"><div class="ava" id="sb-ava">A</div><div><div style="font-size:12px;color:var(--tx2)" id="sb-uname">Admin User</div><div style="font-size:10px;color:var(--tx3)">Administrator</div></div></div>
-    <div style="display:flex;gap:6px">
-      <button onclick="exportData()" style="flex:1;background:transparent;border:1px solid var(--bd2);border-radius:5px;color:var(--tx3);font-size:11px;padding:5px 0;cursor:pointer" title="Export all data as JSON backup">⬇ Export</button>
-      <button onclick="importDataPrompt()" style="flex:1;background:transparent;border:1px solid var(--bd2);border-radius:5px;color:var(--tx3);font-size:11px;padding:5px 0;cursor:pointer" title="Import a backup JSON">⬆ Import</button>
+    <div class="flex gap8" style="margin-bottom:10px"><div class="ava" id="sb-ava">A</div><div><div style="font-size:12px;color:var(--tx2)" id="sb-uname">Admin User</div><div style="font-size:10px;color:var(--tx3)" id="sb-role">Administrator</div></div></div>
+    <div style="display:flex;gap:6px;margin-bottom:6px">
+      <button onclick="exportData()" style="flex:1;background:transparent;border:1px solid var(--bd2);border-radius:5px;color:var(--tx3);font-size:11px;padding:5px 0;cursor:pointer" title="Export JSON backup">⬇ Export</button>
+      <button onclick="importDataPrompt()" style="flex:1;background:transparent;border:1px solid var(--bd2);border-radius:5px;color:var(--tx3);font-size:11px;padding:5px 0;cursor:pointer" title="Import backup">⬆ Import</button>
     </div>
+    <button onclick="doLogout()" style="width:100%;background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:5px;color:var(--re);font-size:12px;padding:7px 0;cursor:pointer;font-weight:600">⏏ Sign Out</button>
   </div>
 </div>
 
@@ -438,15 +492,21 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600">Alert Settings</div></div>
         <div class="cb">
-          <div class="fg"><label class="fl">Alert Email</label><input class="fi" type="email" value="admin@yourcompany.com"></div>
-          <div class="fg"><label class="fl">Frequency</label>
-            <select class="fi" style="appearance:none">
-              <option>Daily (every day at 9 AM)</option>
+          <div class="info" style="margin-bottom:12px">📧 <strong style="color:var(--tx)">Email alerts require EmailJS setup</strong> — free 200 emails/month. See deployment guide for instructions.</div>
+          <div class="fg"><label class="fl">Alert Email Address</label><input class="fi" id="alert-email-input" type="email" value="admin@yourcompany.com" placeholder="admin@yourcompany.com"></div>
+          <div class="fg"><label class="fl">Alert Frequency</label>
+            <select class="fi" id="alert-freq-select" style="appearance:none">
               <option>Immediately on breach</option>
+              <option>Daily (every day at 9 AM)</option>
               <option>Weekly Summary</option>
             </select>
           </div>
-          <button class="btn bp bsm" onclick="toast('Settings saved','green')">Save Settings</button>
+          <div class="fg"><label class="fl">EmailJS Status</label>
+            <div id="email-status-box" style="padding:8px 12px;border-radius:6px;font-size:12px;background:var(--s2);border:1px solid var(--bd2);color:var(--tx3)">
+              Not configured — alerts will log to console only
+            </div>
+          </div>
+          <button class="btn bp bsm" onclick="saveAlertSettings()">Save Alert Settings</button>
         </div>
       </div>
     </div>
@@ -596,6 +656,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="btn bp bsm" onclick="addRow()" style="margin-left:auto">+ Add Row</div>
     <button class="btn bg bsm" onclick="openImport()">⬆ Import</button>
     <button class="btn bg bsm" onclick="dlTemplate()">⬇ Template</button>
+    <button class="btn bp bsm" onclick="exportSKUsToExcel()" title="Download all SKUs with full details">⬇ Download SKUs</button>
   </div>
   <div id="active-filter-chips" class="active-filters"></div>
   <div class="info mb8">
@@ -677,6 +738,93 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   </div>
 </div>
 
+<!-- ═══ APP SETTINGS ═══ -->
+<div class="page" id="page-settings">
+  <div class="g2">
+    <div>
+      <div class="card mb16">
+        <div class="ch">
+          <div>
+            <div style="font-size:13px;font-weight:600">📧 Email Settings (EmailJS)</div>
+            <div class="st" style="margin-top:2px">Paste your keys from emailjs.com — no code editing needed</div>
+          </div>
+          <button class="btn bp bsm" onclick="saveEmailSettings()">✓ Save & Activate</button>
+        </div>
+        <div class="cb">
+          <div class="info mb16">
+            <strong style="color:var(--tx)">How to get these keys:</strong><br>
+            1. Go to <strong style="color:var(--ac)">emailjs.com</strong> → free account<br>
+            2. Connect your Gmail → copy <strong>Service ID</strong><br>
+            3. Create 3 templates → copy each <strong>Template ID</strong><br>
+            4. Account page → copy <strong>Public Key</strong>
+          </div>
+          <div class="fg"><label class="fl">Service ID</label><input class="fi" id="cfg-service-id" placeholder="service_xxxxxxx" spellcheck="false"></div>
+          <div class="fg"><label class="fl">Welcome Template ID</label><input class="fi" id="cfg-tpl-welcome" placeholder="template_xxxxxxx" spellcheck="false"></div>
+          <div class="fg"><label class="fl">Password Reset Template ID</label><input class="fi" id="cfg-tpl-reset" placeholder="template_xxxxxxx" spellcheck="false"></div>
+          <div class="fg"><label class="fl">Alert Template ID</label><input class="fi" id="cfg-tpl-alert" placeholder="template_xxxxxxx" spellcheck="false"></div>
+          <div class="fg" style="margin-bottom:0"><label class="fl">Public Key</label><input class="fi" id="cfg-public-key" placeholder="xxxxxxxxxxxxxx" spellcheck="false"></div>
+          <div id="email-cfg-status" style="margin-top:14px;display:none"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><div style="font-size:13px;font-weight:600">🧪 Test Emails</div></div>
+        <div class="cb">
+          <div class="fg"><label class="fl">Your email (for test sends)</label><input class="fi" id="cfg-test-email" type="email" placeholder="you@gmail.com"></div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <div class="flex gap12"><button class="btn bg bsm" style="width:170px" onclick="testEmail('welcome')">📨 Test Welcome Email</button><span class="st">Sent when a new user is added</span></div>
+            <div class="flex gap12"><button class="btn bg bsm" style="width:170px" onclick="testEmail('reset')">🔑 Test Reset Email</button><span class="st">Sent on password reset</span></div>
+            <div class="flex gap12"><button class="btn bg bsm" style="width:170px" onclick="testEmail('alert')">⚠️ Test Alert Email</button><span class="st">Sent on threshold breach</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card mb16">
+        <div class="ch">
+          <div>
+            <div style="font-size:13px;font-weight:600">☁ Database Settings (Supabase)</div>
+            <div class="st" style="margin-top:2px">Cloud sync across all devices</div>
+          </div>
+          <button class="btn bp bsm" onclick="saveSupabaseSettings()">✓ Save & Connect</button>
+        </div>
+        <div class="cb">
+          <div class="fg"><label class="fl">Supabase Project URL</label><input class="fi" id="cfg-sb-url" placeholder="https://xxxx.supabase.co" spellcheck="false"></div>
+          <div class="fg" style="margin-bottom:0"><label class="fl">Supabase Anon Key</label><input class="fi" id="cfg-sb-key" placeholder="eyJhbGci..." type="password" spellcheck="false"><div class="st" style="margin-top:4px">Supabase → Settings → API</div></div>
+          <div id="sb-cfg-status" style="margin-top:14px;display:none"></div>
+        </div>
+      </div>
+      <div class="card mb16">
+        <div class="ch"><div style="font-size:13px;font-weight:600">🌐 Custom Domain Guide</div></div>
+        <div class="cb">
+          <div class="info" style="margin-bottom:0;line-height:1.9">
+            <strong style="color:var(--ac)">Step 1</strong> — GitHub → repo → Settings → Pages → Custom domain → enter your domain<br>
+            <strong style="color:var(--ac)">Step 2</strong> — Open your domain registrar (GoDaddy / Namecheap)<br>
+            <strong style="color:var(--ac)">Step 3</strong> — Add a CNAME record:<br>
+            &nbsp;&nbsp;Name: <span style="font-family:monospace;color:#2dd4a0">pricing</span> &nbsp; Value: <span style="font-family:monospace;color:#2dd4a0">your-username.github.io</span><br>
+            <strong style="color:var(--ac)">Step 4</strong> — Wait 10–30 min → live on your domain
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><div style="font-size:13px;font-weight:600">ℹ App Info & Data</div></div>
+        <div class="cb" style="font-size:12px">
+          <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd)"><span class="st">Version</span><span class="mono">v6.0</span></div>
+          <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd)"><span class="st">SKUs</span><span class="mono" id="cfg-sku-count">—</span></div>
+          <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd)"><span class="st">Brands</span><span class="mono" id="cfg-brand-count">—</span></div>
+          <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd)"><span class="st">Users</span><span class="mono" id="cfg-user-count">—</span></div>
+          <div style="display:flex;justify-content:space-between;padding:7px 0"><span class="st">Data size</span><span class="mono" id="cfg-storage-size">—</span></div>
+          <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn bg bsm" onclick="exportData()">⬇ Backup</button>
+            <button class="btn bg bsm" onclick="importDataPrompt()">⬆ Restore</button>
+            <button class="btn br bsm" onclick="confirmClearData()">✕ Clear All Data</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
   </div>
 </div>
 <div id="modal-root"></div>
@@ -686,7 +834,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 // SUPABASE CONFIG — paste your keys here after setup
 // ═══════════════════════════════════════════════════════
 const SUPABASE_URL  = 'https://fcmesdnagvrdmjzzuwue.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbWVzZG5hZ3ZyZG1qenp1d3VlIiwicm9sZSI6ImFub24iLCJpYXQiOj';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbWVzZG5hZ3ZyZG1qenp1d3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxNjM4NTgsImV4cCI6MjA4OTczOTg1OH0.fS1ecV898Dmrka6hr3R0RE6gcKlneWUPbDyDPv30_qU';
 
 let _db = null;
 function getDB(){
@@ -1054,7 +1202,17 @@ function renderBreachList(){
     }).join('')+'</tbody></table>';
 }
 
-function saveThr(){triggerRecalc();renderSKUs();updateAlerts();save();toast('✓ Thresholds saved','green');renderBreachList();}
+function saveThr(){
+  triggerRecalc();renderSKUs();updateAlerts();save();renderBreachList();
+  // Send alert email if configured
+  const alertEmail = document.querySelector('#page-thresholds input[type=email]')?.value||'';
+  const freq = document.querySelector('#page-thresholds select')?.value||'';
+  if(alertEmail && freq.includes('Immediately')){
+    const breached = skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+    if(breached.length) sendThresholdAlertEmail(breached, alertEmail);
+  }
+  toast('✓ Thresholds saved','green');
+}
 
 function updateAlerts(){
   const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
@@ -1269,7 +1427,7 @@ function renderSKUs(){
     else if(c.isBreach) statusIcon=`<span class="ico-breach" title="Threshold breached! Net profit ₹${c.profitRs.toFixed(0)} < ₹${c.threshold}">⚠️</span>`;
     else statusIcon=`<span class="ico-healthy" title="Healthy ✓">✅</span>`;
     return`<tr>
-      <td><div onclick="promptImg('${s.id}')" style="cursor:pointer" title="Click to set image">${s.img?`<img src="${fixImg(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">🖼</div>`}</div></td>
+      <td><div onclick="openImgModal('${s.id}')" style="cursor:pointer" title="Click to set image">${s.img?`<img src="${fixImg(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">🖼</div>`}</div></td>
       <td class="mono" style="font-size:11px;font-weight:600">${s.styleId}</td>
       <td>${brand?`<div style="font-size:12px;font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${brand.name}">${brand.name}</div><span class="bdg ${brand.model==='ajio-ppmp'?'bppmp':brand.model==='ajio-cc'?'bcc':'bi'}" style="font-size:10px">${modelLabels[brand.model]||'?'}</span>`:'<span class="st">—</span>'}</td>
       <td><span class="tag tb" style="font-size:10px">${s.category}</span></td>
@@ -1283,7 +1441,10 @@ function renderSKUs(){
       <td class="av" style="color:var(--ac)">${c.comm}%${brand?.commOverride!=null?' 🔒':''}</td>
       <td class="av" style="color:${profColor}">₹${c.profitRs.toFixed(0)}</td>
       <td>
-        <div class="flex gap8">
+        <div class="flex gap8" style="flex-wrap:wrap">
+          <button class="ignore-toggle ${s.ignoreThreshold?'active':''}" onclick="toggleIgnore('${s.id}')" title="${s.ignoreThreshold?'Click to re-enable threshold':'Click to ignore threshold for this SKU'}">
+            ${s.ignoreThreshold?'🔕':'🔔'}
+          </button>
           ${statusIcon}
           <button class="btn bg bxs" onclick="startEdit('${s.id}')" title="Edit">✎</button>
           <button class="btn br bxs" onclick="delSKU('${s.id}')" title="Delete">✕</button>
@@ -1320,7 +1481,7 @@ function renderEditRow(s){
   const lvlOpts=LEVELS.map(l=>`<option ${l===s.level?'selected':''}>${l}</option>`).join('');
   const c=calcSKU(s);
   return`<tr class="er" id="er-${s.id}">
-    <td><div onclick="promptImg('${s.id}')" style="cursor:pointer">${s.img?`<img src="${fixImg(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div>`}</div></td>
+    <td><div onclick="openImgModal('${s.id}')" style="cursor:pointer">${s.img?`<img src="${fixImg(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div>`}</div></td>
     <td><input class="si" id="e-sid" value="${s.styleId}" style="width:115px"></td>
     <td><select class="sse" id="e-brand" onchange="onCatSelectChange('e')">${brandOpts}</select></td>
     <td><select class="sse" id="e-cat" onchange="onCatSelectChange('e')">${catOpts}</select></td>
@@ -1343,7 +1504,7 @@ function renderNewRow(){
   const firstBrand=brands[0];
   const isMyntra=firstBrand?.model==='myntra';
   return`<tr class="er" id="er-new">
-    <td><div onclick="promptImgNew()" style="cursor:pointer;width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div></td>
+    <td><div onclick="openImgModal('new')" style="cursor:pointer;width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div></td>
     <td><input class="si" id="n-sid" placeholder="Style ID" style="width:115px"></td>
     <td><select class="sse" id="n-brand" onchange="onCatSelectChange('n')">${brandOpts}</select></td>
     <td><select class="sse" id="n-cat" onchange="onCatSelectChange('n')">${catOpts}</select></td>
@@ -1406,8 +1567,7 @@ function liveCalcRow(row){
 function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sid')?.focus(),50);}
 function startEdit(id){editId=id;renderSKUs();setTimeout(()=>el('e-sid')?.focus(),50);}
 function cancelEdit(){editId=null;newImg='';renderSKUs();}
-function promptImg(id){const s=skuDB.find(x=>x.id===id);if(!s)return;const u=prompt(`Image URL for ${s.styleId}\n\nDropbox: change ?dl=0 → ?raw=1`,s.img||'');if(u!==null){s.img=u;renderSKUs();}}
-function promptImgNew(){const u=prompt('Image URL (Dropbox ?raw=1 or CDN)','');if(u!==null)newImg=u;}
+// promptImg / promptImgNew now replaced by openImgModal — see IMAGE MANAGEMENT section
 
 function saveNew(){
   const sid=el('n-sid')?.value.trim(),brandId=el('n-brand')?.value,cat=el('n-cat')?.value,lvl=el('n-lvl')?.value;
@@ -1450,6 +1610,7 @@ function renderUsers(){
     <td class="st">${u.added}</td>
     <td><div class="flex gap8">
       <button class="btn bg bxs" onclick="openUserModal('${u.id}')">✎ Edit</button>
+      <button class="btn bg bxs" onclick="resetUserPassword('${u.id}')" title="Reset password">🔑</button>
       ${u.id!=='u1'?`<button class="btn br bxs" onclick="deleteUser('${u.id}')">✕ Remove</button>`:''}
     </div></td>
   </tr>`).join('');
@@ -1490,6 +1651,8 @@ function saveUser(eid){
     users.push({id:'u'+Date.now(),name,email,role,added:new Date().toISOString().slice(0,10)});toast(`✓ ${name} added`,'green');
   }
   closeModal();renderUsers();save();
+  // Send onboarding email to new users
+  if(!eid){ const newUser=users[users.length-1]; sendEmail(EMAIL_CONFIG.templateWelcome,{to_name:newUser.name,to_email:newUser.email,role:newUser.role,temp_password:'pricedesk123',login_url:window.location.href}); }
 }
 
 function deleteUser(id){
@@ -1547,7 +1710,7 @@ function addWFRow(type){const m=el('wf-sel').value;const def={input:'New Input',
 // ═══════════════════════════════════════════════════════
 // NAV & TABS
 // ═══════════════════════════════════════════════════════
-const TITLES={dashboard:'Dashboard',pricing:'Pricing Tables',thresholds:'Thresholds',brands:'Brands',commission:'Commission Settings',logistics:'Logistics Settings',skus:'SKUs',categories:'Categories',wireframe:'Wireframe Builder',users:'User Access'};
+const TITLES={dashboard:'Dashboard',pricing:'Pricing Tables',thresholds:'Thresholds',brands:'Brands',commission:'Commission Settings',logistics:'Logistics Settings',skus:'SKUs',categories:'Categories',wireframe:'Wireframe Builder',users:'User Access',settings:'App Settings'};
 function nav(p){
   document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
@@ -1570,6 +1733,7 @@ function nav(p){
   if(p==='categories')renderCatTable();
   if(p==='thresholds')renderThresholds();
   if(p==='users')renderUsers();
+  if(p==='settings'){ loadConfig(); populateSettingsPage(); }
 }
 
 function switchMP(mp,el_){
@@ -1703,6 +1867,112 @@ function confirmImport(){
   toast(`✓ Imported ${count} SKU${count>1?'s':''}`, 'green');
 }
 
+
+// ═══════════════════════════════════════════════════════
+// IMAGE MANAGEMENT — upload, dropbox, drag-drop, remove, zoom
+// ═══════════════════════════════════════════════════════
+let _imgTargetId = null;
+
+function openImgModal(skuId){
+  _imgTargetId = skuId;
+  const s = skuId === 'new' ? {img: newImg||''} : skuDB.find(x=>x.id===skuId);
+  const currentUrl = s?.img || '';
+  const fixed = fixImg(currentUrl);
+  setModal(`<div class="mhdr"><div class="mtl">📷 Set Product Image</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      ${fixed ? `<div style="text-align:center;margin-bottom:16px">
+        <img src="${fixed}" id="img-modal-preview" style="width:130px;height:130px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2);cursor:zoom-in" onclick="zoomImg('${fixed}')" onerror="this.style.display='none'">
+        <div style="margin-top:8px;display:flex;gap:8px;justify-content:center">
+          <button class="btn bg bsm" onclick="zoomImg('${fixed}')">🔍 Zoom</button>
+          <button class="btn br bsm" onclick="removeImgFromModal()">✕ Remove</button>
+        </div>
+      </div>` : ''}
+      <div class="fg"><label class="fl">Paste image URL (Dropbox / CDN / Google Drive)</label>
+        <input class="fi" id="img-url-input" placeholder="https://..." value="${currentUrl}" oninput="previewImgUrl(this.value)">
+        <div class="st" style="margin-top:4px">Dropbox tip: change <span style="font-family:monospace;color:var(--ac)">?dl=0</span> → <span style="font-family:monospace;color:var(--gr)">?raw=1</span></div>
+      </div>
+      <div class="fg"><label class="fl">Or upload from device / drag & drop</label>
+        <div class="dropzone" id="img-dropzone" ondragover="this.classList.add('drag-over');event.preventDefault()" ondragleave="this.classList.remove('drag-over')" ondrop="handleImgDrop(event)">
+          <input type="file" accept="image/*" onchange="handleImgFile(this.files[0])">
+          <div style="font-size:26px;margin-bottom:6px">🖼</div>
+          <div style="font-size:13px;color:var(--tx2)">Drag & drop here, or click to browse</div>
+          <div class="st" style="margin-top:3px">JPG, PNG, WebP · max 2MB</div>
+        </div>
+        <div id="img-upload-preview" style="text-align:center;margin-top:10px"></div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg" onclick="closeModal()">Cancel</button>
+      <button class="btn bp" onclick="saveImgFromModal()">✓ Save Image</button>
+    </div>`);
+}
+
+function previewImgUrl(url){
+  const fixed = fixImg(url);
+  const prev = document.getElementById('img-modal-preview');
+  if(prev && fixed){ prev.src=fixed; prev.style.display=''; }
+}
+
+function handleImgFile(file){
+  if(!file) return;
+  if(file.size > 2*1024*1024){ toast('Image too large — max 2MB','red'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const dataUrl = e.target.result;
+    const urlInput = document.getElementById('img-url-input');
+    if(urlInput) urlInput.value = dataUrl;
+    const prev = document.getElementById('img-upload-preview');
+    if(prev) prev.innerHTML = `<img src="${dataUrl}" style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2)">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleImgDrop(e){
+  e.preventDefault();
+  const dz = document.getElementById('img-dropzone');
+  if(dz) dz.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if(file && file.type.startsWith('image/')) handleImgFile(file);
+}
+
+function removeImgFromModal(){
+  const urlInput = document.getElementById('img-url-input');
+  if(urlInput) urlInput.value='';
+  const prev = document.getElementById('img-modal-preview');
+  if(prev) prev.style.display='none';
+  const up = document.getElementById('img-upload-preview');
+  if(up) up.innerHTML='';
+}
+
+function saveImgFromModal(){
+  const url = document.getElementById('img-url-input')?.value.trim() || '';
+  if(_imgTargetId === 'new'){
+    newImg = url;
+  } else {
+    const s = skuDB.find(x=>x.id===_imgTargetId);
+    if(s){ s.img = url; save(); }
+  }
+  closeModal();
+  renderSKUs();
+  toast(url ? '✓ Image saved' : '✓ Image removed','green');
+}
+
+// ── Image zoom ────────────────────────────────────────
+function zoomImg(url){
+  const ov = document.getElementById('img-zoom-overlay');
+  const img = document.getElementById('img-zoom-img');
+  if(!ov||!img||!url) return;
+  img.src = fixImg(url)||url;
+  ov.classList.add('active');
+  document.body.style.overflow='hidden';
+}
+function closeZoom(){
+  const ov = document.getElementById('img-zoom-overlay');
+  if(ov) ov.classList.remove('active');
+  document.body.style.overflow='';
+}
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeZoom(); closeModal(); } });
+
 // ═══════════════════════════════════════════════════════
 // DATA EXPORT / IMPORT (JSON backup)
 // ═══════════════════════════════════════════════════════
@@ -1742,17 +2012,432 @@ function importDataPrompt(){
   input.click();
 }
 
+
+
+function saveAlertSettings(){
+  const email = document.getElementById('alert-email-input')?.value||'';
+  if(email && !email.includes('@')){ toast('Enter a valid email','red'); return; }
+  // Test email status
+  const statusBox = document.getElementById('email-status-box');
+  if(statusBox){
+    if(emailReady()){
+      statusBox.textContent='✓ EmailJS connected — alerts will be sent';
+      statusBox.style.color='var(--gr)';
+      statusBox.style.borderColor='rgba(45,212,160,.3)';
+    } else {
+      statusBox.textContent='⚠ EmailJS not configured — see deployment guide';
+      statusBox.style.color='var(--ac)';
+    }
+  }
+  toast('✓ Alert settings saved','green');
+}
+
+
+// ═══════════════════════════════════════════════════════
+// SETTINGS PAGE — save keys to localStorage, no file edit needed
+// ═══════════════════════════════════════════════════════
+const CFG_KEY = 'pricedesk_config';
+
+function loadConfig(){
+  try{
+    const cfg = JSON.parse(localStorage.getItem(CFG_KEY)||'{}');
+    // Apply to EMAIL_CONFIG
+    if(cfg.serviceId)      EMAIL_CONFIG.serviceId       = cfg.serviceId;
+    if(cfg.tplWelcome)     EMAIL_CONFIG.templateWelcome = cfg.tplWelcome;
+    if(cfg.tplReset)       EMAIL_CONFIG.templateReset   = cfg.tplReset;
+    if(cfg.tplAlert)       EMAIL_CONFIG.templateAlert   = cfg.tplAlert;
+    if(cfg.publicKey)      EMAIL_CONFIG.publicKey       = cfg.publicKey;
+    // Apply Supabase (re-init if keys present)
+    if(cfg.sbUrl && cfg.sbKey){
+      try{
+        if(window.supabase) _db = window.supabase.createClient(cfg.sbUrl, cfg.sbKey);
+      } catch(e){}
+    }
+    return cfg;
+  } catch(e){ return {}; }
+}
+
+function populateSettingsPage(){
+  const cfg = JSON.parse(localStorage.getItem(CFG_KEY)||'{}');
+  const set = (id, val) => { const e=el(id); if(e&&val) e.value=val; };
+  set('cfg-service-id',  cfg.serviceId);
+  set('cfg-tpl-welcome', cfg.tplWelcome);
+  set('cfg-tpl-reset',   cfg.tplReset);
+  set('cfg-tpl-alert',   cfg.tplAlert);
+  set('cfg-public-key',  cfg.publicKey);
+  set('cfg-sb-url',      cfg.sbUrl);
+  set('cfg-sb-key',      cfg.sbKey);
+  // Update counts
+  if(el('cfg-sku-count'))     el('cfg-sku-count').textContent     = skuDB.length;
+  if(el('cfg-brand-count'))   el('cfg-brand-count').textContent   = brands.length;
+  if(el('cfg-user-count'))    el('cfg-user-count').textContent    = users.length;
+  if(el('cfg-storage-size')){
+    try{
+      const size = new Blob([localStorage.getItem(STORAGE_KEY)||'']).size;
+      el('cfg-storage-size').textContent = size > 1024 ? (size/1024).toFixed(1)+' KB' : size+' B';
+    } catch(e){}
+  }
+  // Show email status
+  const statusBox = el('email-cfg-status');
+  if(statusBox){
+    statusBox.style.display = '';
+    if(cfg.publicKey){
+      statusBox.innerHTML = '<div class="success" style="margin:0">✓ EmailJS configured — emails are active</div>';
+    } else {
+      statusBox.innerHTML = '<div class="warn" style="margin:0">⚠ Not configured yet — paste your keys above and click Save</div>';
+    }
+  }
+}
+
+function saveEmailSettings(){
+  const get = id => el(id)?.value.trim()||'';
+  const serviceId  = get('cfg-service-id');
+  const tplWelcome = get('cfg-tpl-welcome');
+  const tplReset   = get('cfg-tpl-reset');
+  const tplAlert   = get('cfg-tpl-alert');
+  const publicKey  = get('cfg-public-key');
+
+  if(!serviceId||!publicKey){ toast('Service ID and Public Key are required','red'); return; }
+
+  // Save to localStorage config
+  const cfg = JSON.parse(localStorage.getItem(CFG_KEY)||'{}');
+  Object.assign(cfg, {serviceId, tplWelcome, tplReset, tplAlert, publicKey});
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+
+  // Apply immediately without page reload
+  EMAIL_CONFIG.serviceId       = serviceId;
+  EMAIL_CONFIG.templateWelcome = tplWelcome;
+  EMAIL_CONFIG.templateReset   = tplReset;
+  EMAIL_CONFIG.templateAlert   = tplAlert;
+  EMAIL_CONFIG.publicKey       = publicKey;
+
+  if(typeof emailjs !== 'undefined') emailjs.init(publicKey);
+
+  const statusBox = el('email-cfg-status');
+  if(statusBox){
+    statusBox.style.display='';
+    statusBox.innerHTML = '<div class="success" style="margin:0">✓ Email settings saved and activated! Use the test buttons below to verify.</div>';
+  }
+  toast('✓ Email settings saved — no code editing needed!','green');
+}
+
+function saveSupabaseSettings(){
+  const sbUrl = el('cfg-sb-url')?.value.trim()||'';
+  const sbKey = el('cfg-sb-key')?.value.trim()||'';
+  if(!sbUrl||!sbKey){ toast('Both Supabase URL and Key are required','red'); return; }
+  if(!sbUrl.includes('supabase.co')){ toast('URL should look like https://xxxx.supabase.co','red'); return; }
+
+  const cfg = JSON.parse(localStorage.getItem(CFG_KEY)||'{}');
+  Object.assign(cfg, {sbUrl, sbKey});
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+
+  // Re-init Supabase
+  try{
+    if(window.supabase){ _db = window.supabase.createClient(sbUrl, sbKey); }
+    const statusBox = el('sb-cfg-status');
+    if(statusBox){
+      statusBox.style.display='';
+      statusBox.innerHTML = '<div class="success" style="margin:0">✓ Supabase connected! Your data will now sync to the cloud.</div>';
+    }
+    // Trigger a save to push existing data to Supabase
+    save();
+    toast('✓ Supabase connected — syncing data now','green');
+  } catch(err){
+    toast('Connection failed — check your URL and key','red');
+  }
+}
+
+async function testEmail(type){
+  const testEmail = el('cfg-test-email')?.value.trim();
+  if(!testEmail||!testEmail.includes('@')){ toast('Enter your email address in the test field first','red'); return; }
+  if(!emailReady()){ toast('Save your EmailJS keys first, then test','red'); return; }
+
+  toast('Sending test email…','green');
+  let result = false;
+  if(type==='welcome'){
+    result = await sendEmail(EMAIL_CONFIG.templateWelcome,{
+      to_name:'Test User', to_email:testEmail, role:'manager',
+      temp_password:'pricedesk123', login_url:window.location.href
+    });
+  } else if(type==='reset'){
+    result = await sendEmail(EMAIL_CONFIG.templateReset,{
+      to_name:'Test User', to_email:testEmail,
+      temp_password:'PD-TESTXYZ', login_url:window.location.href
+    });
+  } else if(type==='alert'){
+    result = await sendEmail(EMAIL_CONFIG.templateAlert,{
+      to_email:testEmail, breach_count:'2',
+      breach_list:'SP39-ORANGE-M (Fusionic Myntra, Kurta Sets): ₹210 < ₹300\nTF-202 (LNB Amazon, Lehenga Choli): ₹380 < ₹500',
+      date:new Date().toLocaleDateString('en-IN'),
+      login_url:window.location.href
+    });
+  }
+  if(result !== false) toast('✓ Test email sent! Check your inbox (also check spam)','green');
+}
+
+function confirmClearData(){
+  if(!confirm('This will permanently delete ALL SKUs, brands, users and settings. This cannot be undone. Are you sure?')) return;
+  if(!confirm('Last chance — DELETE ALL DATA?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(CFG_KEY);
+  location.reload();
+}
+
+// ═══════════════════════════════════════════════════════
+// AUTH — Login, Logout, Session (1hr auto-logout)
+// ═══════════════════════════════════════════════════════
+const SESSION_KEY = 'pricedesk_session';
+const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour
+const WARN_BEFORE    = 5  * 60 * 1000;  // warn 5 min before
+let _sessionTimer = null, _warnTimer = null, _countdownInterval = null;
+let currentUser = null;
+
+function doLogin(){
+  const email = document.getElementById('login-email')?.value.trim().toLowerCase();
+  const pass  = document.getElementById('login-pass')?.value;
+  const errEl = document.getElementById('login-err');
+  if(!email||!pass){ showLoginErr('Please fill in both fields.'); return; }
+  // Find user in users array
+  const user = users.find(u => u.email.toLowerCase()===email);
+  if(!user){ showLoginErr('No account found with that email.'); return; }
+  // Password check — stored as hash or plain (first login uses default password)
+  const storedHash = user.passwordHash || null;
+  const defaultPass = 'pricedesk123'; // default for new users
+  const inputHash = simpleHash(pass);
+  if(storedHash && storedHash !== inputHash){ showLoginErr('Incorrect password.'); return; }
+  if(!storedHash && pass !== defaultPass){ showLoginErr('Incorrect password. Default: pricedesk123'); return; }
+  // Set user password hash on first login
+  if(!storedHash){ user.passwordHash = inputHash; save(); }
+  // Start session
+  currentUser = user;
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({userId:user.id, loginTime:Date.now()}));
+  document.getElementById('login-screen').style.display='none';
+  updateSidebarUser(user);
+  startSessionTimer();
+  sendWelcomeEmail(user);
+  toast(`Welcome back, ${user.name.split(' ')[0]}!`,'green');
+}
+
+function showLoginErr(msg){
+  const e = document.getElementById('login-err');
+  if(e){ e.textContent=msg; e.style.display='block'; }
+}
+
+function doLogout(){
+  if(!confirm('Sign out of PriceDesk?')) return;
+  _forceLogout();
+}
+
+function _forceLogout(){
+  currentUser = null;
+  sessionStorage.removeItem(SESSION_KEY);
+  clearTimeout(_sessionTimer);
+  clearTimeout(_warnTimer);
+  clearInterval(_countdownInterval);
+  document.getElementById('session-warn').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-email').value='';
+  document.getElementById('login-pass').value='';
+  document.getElementById('login-err').style.display='none';
+}
+
+function startSessionTimer(){
+  clearTimeout(_sessionTimer);
+  clearTimeout(_warnTimer);
+  clearInterval(_countdownInterval);
+  document.getElementById('session-warn').style.display='none';
+  // Warn 5 min before logout
+  _warnTimer = setTimeout(()=>{
+    document.getElementById('session-warn').style.display='block';
+    let remaining = WARN_BEFORE/1000;
+    _countdownInterval = setInterval(()=>{
+      remaining--;
+      const m = Math.floor(remaining/60), s = remaining%60;
+      const cEl = document.getElementById('session-countdown');
+      if(cEl) cEl.textContent = m+':'+(s<10?'0':'')+s;
+      if(remaining<=0){ clearInterval(_countdownInterval); _forceLogout(); toast('Session expired. Please log in again.','red'); }
+    },1000);
+  }, SESSION_TIMEOUT - WARN_BEFORE);
+  // Hard logout
+  _sessionTimer = setTimeout(()=>{ _forceLogout(); toast('Session expired. Please log in again.','red'); }, SESSION_TIMEOUT);
+}
+
+function resetSession(){
+  startSessionTimer();
+  document.getElementById('session-warn').style.display='none';
+  toast('Session extended for 1 hour','green');
+}
+
+// Reset timer on any user interaction
+['click','keydown','mousemove','touchstart'].forEach(evt=>{
+  document.addEventListener(evt, ()=>{ if(currentUser) startSessionTimer(); }, {passive:true});
+});
+
+function updateSidebarUser(user){
+  const ava  = document.getElementById('sb-ava');
+  const name = document.getElementById('sb-uname');
+  const role = document.getElementById('sb-role');
+  const ROLE_LABELS={admin:'Administrator',manager:'Manager',viewer:'Viewer'};
+  if(ava)  ava.textContent  = user.name.charAt(0).toUpperCase();
+  if(name) name.textContent = user.name;
+  if(role) role.textContent = ROLE_LABELS[user.role]||user.role;
+}
+
+function simpleHash(str){
+  // Simple deterministic hash — not cryptographic, but works for this app
+  let hash = 0;
+  for(let i=0;i<str.length;i++){ hash = ((hash<<5)-hash)+str.charCodeAt(i); hash|=0; }
+  return 'h'+Math.abs(hash).toString(36);
+}
+
+// Check existing session on load
+function checkSession(){
+  try{
+    const sess = JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');
+    if(sess && (Date.now()-sess.loginTime < SESSION_TIMEOUT)){
+      const user = users.find(u=>u.id===sess.userId);
+      if(user){
+        currentUser = user;
+        document.getElementById('login-screen').style.display='none';
+        updateSidebarUser(user);
+        startSessionTimer();
+        return true;
+      }
+    }
+  } catch(e){}
+  return false;
+}
+
+// ═══════════════════════════════════════════════════════
+// EMAIL SYSTEM (uses EmailJS — free tier, 200 emails/mo)
+// Configure at emailjs.com and paste your keys below
+// ═══════════════════════════════════════════════════════
+const EMAIL_CONFIG = {
+  serviceId:  'YOUR_EMAILJS_SERVICE_ID',   // from emailjs.com
+  templateWelcome: 'YOUR_WELCOME_TEMPLATE',
+  templateAlert:   'YOUR_ALERT_TEMPLATE',
+  templateReset:   'YOUR_RESET_TEMPLATE',
+  publicKey:  'YOUR_EMAILJS_PUBLIC_KEY',
+};
+
+function emailReady(){
+  return EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY' && typeof emailjs !== 'undefined';
+}
+
+async function sendEmail(templateId, params){
+  if(!emailReady()){ console.log('Email not configured — would send:', templateId, params); return false; }
+  try{
+    await emailjs.send(EMAIL_CONFIG.serviceId, templateId, params, EMAIL_CONFIG.publicKey);
+    return true;
+  } catch(e){ console.warn('Email send failed:', e); return false; }
+}
+
+function sendWelcomeEmail(user){
+  sendEmail(EMAIL_CONFIG.templateWelcome,{
+    to_name:  user.name,
+    to_email: user.email,
+    role:     user.role,
+    login_url: window.location.href,
+  });
+}
+
+function sendPasswordResetEmail(user, tempPass){
+  sendEmail(EMAIL_CONFIG.templateReset,{
+    to_name:   user.name,
+    to_email:  user.email,
+    temp_password: tempPass,
+    login_url: window.location.href,
+  });
+}
+
+function sendThresholdAlertEmail(breachedList, alertEmail){
+  if(!breachedList.length) return;
+  const body = breachedList.map(s=>{
+    const c=calcSKU(s), brand=brands.find(b=>b.id===s.brandId);
+    return `${s.styleId} (${brand?.name||''}, ${s.category}): ₹${c.profitRs.toFixed(0)} < ₹${c.threshold}`;
+  }).join('\n');
+  sendEmail(EMAIL_CONFIG.templateAlert,{
+    to_email: alertEmail,
+    breach_count: breachedList.length,
+    breach_list: body,
+    date: new Date().toLocaleDateString('en-IN'),
+  });
+}
+
+// ── Password reset from User Access page ─────────────
+function resetUserPassword(userId){
+  const user = users.find(u=>u.id===userId);
+  if(!user) return;
+  const tempPass = 'PD-'+Math.random().toString(36).slice(2,8).toUpperCase();
+  user.passwordHash = simpleHash(tempPass);
+  save();
+  const sent = sendPasswordResetEmail(user, tempPass);
+  toast(`Temp password: ${tempPass} — ${emailReady()?'Email sent to '+user.email:'Copy this and share manually'}`, 'green');
+}
+
+// ── SKU EXCEL EXPORT ──────────────────────────────────
+function exportSKUsToExcel(){
+  if(typeof XLSX==='undefined'){ toast('Loading Excel library…','red'); return; }
+  const rows = [['Style ID','Brand','Marketplace','Model','Category','Level','Cost (₹)','Markup %','MRP (₹)','SP (₹)','GST %','Commission %','Commission (₹)','Net Payout (₹)','Net Profit (₹)','Net Profit %','Threshold (₹)','Threshold Status','Ignore Threshold','Image URL']];
+  const modelLabels={myntra:'Myntra',ajioppmp:'Ajio PPMP','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC',amazon:'Amazon'};
+  skuDB.forEach(s=>{
+    const c = calcSKU(s);
+    const brand = brands.find(b=>b.id===s.brandId)||{name:'—',marketplace:'—',model:'—'};
+    const commAmt = (c.sp * c.comm / 100).toFixed(0);
+    rows.push([
+      s.styleId, brand.name, brand.marketplace, modelLabels[brand.model]||brand.model,
+      s.category, s.level, s.cost, s.markup,
+      c.mrp, c.sp, (autoGST(c.sp)*100).toFixed(0)+'%',
+      c.comm+'%', commAmt,
+      c.payout.toFixed(0), c.profitRs.toFixed(0), c.profitPct+'%',
+      c.threshold,
+      s.ignoreThreshold?'Ignored':c.isBreach?'⚠ BREACHED':'✓ Healthy',
+      s.ignoreThreshold?'Yes':'No',
+      s.img||''
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [14,22,12,12,16,10,10,10,10,10,8,12,14,14,14,12,12,16,12,50].map(w=>({wch:w}));
+  // Style header row
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'SKUs');
+  // Second sheet: summary by brand
+  const sum=[['Brand','Model','SKU Count','Avg Cost','Avg Profit (₹)','Avg Profit %','Breaches']];
+  brands.forEach(b=>{
+    const bSkus=skuDB.filter(s=>s.brandId===b.id);
+    if(!bSkus.length) return;
+    const calcs=bSkus.map(s=>calcSKU(s));
+    const avgCost=(bSkus.reduce((a,s)=>a+s.cost,0)/bSkus.length).toFixed(0);
+    const avgProfit=(calcs.reduce((a,c)=>a+c.profitRs,0)/calcs.length).toFixed(0);
+    const avgPct=(calcs.reduce((a,c)=>a+parseFloat(c.profitPct),0)/calcs.length).toFixed(1);
+    const breaches=bSkus.filter((s,i)=>!s.ignoreThreshold&&calcs[i].isBreach).length;
+    sum.push([b.name,modelLabels[b.model]||b.model,bSkus.length,avgCost,avgProfit,avgPct+'%',breaches]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), 'Brand Summary');
+  XLSX.writeFile(wb,'PriceDesk_SKUs_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast(`✓ Exported ${skuDB.length} SKUs to Excel`,'green');
+}
+
 // ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded',()=>{
-  // Load saved data first, then init UI
-  loadFromStorage();
+document.addEventListener('DOMContentLoaded',async ()=>{
+  // Load saved data first
+  loadConfig(); // load email/supabase config from localStorage
+  await loadFromStorage();
   populateFilters();
   renderBrandSummary();
   renderWFPreviews();
   updateAlerts();
   renderUsers();
+  // Check if already logged in
+  if(!checkSession()){
+    document.getElementById('login-screen').style.display='flex';
+  }
+  // Init EmailJS if configured
+  if(EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY' && typeof emailjs !== 'undefined'){
+    emailjs.init(EMAIL_CONFIG.publicKey);
+  }
 });
 </script>
 <script>
