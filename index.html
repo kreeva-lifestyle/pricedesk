@@ -3288,6 +3288,15 @@ function runWFEngine(marketplace, inputs){
       continue;
     }
 
+    // INPUT rows: only set default value if not already provided in inputs
+    if(row.t === 'input'){
+      if(ctx[row.var] === undefined || ctx[row.var] === null){
+        ctx[row.var] = row.defaultVal !== undefined ? row.defaultVal : 0;
+      }
+      // Never overwrite a value already seeded from outside (sample or real SKU data)
+      continue;
+    }
+
     if(!row.expr) continue;
     try{
       const keys = Object.keys(ctx);
