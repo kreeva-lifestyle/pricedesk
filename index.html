@@ -69,7 +69,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 /* FORMS */
 .fg{margin-bottom:14px}
 .fl{font-size:11px;color:var(--tx3);margin-bottom:5px;text-transform:uppercase;letter-spacing:1px;display:block}
-.fi{width:100%;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-family:var(--sans);font-size:13px;padding:8px 11px;transition:border .12s}
+.fi{width:100%;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-family:var(--sans);font-size:16px;padding:8px 11px;transition:border .12s}
 .fi:focus{outline:none;border-color:var(--ac)}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 /* TABS */
@@ -158,7 +158,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .flex{display:flex;align-items:center}.flexb{display:flex;align-items:center;justify-content:space-between}
 .gap8{gap:8px}.gap12{gap:12px}.gap16{gap:16px}
 .mb8{margin-bottom:8px}.mb12{margin-bottom:12px}.mb16{margin-bottom:16px}.mb20{margin-bottom:20px}
-.toast{position:fixed;bottom:22px;right:22px;background:var(--s);border:1px solid var(--bd2);border-radius:var(--r);padding:11px 17px;font-size:13px;z-index:999;display:flex;align-items:center;gap:9px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:su .18s ease}
+.toast{position:fixed;bottom:22px;right:22px;background:var(--s);border:1px solid var(--bd2);border-radius:var(--r);padding:11px 17px;font-size:13px;z-index:999;display:flex;align-items:center;gap:9px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:su .18s ease;max-width:calc(100vw - 32px)}
 .tg2{border-left:3px solid var(--gr)}.tr2{border-left:3px solid var(--re)}
 @keyframes su{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
@@ -178,7 +178,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .role-viewer{background:rgba(139,154,191,.1);color:var(--tx2)}
 /* ── LOGIN SCREEN ───────────────────────────────────── */
 #login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center}
-.login-box{background:var(--s);border:1px solid var(--bd2);border-radius:16px;width:380px;padding:36px 32px;text-align:center}
+.login-box{background:var(--s);border:1px solid var(--bd2);border-radius:16px;width:380px;max-width:calc(100vw - 32px);padding:36px 32px;text-align:center}
 .login-logo{font-size:22px;font-weight:700;color:var(--ac);font-family:var(--mono);margin-bottom:4px}
 .login-sub{font-size:12px;color:var(--tx3);letter-spacing:2px;text-transform:uppercase;margin-bottom:28px}
 .login-err{background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--re);margin-bottom:14px;display:none}
@@ -202,7 +202,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .fb-part.fb-op{border-color:rgba(245,166,35,.4);background:rgba(245,166,35,.08);color:var(--ac);padding:0 4px;font-weight:700;font-size:14px}
 .fb-part.fb-paren{border-color:rgba(155,109,255,.4);background:rgba(155,109,255,.08);color:var(--pu);padding:0 6px;font-size:16px;font-weight:700}
 .fb-part.fb-fn{border-color:rgba(220,90,200,.4);background:rgba(220,90,200,.08);color:#dc5ac8;font-family:var(--mono)}
-.fb-del{width:18px;height:18px;border-radius:50%;background:rgba(245,87,92,.2);border:none;color:var(--re);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;margin-left:2px}
+.fb-del{width:28px;height:28px;border-radius:50%;background:rgba(245,87,92,.2);border:none;color:var(--re);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;margin-left:2px}
 .fb-del:hover{background:rgba(245,87,92,.4)}
 .fb-add-section{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px}
 .fb-add-section label{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:8px}
@@ -218,7 +218,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 #img-zoom-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:500;display:none;align-items:center;justify-content:center;cursor:zoom-out;backdrop-filter:blur(6px)}
 #img-zoom-overlay.active{display:flex}
 #img-zoom-overlay img{max-width:90vw;max-height:88vh;border-radius:10px;box-shadow:0 8px 48px rgba(0,0,0,.8);object-fit:contain}
-#img-zoom-overlay .zoom-close{position:absolute;top:18px;right:22px;color:#fff;font-size:28px;cursor:pointer;opacity:.7;line-height:1}
+#img-zoom-overlay .zoom-close{position:absolute;top:18px;right:22px;color:#fff;font-size:28px;cursor:pointer;opacity:.7;line-height:1;padding:8px;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center}
 #img-zoom-overlay .zoom-close:hover{opacity:1}
 /* ── IMAGE UPLOAD MODAL ─────────────────────────────── */
 .dropzone{border:2px dashed var(--bd2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .15s;position:relative}
@@ -226,15 +226,15 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .img-preview-wrap{position:relative;display:inline-block;margin-top:12px}
 .img-preview-wrap img{width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2);display:block}
-.img-remove-btn{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:var(--re);color:#fff;border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.img-remove-btn{position:absolute;top:-10px;right:-10px;width:30px;height:30px;border-radius:50%;background:var(--re);color:#fff;border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700}
 /* ── IGNORE THRESHOLD TOGGLE (inline SKU table) ─────── */
 .ignore-toggle{display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;padding:3px 7px;border-radius:4px;border:1px solid var(--bd2);background:transparent;color:var(--tx3);transition:all .12s;white-space:nowrap}
 .ignore-toggle:hover{border-color:var(--ac);color:var(--ac)}
 .ignore-toggle.active{background:rgba(245,166,35,.12);border-color:var(--ac);color:var(--ac)}
 /* ── AUTO-LOGOUT WARNING ────────────────────────────── */
-#session-warn{position:fixed;bottom:70px;right:22px;background:var(--s);border:1px solid var(--re);border-radius:var(--r);padding:12px 16px;font-size:13px;z-index:998;display:none;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+#session-warn{position:fixed;bottom:70px;right:22px;background:var(--s);border:1px solid var(--re);border-radius:var(--r);padding:12px 16px;font-size:13px;z-index:998;display:none;box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:calc(100vw - 32px)}
 
-.hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;background:transparent;border:none;cursor:pointer;padding:6px;border-radius:6px;flex-shrink:0}
+.hamburger{display:none;flex-direction:column;justify-content:center;gap:6px;width:44px;height:44px;background:transparent;border:none;cursor:pointer;padding:8px;border-radius:6px;flex-shrink:0}
 .hamburger:hover{background:var(--s2)}
 .hamburger span{display:block;height:2px;background:var(--tx2);border-radius:2px;transition:all .2s}
 .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
@@ -322,7 +322,12 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   {}
 
   /* Modals full-width on mobile */
-  .modal{width:calc(100vw - 32px);max-height:90vh}
+  .modal{width:calc(100% - 32px);max-height:90vh}
+
+  /* Inputs: prevent iOS auto-zoom (must be >=16px) */
+  .filter-select{font-size:16px}
+  .ci{font-size:16px}
+  .ct input[type=number]{font-size:16px}
 
   /* Page title smaller */
   .pt{font-size:14px}
@@ -351,9 +356,19 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   /* Filter bar: two rows */
   .filter-bar{flex-wrap:wrap}
   .filter-bar .btn{margin-left:0}
-  /* Modal full screen */
-  .modal{width:100vw;max-height:100vh;border-radius:0;border-left:none;border-right:none;border-bottom:none}
+  /* Modal full screen — use 100% not 100vw to avoid scrollbar overflow */
+  .modal{width:100%;max-height:100vh;border-radius:0;border-left:none;border-right:none;border-bottom:none}
   .movl{align-items:flex-end}
+  /* Login box: fit narrow screens */
+  .login-box{padding:28px 20px;border-radius:12px}
+  /* Session warning: stack at bottom center */
+  #session-warn{right:12px;left:12px;bottom:12px}
+  /* Toast: center on mobile */
+  .toast{right:12px;left:12px}
+  /* Formula builder: reduce padding */
+  .fb-hdr{padding:12px 14px}
+  .fb-body{padding:14px}
+  .fb-foot{padding:10px 14px}
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -367,8 +382,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="login-logo">PriceDesk</div>
     <div class="login-sub">Marketplace Pricing</div>
     <div class="login-err" id="login-err"></div>
-    <div class="fg"><label class="fl" style="text-align:left">Email</label><input class="fi" id="login-email" type="email" placeholder="you@company.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <div class="fg" style="margin-bottom:20px"><label class="fl" style="text-align:left">Password</label><input class="fi" id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="fg"><label class="fl" style="text-align:left">Email</label><input class="fi" id="login-email" type="email" placeholder="you@company.com" autocomplete="email" inputmode="email" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="fg" style="margin-bottom:20px"><label class="fl" style="text-align:left">Password</label><input class="fi" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn bp" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button>
     <div class="login-footer"><a href="#" onclick="openForgotPassword();return false" style="color:var(--ac);text-decoration:none">Forgot password?</a></div>
   </div>
@@ -420,7 +435,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <!-- ═══ FORMULA BLOCK DISPLAY ═══ -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
         <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Formula being built</label>
-        <button onclick="fbClear()" style="font-size:10px;color:var(--re);background:none;border:none;cursor:pointer;opacity:.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">✕ Clear</button>
+        <button onclick="fbClear()" style="font-size:12px;color:var(--re);background:none;border:none;cursor:pointer;opacity:.8;padding:4px 8px">✕ Clear</button>
       </div>
       <div class="fb-row" id="fb-parts-row">
         <span style="font-size:12px;color:var(--tx3)">Use shortcuts above or add parts manually below ↓</span>
@@ -530,19 +545,19 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px" id="fb-sample-inputs">
           <div style="display:flex;align-items:center;gap:6px;font-size:11px">
             <span style="color:var(--tx3)">Cost ₹</span>
-            <input id="fb-s-cost" type="number" value="1000" style="width:70px;background:var(--s3);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:11px;padding:3px 7px;font-family:monospace" oninput="renderFBParts()">
+            <input id="fb-s-cost" type="number" value="1000" style="width:70px;background:var(--s3);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:16px;padding:3px 7px;font-family:monospace" oninput="renderFBParts()">
           </div>
           <div style="display:flex;align-items:center;gap:6px;font-size:11px">
             <span style="color:var(--tx3)">Markup %</span>
-            <input id="fb-s-markup" type="number" value="78" style="width:55px;background:var(--s3);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:11px;padding:3px 7px;font-family:monospace" oninput="renderFBParts()">
+            <input id="fb-s-markup" type="number" value="78" style="width:55px;background:var(--s3);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:16px;padding:3px 7px;font-family:monospace" oninput="renderFBParts()">
           </div>
           <div style="display:flex;align-items:center;gap:6px;font-size:11px">
             <span style="color:var(--tx3)">Discount %</span>
-            <input id="fb-s-disc" type="number" value="55" style="width:55px;background:var(--s3);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:11px;padding:3px 7px;font-family:monospace" oninput="renderFBParts()">
+            <input id="fb-s-disc" type="number" value="55" style="width:55px;background:var(--s3);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:16px;padding:3px 7px;font-family:monospace" oninput="renderFBParts()">
           </div>
           <div style="display:flex;align-items:center;gap:6px;font-size:11px">
             <span style="color:var(--tx3)">Incentive %</span>
-            <input id="fb-s-inc" type="number" value="0" style="width:45px;background:var(--s3);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:11px;padding:3px 7px;font-family:monospace" oninput="renderFBParts()">
+            <input id="fb-s-inc" type="number" value="0" style="width:45px;background:var(--s3);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:16px;padding:3px 7px;font-family:monospace" oninput="renderFBParts()">
           </div>
         </div>
         <!-- Step-by-step breakdown -->
@@ -565,7 +580,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 </div>
 
 <!-- ═══ IMAGE ZOOM OVERLAY ═══ -->
-<div id="img-zoom-overlay" onclick="closeZoom()">
+<div id="img-zoom-overlay" onclick="if(event.target===this)closeZoom()">
   <span class="zoom-close" onclick="closeZoom()">×</span>
   <img id="img-zoom-img" src="" alt="">
 </div>
@@ -2685,12 +2700,17 @@ function zoomImg(url){
   ov.classList.add('active');
   document.body.style.overflow='hidden';
 }
+function _anyOverlayOpen(){
+  return document.getElementById('sidebar')?.classList.contains('open')
+    || document.getElementById('fb-overlay')?.classList.contains('active')
+    || document.getElementById('img-zoom-overlay')?.classList.contains('active');
+}
 function closeZoom(){
   const ov = document.getElementById('img-zoom-overlay');
   if(ov) ov.classList.remove('active');
-  document.body.style.overflow='';
+  if(!_anyOverlayOpen()) document.body.style.overflow='';
 }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeFB(); closeZoom(); closeModal(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeFB(); closeZoom(); closeModal(); if(typeof closeSidebar==='function') closeSidebar(); } });
 
 // ═══════════════════════════════════════════════════════
 // DATA EXPORT / IMPORT (JSON backup)
@@ -3438,7 +3458,7 @@ function openFB(marketplace, idx){
 
 function closeFB(){
   document.getElementById('fb-overlay').classList.remove('active');
-  document.body.style.overflow='';
+  if(!_anyOverlayOpen()) document.body.style.overflow='';
 }
 
 // Parse an existing expression string back into parts for editing
@@ -4112,7 +4132,7 @@ function closeSidebar(){
   if(sb)sb.classList.remove('open');
   if(ov)ov.classList.remove('active');
   if(hb)hb.classList.remove('open');
-  document.body.style.overflow='';
+  if(!_anyOverlayOpen()) document.body.style.overflow='';
 }
 // Auto-close sidebar when a nav item is tapped on mobile
 (function(){
