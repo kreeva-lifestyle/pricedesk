@@ -495,6 +495,26 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
           </div>
 
         </div>
+
+        <!-- TYPE DIRECTLY — for complex formulas like Math.ceil -->
+        <div class="fb-add-section" style="margin-top:10px;border-color:rgba(245,166,35,.3)">
+          <label style="color:var(--ac)">⌨ Type formula directly <span style="color:var(--tx3);text-transform:none;letter-spacing:0;font-weight:400">— for advanced formulas like Math.ceil, Math.round, Math.max</span></label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input class="fi" id="fb-raw-expr" placeholder="e.g. Math.ceil(mrpRaw/50)*50"
+              style="flex:1;font-family:var(--mono);font-size:12px"
+              onkeydown="if(event.key==='Enter'){fbSetRawExpr();event.preventDefault()}"
+              oninput="fbPreviewRaw(this.value)">
+            <button class="btn bp bsm" onclick="fbSetRawExpr()">✓ Use This</button>
+          </div>
+          <div style="margin-top:6px;font-size:11px;color:var(--tx3)">
+            Common patterns:
+            <span style="font-family:monospace;color:var(--gr);cursor:pointer" onclick="el('fb-raw-expr').value='Math.ceil(mrpRaw/50)*50';fbPreviewRaw(el('fb-raw-expr').value)">Math.ceil(mrpRaw/50)*50</span> ·
+            <span style="font-family:monospace;color:var(--gr);cursor:pointer" onclick="el('fb-raw-expr').value='Math.round(sellerPrice)';fbPreviewRaw(el('fb-raw-expr').value)">Math.round(sellerPrice)</span> ·
+            <span style="font-family:monospace;color:var(--gr);cursor:pointer" onclick="el('fb-raw-expr').value='Math.max(0, commPct-incentive)';fbPreviewRaw(el('fb-raw-expr').value)">Math.max(0, commPct-incentive)</span>
+          </div>
+          <div id="fb-raw-preview" style="margin-top:5px;font-size:11px;display:none"></div>
+        </div>
+
       </div>
 
       <!-- Live preview -->
@@ -3377,7 +3397,11 @@ function openFB(marketplace, idx){
   el('fb-name').value = row.l || '';
   el('fb-var').value  = row.var || '';
   el('fb-title').textContent = `Edit Formula — ${row.l||'New Formula'}`;
-
+  // Pre-fill raw expression box with existing expr
+  const rawBox = el('fb-raw-expr');
+  if(rawBox) rawBox.value = row.expr || '';
+  const rawPrev = el('fb-raw-preview');
+  if(rawPrev) rawPrev.style.display='none';
   renderFBParts();
   document.getElementById('fb-overlay').classList.add('active');
   document.body.style.overflow='hidden';
@@ -3405,7 +3429,10 @@ function parseExprToParts(expr){
 
 // Convert parts array → JS expression string
 function partsToExpr(parts){
+  // If single raw part, return it directly
+  if(parts.length===1 && parts[0].type==='raw') return parts[0].val;
   return parts.map(p => {
+    if(p.type==='raw')   return p.val;
     if(p.type==='op')    return ' '+p.val+' ';
     if(p.type==='paren') return p.val;
     if(p.type==='num')   return p.val;
@@ -3421,8 +3448,8 @@ function renderFBParts(){
     row.innerHTML='<span style="font-size:12px;color:var(--tx3)">Add parts below ↓ Start with a variable or number</span>';
   } else {
     row.innerHTML = _fb.parts.map((p,i) => {
-      const cls = p.type==='var'?'fb-var':p.type==='num'?'fb-num':p.type==='paren'?'fb-paren':'fb-op';
-      const disp = p.type==='op' ? (OP_DISPLAY[p.val]||p.val) : p.type==='num' ? p.val : p.val;
+      const cls = p.type==='var'?'fb-var':p.type==='num'?'fb-num':p.type==='paren'?'fb-paren':p.type==='raw'?'fb-fn':'fb-op';
+      const disp = p.type==='op' ? (OP_DISPLAY[p.val]||p.val) : p.val;
       return `<span class="fb-part ${cls}">
         <span>${disp}</span>
         <button class="fb-del" onclick="fbRemovePart(${i})" title="Remove">×</button>
@@ -3552,7 +3579,58 @@ function fbRemovePart(i){
 function fbClear(){
   _fb.parts = [];
   el('fb-shortcut-area').style.display='none';
+  const raw = el('fb-raw-expr');
+  if(raw) raw.value = '';
   renderFBParts();
+}
+
+function fbPreviewRaw(val){
+  const box = el('fb-raw-preview');
+  if(!box) return;
+  if(!val.trim()){ box.style.display='none'; return; }
+  // Try evaluating with sample data
+  try{
+    const sampleCtx = {
+      cost:+(el('fb-s-cost')?.value||1000),
+      markup:+(el('fb-s-markup')?.value||78),
+      discount:+(el('fb-s-disc')?.value||55),
+      level:'Level 2', cat:'Kurta Sets', incentive:0, retPct:8
+    };
+    const preview = runWFEngine(_fb.marketplace, sampleCtx);
+    const keys = Object.keys(preview);
+    const vals = Object.values(preview);
+    const fn = new Function(...keys, '"use strict"; return ('+val+');');
+    const result = fn(...vals);
+    const display = typeof result==='number'
+      ? (result%1===0?'₹'+result.toLocaleString('en-IN'):'₹'+result.toFixed(2))
+      : String(result);
+    box.style.display='';
+    box.innerHTML = '<span style="color:var(--gr)">✓ Preview: <strong>'+display+'</strong></span>';
+  } catch(e){
+    box.style.display='';
+    box.innerHTML = '<span style="color:var(--re)">Error: '+e.message+'</span>';
+  }
+}
+
+function fbSetRawExpr(){
+  const val = el('fb-raw-expr')?.value.trim();
+  if(!val){ toast('Type a formula first','red'); return; }
+  // Validate by trying to run it
+  try{
+    const sampleCtx = {cost:1000,markup:78,discount:55,level:'Level 2',cat:'Kurta Sets',incentive:0,retPct:8};
+    const preview = runWFEngine(_fb.marketplace, sampleCtx);
+    const keys = Object.keys(preview);
+    const vals = Object.values(preview);
+    const fn = new Function(...keys, '"use strict"; return ('+val+');');
+    fn(...vals); // test run — throws if invalid
+  } catch(e){
+    toast('Formula error: '+e.message,'red');
+    return;
+  }
+  // Parse into parts for display (best effort) then set as raw token
+  _fb.parts = [{type:'raw', val:val}];
+  renderFBParts();
+  toast('✓ Formula set — check live preview','green');
 }
 
 // Smart shortcut templates
