@@ -373,10 +373,6 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   </nav>
   <div class="sb-btm">
     <div class="flex gap8" style="margin-bottom:10px"><div class="ava" id="sb-ava">A</div><div><div style="font-size:12px;color:var(--tx2)" id="sb-uname">Admin User</div><div style="font-size:10px;color:var(--tx3)" id="sb-role">Administrator</div></div></div>
-    <div style="display:flex;gap:6px;margin-bottom:6px">
-      <button onclick="exportData()" style="flex:1;background:transparent;border:1px solid var(--bd2);border-radius:5px;color:var(--tx3);font-size:11px;padding:5px 0;cursor:pointer" title="Export JSON backup">⬇ Export</button>
-      <button onclick="importDataPrompt()" style="flex:1;background:transparent;border:1px solid var(--bd2);border-radius:5px;color:var(--tx3);font-size:11px;padding:5px 0;cursor:pointer" title="Import backup">⬆ Import</button>
-    </div>
     <button onclick="doLogout()" style="width:100%;background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:5px;color:var(--re);font-size:12px;padding:7px 0;cursor:pointer;font-weight:600">⏏ Sign Out</button>
   </div>
 </div>
@@ -570,12 +566,20 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="level" checked style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Level-based</label>
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Fixed</label>
       </div></div>
-      <div id="mfwd-level"><table class="dt" style="font-size:12px"><thead><tr><th>Level</th><th>₹</th></tr></thead><tbody>
-        <tr><td>Level 1</td><td><input class="ci" id="mfwd-l1" value="207"></td></tr>
-        <tr><td>Level 2</td><td><input class="ci" id="mfwd-l2" value="230"></td></tr>
-        <tr><td>Level 3</td><td><input class="ci" id="mfwd-l3" value="266"></td></tr>
-        <tr><td>Level 4</td><td><input class="ci" id="mfwd-l4" value="313"></td></tr>
-      </tbody></table></div>
+      <div id="mfwd-level"><div class="success" style="margin-bottom:12px;font-size:11px">✓ Auto-applied based on Selling Price band. No manual input needed — values match your Myntra sheet exactly.</div>
+        <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:520px">
+          <thead><tr>
+            <th>Level</th><th>0–1</th><th>2–99</th><th>100–300</th><th>300–500</th><th>500–1000</th><th>1000–2000</th><th>&gt;2000</th>
+          </tr></thead>
+          <tbody>
+            <tr><td><strong>Level 1</strong></td><td class="mono">₹0</td><td class="mono">₹1</td><td class="mono">₹59</td><td class="mono">₹59</td><td class="mono">₹94</td><td class="mono">₹171</td><td class="mono" style="color:var(--ac)">₹207</td></tr>
+            <tr><td><strong>Level 2</strong></td><td class="mono">₹0</td><td class="mono">₹1</td><td class="mono">₹83</td><td class="mono">₹83</td><td class="mono">₹118</td><td class="mono">₹195</td><td class="mono" style="color:var(--ac)">₹230</td></tr>
+            <tr><td><strong>Level 3</strong></td><td class="mono">₹0</td><td class="mono">₹1</td><td class="mono">₹100</td><td class="mono">₹106</td><td class="mono">₹148</td><td class="mono">₹230</td><td class="mono" style="color:var(--ac)">₹266</td></tr>
+            <tr><td><strong>Level 4</strong></td><td class="mono">₹0</td><td class="mono">₹1</td><td class="mono">₹100</td><td class="mono">₹153</td><td class="mono">₹189</td><td class="mono">₹277</td><td class="mono" style="color:var(--ac)">₹313</td></tr>
+          </tbody>
+        </table></div>
+        <div class="st" style="margin-top:8px">Highlighted column = most common (SP &gt; ₹2000). Calculator picks the right column automatically based on Selling Price.</div>
+      </div>
       <div id="mfwd-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Rate (₹)</label><input class="fi" type="number" id="mfwd-fix" value="230"></div></div>
       <div style="margin-top:14px">
         <div class="fg"><label class="fl">Collection Fee (₹)</label><input class="fi" type="number" id="myn-coll" value="61"></div>
@@ -769,7 +773,10 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600">🧪 Test Emails</div></div>
         <div class="cb">
-          <div class="fg"><label class="fl">Your email (for test sends)</label><input class="fi" id="cfg-test-email" type="email" placeholder="you@gmail.com"></div>
+          <div class="warn" style="margin-bottom:14px">
+            ⚠ <strong>If test emails go to the wrong address:</strong> In EmailJS → open each template → find the <strong>"To Email"</strong> field at the top → make sure it says <code style="background:var(--s3);padding:1px 6px;border-radius:3px;font-family:monospace;color:var(--gr)">{{to_email}}</code> — NOT a fixed email address like owner@aryadesigns.co.in. Save the template. Then test again.
+          </div>
+          <div class="fg"><label class="fl">Send test to this email</label><input class="fi" id="cfg-test-email" type="email" placeholder="manthankreeva@gmail.com"></div>
           <div style="display:flex;flex-direction:column;gap:9px">
             <div class="flex gap12"><button class="btn bg bsm" style="width:170px" onclick="testEmail('welcome')">📨 Test Welcome Email</button><span class="st">Sent when a new user is added</span></div>
             <div class="flex gap12"><button class="btn bg bsm" style="width:170px" onclick="testEmail('reset')">🔑 Test Reset Email</button><span class="st">Sent on password reset</span></div>
@@ -833,12 +840,12 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 // ═══════════════════════════════════════════════════════
 // SUPABASE CONFIG — paste your keys here after setup
 // ═══════════════════════════════════════════════════════
-const SUPABASE_URL  = 'https://fcmesdnagvrdmjzzuwue.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbWVzZG5hZ3ZyZG1qenp1d3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxNjM4NTgsImV4cCI6MjA4OTczOTg1OH0.fS1ecV898Dmrka6hr3R0RE6gcKlneWUPbDyDPv30_qU';
+const SUPABASE_URL  = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
 
 let _db = null;
 function getDB(){
-  if(!_db && SUPABASE_URL !== 'https://fcmesdnagvrdmjzzuwue.supabase.co'){
+  if(!_db && SUPABASE_URL !== 'YOUR_SUPABASE_URL'){
     try{ _db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
     catch(e){ console.warn('Supabase init failed:', e); }
   }
@@ -984,7 +991,25 @@ function getMyntraComm(cat,sp){
   for(let i=0;i<SLABS.length;i++){if(sp>=SLABS[i].min&&sp<SLABS[i].max)return slabs[i];}
   return slabs[slabs.length-1];
 }
-function getMynFwd(level){const m={'Level 1':+el('mfwd-l1')?.value||207,'Level 2':+el('mfwd-l2')?.value||230,'Level 3':+el('mfwd-l3')?.value||266,'Level 4':+el('mfwd-l4')?.value||313};return m[level]||230;}
+function getMynFwd(level, sp){
+  // GT Charges: 7 price bands × 4 levels (from Myntra GT Charges sheet)
+  // Bands: 0-1, 2-99, 100-300, 300-500, 500-1000, 1000-2000, >2000
+  const GT = {
+    'Level 1': [0,   1,  59,  59,  94, 171, 207],
+    'Level 2': [0,   1,  83,  83, 118, 195, 230],
+    'Level 3': [0,   1, 100, 106, 148, 230, 266],
+    'Level 4': [0,   1, 100, 153, 189, 277, 313],
+  };
+  const slabs = GT[level] || GT['Level 2'];
+  const price = sp || 0;
+  if(price <= 1)    return slabs[0];
+  if(price <= 99)   return slabs[1];
+  if(price <= 300)  return slabs[2];
+  if(price <= 500)  return slabs[3];
+  if(price <= 1000) return slabs[4];
+  if(price <= 2000) return slabs[5];
+  return slabs[6];
+}
 function getMynRet(level){const m={'Level 1':+el('mret-l1')?.value||167,'Level 2':+el('mret-l2')?.value||218,'Level 3':+el('mret-l3')?.value||259,'Level 4':+el('mret-l4')?.value||331};return m[level]||218;}
 function el(id){return document.getElementById(id);}
 function fixImg(url){if(!url)return'';url=url.replace('www.dropbox.com','dl.dropboxusercontent.com').replace(/[?&]dl=[01]/g,'');if(url.includes('dropboxusercontent')&&!url.includes('raw=1'))url+=(url.includes('?')?'&':'?')+'raw=1';return url;}
@@ -1004,7 +1029,7 @@ function calcSKU(s){
   const gstAmt=commAmt*gst;
   let payout;
   if(brand.model==='ajio-cc'){payout=sp-commAmt-gstAmt;}
-  else if(brand.model==='myntra'){const fwd=getMynFwd(s.level),ret=getMynRet(s.level),coll=+el('myn-coll')?.value||61,pg=+el('myn-pg')?.value||50.22;payout=sp-commAmt-gstAmt-fwd-ret-coll-pg;}
+  else if(brand.model==='myntra'){const fwd=getMynFwd(s.level,sp),ret=getMynRet(s.level),coll=+el('myn-coll')?.value||61,pg=+el('myn-pg')?.value||50.22;payout=sp-commAmt-gstAmt-fwd-ret-coll-pg;}
   else if(brand.model==='ajio-ppmp'){const fwd=+el('ajfwd-fix')?.value||70,ret=+el('ajret-fix')?.value||70,platFee=+el('ajio-platform-fee')?.value||0;payout=sp-commAmt-gstAmt-fwd-ret-platFee;}
   else{const fba=+el('amz-fba')?.value||55,close=+el('amz-close')?.value||15,allFees=commAmt+close+fba,gstAmt2=allFees*gst;payout=sp-allFees-gstAmt2;}
   const profitRs=payout-s.cost;
@@ -1027,7 +1052,7 @@ const CD={
 function renderMyntra(){
   const d=CD.myntra;const mrp=Math.round(d.cost*(1+d.markup/100));const sp=Math.round(mrp*3/100)*100||mrp*3;
   const gst=autoGST(sp);const rawComm=getMyntraComm(d.cat,sp);const eff=Math.max(0,rawComm-d.inc);
-  const commAmt=sp*eff/100;const gstAmt=commAmt*gst;const fwd=getMynFwd('Level 2');const ret=getMynRet('Level 2');
+  const commAmt=sp*eff/100;const gstAmt=commAmt*gst;const fwd=getMynFwd('Level 2',sp);const ret=getMynRet('Level 2');
   const coll=+el('myn-coll')?.value||61;const pg=+el('myn-pg')?.value||50.22;const retProv=d.retPct/100*ret;
   const total=commAmt+gstAmt+fwd+ret+coll+pg+retProv;const payout=sp-total;const profRs=(payout-d.cost).toFixed(0);
   const pp=(+(payout-d.cost)/sp*100).toFixed(1);const br=parseFloat(pp)<0||(payout-d.cost)<(THRESHOLDS[d.cat]||0);
@@ -1552,7 +1577,7 @@ function liveCalcRow(row){
   const commAmt=sp*comm/100,gstAmt=commAmt*gst;
   let payout;
   if(brand.model==='ajio-cc') payout=sp-commAmt-gstAmt;
-  else if(brand.model==='myntra'){const fwd=getMynFwd(level),ret=getMynRet(level),coll=+el('myn-coll')?.value||61,pg=+el('myn-pg')?.value||50.22;payout=sp-commAmt-gstAmt-fwd-ret-coll-pg;}
+  else if(brand.model==='myntra'){const fwd=getMynFwd(level,sp),ret=getMynRet(level),coll=+el('myn-coll')?.value||61,pg=+el('myn-pg')?.value||50.22;payout=sp-commAmt-gstAmt-fwd-ret-coll-pg;}
   else if(brand.model==='ajio-ppmp'){const fwd=+el('ajfwd-fix')?.value||70,ret=+el('ajret-fix')?.value||70;payout=sp-commAmt-gstAmt-fwd-ret;}
   else{const fba=+el('amz-fba')?.value||55,close=+el('amz-close')?.value||15,allFees=commAmt+close+fba,gstAmt2=allFees*gst;payout=sp-allFees-gstAmt2;}
   const profRs=(payout-cost);const pp=(profRs/sp*100).toFixed(1);
@@ -2148,31 +2173,35 @@ function saveSupabaseSettings(){
 }
 
 async function testEmail(type){
-  const testEmail = el('cfg-test-email')?.value.trim();
-  if(!testEmail||!testEmail.includes('@')){ toast('Enter your email address in the test field first','red'); return; }
+  const dest = el('cfg-test-email')?.value.trim();
+  if(!dest||!dest.includes('@')){ toast('Enter your email address in the test field first','red'); return; }
   if(!emailReady()){ toast('Save your EmailJS keys first, then test','red'); return; }
 
-  toast('Sending test email…','green');
+  // NOTE: EmailJS sends to whatever address is in the template's "To Email" field.
+  // To send to a DIFFERENT address, the template "To Email" field MUST be set to {{to_email}}
+  // We pass to_email in every call — make sure your template uses {{to_email}} not a fixed address.
+  toast('Sending to ' + dest + '…','green');
   let result = false;
+  const base = { to_email: dest, to_name:'Test User', login_url: window.location.href };
   if(type==='welcome'){
     result = await sendEmail(EMAIL_CONFIG.templateWelcome,{
-      to_name:'Test User', to_email:testEmail, role:'manager',
-      temp_password:'pricedesk123', login_url:window.location.href
+      ...base, role:'manager', temp_password:'pricedesk123'
     });
   } else if(type==='reset'){
     result = await sendEmail(EMAIL_CONFIG.templateReset,{
-      to_name:'Test User', to_email:testEmail,
-      temp_password:'PD-TESTXYZ', login_url:window.location.href
+      ...base, temp_password:'PD-TESTXYZ'
     });
   } else if(type==='alert'){
     result = await sendEmail(EMAIL_CONFIG.templateAlert,{
-      to_email:testEmail, breach_count:'2',
+      ...base,
+      breach_count:'2',
       breach_list:'SP39-ORANGE-M (Fusionic Myntra, Kurta Sets): ₹210 < ₹300\nTF-202 (LNB Amazon, Lehenga Choli): ₹380 < ₹500',
-      date:new Date().toLocaleDateString('en-IN'),
-      login_url:window.location.href
+      date: new Date().toLocaleDateString('en-IN'),
     });
   }
-  if(result !== false) toast('✓ Test email sent! Check your inbox (also check spam)','green');
+  if(result !== false){
+    toast('✓ Sent to ' + dest + ' — check inbox & spam','green');
+  }
 }
 
 function confirmClearData(){
