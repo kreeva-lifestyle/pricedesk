@@ -4,8 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PriceDesk — Marketplace Pricing Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{--bg:#0f1117;--s:#181c26;--s2:#1f2435;--s3:#262d42;--bd:#2a3148;--bd2:#3a4560;--tx:#e8ecf4;--tx2:#8b9abf;--tx3:#5a6a90;--ac:#f5a623;--gr:#2dd4a0;--re:#f5575c;--bl:#4e8ef7;--pu:#9b6dff;--mn:#ff3f6c;--aj:#e94560;--amz:#ff9900;--r:8px;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -354,7 +357,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
 
@@ -826,7 +829,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       </div></div>
       <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">PPMP — Return (₹)</div></div><div class="cb">
         <div class="fg"><label class="fl">Return Rate (₹)</label><input class="fi" type="number" id="ajret-fix" value="70"></div>
-        <button class="btn bp bsm" onclick="toast('Ajio logistics saved','green');triggerRecalc()">✓ Save</button>
+        <button class="btn bp bsm" onclick="saveLogisticsAll();toast('Ajio logistics saved','green')">✓ Save</button>
       </div></div>
     </div>
   </div>
@@ -838,7 +841,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       </div></div>
       <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Return (₹)</div></div><div class="cb">
         <div class="fg"><label class="fl">Return Fee (₹)</label><input class="fi" type="number" id="amz-ret" value="55"></div>
-        <button class="btn bp bsm" onclick="toast('Amazon logistics saved','green');triggerRecalc()">✓ Save</button>
+        <button class="btn bp bsm" onclick="saveLogisticsAll();toast('Amazon logistics saved','green')">✓ Save</button>
       </div></div>
     </div>
   </div>
@@ -1513,7 +1516,16 @@ function getMynRet(level){return REVERSE_FEES[level]||218;}
 function el(id){return document.getElementById(id);}
 function fixImg(url){if(!url)return'';url=url.replace('www.dropbox.com','dl.dropboxusercontent.com').replace(/[?&]dl=[01]/g,'');if(url.includes('dropboxusercontent')&&!url.includes('raw=1'))url+=(url.includes('?')?'&':'?')+'raw=1';return url;}
 
+// ── calcSKU cache — invalidated on any data change ────
+let _calcCache = new Map();
+let _calcCacheVersion = 0;
+function invalidateCalcCache(){ _calcCacheVersion++; _calcCache = new Map(); }
+
 function calcSKU(s){
+  const cacheKey = s.id + '|' + _calcCacheVersion;
+  const cached = _calcCache.get(cacheKey);
+  if(cached) return cached;
+
   const mrp=Math.round(s.cost*(1+s.markup/100));
   const sp=Math.round(mrp*3/100)*100||mrp*3;
   const gst=autoGST(sp);
@@ -1541,7 +1553,9 @@ function calcSKU(s){
   const profitPct=(profitRs/sp*100).toFixed(1);
   const threshold=THRESHOLDS[s.category]||0;
   const isBreach=!s.ignoreThreshold&&profitRs<threshold;
-  return{mrp,sp,gst,comm,payout,profitRs,profitPct,isBreach,threshold};
+  const result={mrp,sp,gst,comm,payout,profitRs,profitPct,isBreach,threshold};
+  _calcCache.set(cacheKey, result);
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1672,7 +1686,7 @@ function onCatChange(mp){
   else if(mp==='ajio-cc'){CD.ajiocc.cat=cat;renderAjioCC();}
   else if(mp==='amazon'){CD.amazon.cat=cat;renderAmazon();}
 }
-function triggerRecalc(){renderMyntra();renderAjioPPMP();renderAjioCC();renderAmazon();}
+function triggerRecalc(){invalidateCalcCache();renderMyntra();renderAjioPPMP();renderAjioCC();renderAmazon();}
 
 // ═══════════════════════════════════════════════════════
 // COMMISSION TABLES
@@ -1946,6 +1960,7 @@ function clearFilters(){
 }
 
 function renderSKUs(){
+  invalidateCalcCache();
   const list=filteredSKUs();
   renderActiveFilterChips();
   el('sku-count').textContent=`Showing ${list.length} of ${skuDB.length} SKUs`;
@@ -2148,7 +2163,7 @@ function renderUsers(){
     <td><div class="flex gap8">
       <button class="btn bg bxs" onclick="openUserModal('${u.id}')">✎ Edit</button>
       <button class="btn bg bxs" onclick="resetUserPassword('${u.id}')" title="Reset password">🔑</button>
-      ${u.id!=='u1'?`<button class="btn br bxs" onclick="deleteUser('${u.id}')">✕ Remove</button>`:''}
+      ${u.id!=='u0'&&u.id!=='u1'?`<button class="btn br bxs" onclick="deleteUser('${u.id}')">✕ Remove</button>`:''}
     </div></td>
   </tr>`).join('');
 }
@@ -2171,7 +2186,7 @@ function openUserModal(id){
       </div>
     </div>
     <div class="mfoot">
-      ${isEdit&&id!=='u1'?`<button class="btn br bsm" onclick="if(deleteUser('${id}'))closeModal()" style="margin-right:auto">Remove User</button>`:''}
+      ${isEdit&&id!=='u0'&&id!=='u1'?`<button class="btn br bsm" onclick="if(deleteUser('${id}'))closeModal()" style="margin-right:auto">Remove User</button>`:''}
       <button class="btn bg" onclick="closeModal()">Cancel</button>
       <button class="btn bp" onclick="saveUser('${isEdit?id:''}')">${isEdit?'Update User':'Add User'}</button>
     </div>`);
@@ -2193,9 +2208,9 @@ function saveUser(eid){
 }
 
 function deleteUser(id){
-  if(id==='u1'){toast('Cannot remove the admin account','red');return false;}
+  if(id==='u0'||id==='u1'){toast('Cannot remove default admin accounts','red');return false;}
   const u=users.find(x=>x.id===id);if(!u||!confirm(`Remove "${u.name}"?`))return false;
-  users=users.filter(x=>x.id!==id);renderUsers();save();toast(`${u.name} removed`,'red');return true;
+  users=users.filter(x=>x.id!==id);renderUsers();save('users');toast(`${u.name} removed`,'red');return true;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2567,7 +2582,7 @@ function confirmImport(){
   const count=importRows.length;
   importRows=[];
   closeModal();
-  renderSKUs();renderBrands();updateAlerts();save();
+  renderSKUs();renderBrands();updateAlerts();save('skus');
   toast(`✓ Imported ${count} SKU${count>1?'s':''}`, 'green');
 }
 
@@ -2833,29 +2848,26 @@ function saveEmailSettings(){
 }
 
 function saveSupabaseSettings(){
-  const sbUrl = el('cfg-sb-url')?.value.trim()||'';
-  const sbKey = el('cfg-sb-key')?.value.trim()||'';
-  if(!sbUrl||!sbKey){ toast('Both Supabase URL and Key are required','red'); return; }
-  if(!sbUrl.includes('supabase.co')){ toast('URL should look like https://xxxx.supabase.co','red'); return; }
-
-  const cfg = JSON.parse(localStorage.getItem(CFG_KEY)||'{}');
-  Object.assign(cfg, {sbUrl, sbKey});
-  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
-
-  // Re-init Supabase
-  try{
-    if(window.supabase){ _db = window.supabase.createClient(sbUrl, sbKey); }
-    const statusBox = el('sb-cfg-status');
-    if(statusBox){
-      statusBox.style.display='';
-      statusBox.innerHTML = '<div class="success" style="margin:0">✓ Supabase connected! Your data will now sync to the cloud.</div>';
+  // Supabase is hardcoded — verify connection is working
+  const db = getDB();
+  if(!db){ toast('Supabase not initialized','red'); return; }
+  const statusBox = el('sb-cfg-status');
+  // Test the connection
+  db.from('app_data').select('key').limit(1).then(({error})=>{
+    if(error){
+      if(statusBox){
+        statusBox.style.display='';
+        statusBox.innerHTML = '<div class="warn" style="margin:0">⚠ Connection issue: '+error.message+'</div>';
+      }
+      toast('Connection issue — check console','red');
+    } else {
+      if(statusBox){
+        statusBox.style.display='';
+        statusBox.innerHTML = '<div class="success" style="margin:0">✓ Supabase connected and working! Data syncs automatically.</div>';
+      }
+      toast('✓ Supabase connection verified','green');
     }
-    // Trigger a save to push existing data to Supabase
-    save();
-    toast('✓ Supabase connected — syncing data now','green');
-  } catch(err){
-    toast('Connection failed — check your URL and key','red');
-  }
+  });
 }
 
 async function testEmail(type){
@@ -2890,9 +2902,17 @@ async function testEmail(type){
   }
 }
 
-function confirmClearData(){
+async function confirmClearData(){
   if(!confirm('This will permanently delete ALL SKUs, brands, users and settings. This cannot be undone. Are you sure?')) return;
   if(!confirm('Last chance — DELETE ALL DATA?')) return;
+  // Clear Supabase data
+  const db = getDB();
+  if(db){
+    try{
+      const keys = Object.values(DB_KEYS);
+      await Promise.all(keys.map(k => db.from('app_data').delete().eq('key', k)));
+    } catch(e){ console.warn('Error clearing Supabase:', e); }
+  }
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(CFG_KEY);
   location.reload();
@@ -2922,14 +2942,15 @@ function doLogin(){
   if(storedHash && storedHash !== inputHash){ showLoginErr('Incorrect password.'); return; }
   if(!storedHash && pass !== defaultPass){ showLoginErr('Incorrect password. Default: pricedesk123'); return; }
   // Set user password hash on first login
-  if(!storedHash){ user.passwordHash = inputHash; save('users'); }
+  const isFirstLogin = !storedHash;
+  if(isFirstLogin){ user.passwordHash = inputHash; save('users'); }
   // Start session
   currentUser = user;
   sessionStorage.setItem(SESSION_KEY, JSON.stringify({userId:user.id, loginTime:Date.now()}));
   document.getElementById('login-screen').style.display='none';
   updateSidebarUser(user);
   startSessionTimer();
-  sendWelcomeEmail(user);
+  if(isFirstLogin) sendWelcomeEmail(user);
   toast(`Welcome back, ${user.name.split(' ')[0]}!`,'green');
 }
 
@@ -2977,7 +2998,7 @@ function doForgotPassword(){
   // Generate temp password
   const tempPass = 'PD-' + Math.random().toString(36).slice(2,8).toUpperCase();
   user.passwordHash = simpleHash(tempPass);
-  save();
+  save('users');
   // Try to send email
   if(emailReady()){
     sendEmail(EMAIL_CONFIG.templateReset,{
@@ -3038,9 +3059,18 @@ function resetSession(){
   toast('Session extended for 1 hour','green');
 }
 
-// Reset timer on any user interaction
+// Reset timer on any user interaction — debounced to avoid firing on every mousemove
+let _sessionDebounce = null;
+function _debouncedSessionReset(){
+  if(!currentUser) return;
+  if(_sessionDebounce) return; // already scheduled
+  _sessionDebounce = setTimeout(()=>{
+    _sessionDebounce = null;
+    startSessionTimer();
+  }, 30000); // at most once per 30 seconds
+}
 ['click','keydown','mousemove','touchstart'].forEach(evt=>{
-  document.addEventListener(evt, ()=>{ if(currentUser) startSessionTimer(); }, {passive:true});
+  document.addEventListener(evt, _debouncedSessionReset, {passive:true});
 });
 
 function updateSidebarUser(user){
@@ -3140,7 +3170,7 @@ function resetUserPassword(userId){
   if(!user) return;
   const tempPass = 'PD-'+Math.random().toString(36).slice(2,8).toUpperCase();
   user.passwordHash = simpleHash(tempPass);
-  save();
+  save('users');
   const sent = sendPasswordResetEmail(user, tempPass);
   toast(`Temp password: ${tempPass} — ${emailReady()?'Email sent to '+user.email:'Copy this and share manually'}`, 'green');
 }
