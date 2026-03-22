@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PriceDesk — Marketplace Pricing Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#0f1117;--s:#181c26;--s2:#1f2435;--s3:#262d42;--bd:#2a3148;--bd2:#3a4560;--tx:#e8ecf4;--tx2:#8b9abf;--tx3:#5a6a90;--ac:#f5a623;--gr:#2dd4a0;--re:#f5575c;--bl:#4e8ef7;--pu:#9b6dff;--mn:#ff3f6c;--aj:#e94560;--amz:#ff9900;--r:8px;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh;display:flex}
+.sidebar{width:230px;min-height:100vh;background:var(--s);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;z-index:100;overflow-y:auto}
+.logo{padding:18px;border-bottom:1px solid var(--bd)}
+.logo-text{font-size:17px;font-weight:700;color:var(--ac);font-family:var(--mono)}
+.logo-sub{font-size:10px;color:var(--tx3);letter-spacing:2px;text-transform:uppercase;margin-top:2px}
+.nav{flex:1;padding:10px 0}
+.nav-sec{font-size:10px;color:var(--tx3);letter-spacing:2px;text-transform:uppercase;padding:12px 16px 5px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;color:var(--tx2);font-size:13px;font-weight:500;transition:all .12s;border-left:3px solid transparent}
+.nav-item:hover{background:var(--s2);color:var(--tx)}
+.nav-item.active{background:var(--s2);color:var(--ac);border-left-color:var(--ac)}
+.ni{width:16px;text-align:center;font-size:13px}
+.sb-btm{padding:14px 16px;border-top:1px solid var(--bd);margin-top:auto}
+.ava{width:28px;height:28px;border-radius:50%;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000;flex-shrink:0}
+.main{margin-left:230px;flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{background:var(--s);border-bottom:1px solid var(--bd);padding:12px 26px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.pt{font-size:15px;font-weight:600}
+.content{padding:22px 26px;flex:1;overflow-x:hidden}
+.page{display:none}.page.active{display:block;animation:fi .18s ease}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+/* BUTTONS */
+.btn{padding:7px 15px;border-radius:var(--r);border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--sans);transition:all .12s;display:inline-flex;align-items:center;gap:5px}
+.bp{background:var(--ac);color:#000}.bp:hover{background:#e8941a}
+.bg{background:transparent;color:var(--tx2);border:1px solid var(--bd2)}.bg:hover{background:var(--s2);color:var(--tx)}
+.br{background:rgba(245,87,92,.15);color:var(--re);border:1px solid rgba(245,87,92,.3)}.br:hover{background:rgba(245,87,92,.25)}
+.bsm{padding:5px 10px;font-size:12px}.bxs{padding:4px 8px;font-size:11px}
+/* CARDS */
+.card{background:var(--s);border:1px solid var(--bd);border-radius:var(--r)}
+.ch{padding:13px 17px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
+.cb{padding:17px}
+/* GRIDS */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+/* STAT CARDS */
+.sc{background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:15px 17px}
+.sl{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:7px}
+.sv{font-family:var(--mono);font-size:22px;font-weight:600}
+.ss{font-size:11px;color:var(--tx3);margin-top:3px}
+/* TAGS */
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+.tm{background:rgba(255,63,108,.15);color:var(--mn)}.taj{background:rgba(233,69,96,.15);color:var(--aj)}
+.tamz{background:rgba(255,153,0,.15);color:var(--amz)}.tg{background:rgba(45,212,160,.15);color:var(--gr)}
+.tr{background:rgba(245,87,92,.15);color:var(--re)}.tb{background:rgba(78,142,247,.15);color:var(--bl)}
+.tp{background:rgba(155,109,255,.15);color:var(--pu)}.ta{background:rgba(245,166,35,.15);color:var(--ac)}
+/* BADGES */
+.bdg{font-size:10px;padding:2px 7px;border-radius:4px;font-family:var(--mono)}
+.bi{background:rgba(155,109,255,.15);color:var(--pu)}.bf{background:rgba(78,142,247,.15);color:var(--bl)}
+.bo{background:rgba(45,212,160,.15);color:var(--gr)}.bs{background:rgba(139,154,191,.1);color:var(--tx3)}
+.bppmp{background:rgba(245,166,35,.15);color:var(--ac)}.bcc{background:rgba(45,212,160,.15);color:var(--gr)}
+/* TABLES */
+.dt{width:100%;border-collapse:collapse}
+.dt th{background:var(--s2);font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;padding:9px 13px;text-align:left;border-bottom:1px solid var(--bd);font-weight:600}
+.dt td{padding:9px 13px;font-size:12px;border-bottom:1px solid var(--bd)}
+.dt tr:last-child td{border-bottom:none}.dt tr:hover td{background:rgba(255,255,255,.015)}
+/* FORMS */
+.fg{margin-bottom:14px}
+.fl{font-size:11px;color:var(--tx3);margin-bottom:5px;text-transform:uppercase;letter-spacing:1px;display:block}
+.fi{width:100%;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-family:var(--sans);font-size:13px;padding:8px 11px;transition:border .12s}
+.fi:focus{outline:none;border-color:var(--ac)}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+/* TABS */
+.tabs{display:flex;border-bottom:1px solid var(--bd);margin-bottom:18px;gap:2px}
+.tab{padding:9px 17px;font-size:13px;font-weight:500;cursor:pointer;color:var(--tx3);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .12s;white-space:nowrap}
+.tab:hover{color:var(--tx)}.tab.active{color:var(--ac);border-bottom-color:var(--ac)}
+.tab.tm-t.active{color:var(--mn);border-bottom-color:var(--mn)}
+.tab.taj-t.active{color:var(--aj);border-bottom-color:var(--aj)}
+.tab.tamz-t.active{color:var(--amz);border-bottom-color:var(--amz)}
+.tdot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px}
+/* CALC TABLE */
+.ct{width:100%;border-collapse:collapse}
+.ct tr{border-bottom:1px solid var(--bd)}.ct tr:last-child{border-bottom:none}
+.ct td{padding:7px 11px;font-size:12px}
+.ct td:first-child{color:var(--tx2);width:56%}
+.ct td:last-child{font-family:var(--mono);text-align:right;font-size:12px}
+.sh td{background:var(--s3);font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;padding:5px 11px}
+.ir td:last-child{padding:3px 7px}
+.ct input[type=number]{background:var(--s3);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-family:var(--mono);font-size:12px;padding:4px 7px;width:95px;text-align:right}
+.ct input[type=number]:focus{outline:none;border-color:var(--ac)}
+.ctotal{background:rgba(45,212,160,.07)!important}.ctotal td{font-weight:600!important;color:var(--gr)!important}
+.cbreach{background:rgba(245,87,92,.07)!important}.cbreach td{color:var(--re)!important}
+.cauto{background:rgba(78,142,247,.05)!important}.cauto td:first-child{color:var(--bl)!important}
+.cform{background:rgba(78,142,247,.04)}.cform td:first-child{color:var(--bl)}
+/* MODAL */
+.movl{position:fixed;inset:0;background:rgba(0,0,0,.74);z-index:200;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal{background:var(--s);border:1px solid var(--bd2);border-radius:12px;width:540px;max-height:88vh;overflow-y:auto}
+.mhdr{padding:17px 21px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
+.mtl{font-size:15px;font-weight:600}
+.mclose{cursor:pointer;color:var(--tx3);font-size:20px;line-height:1}.mclose:hover{color:var(--tx)}
+.mbody{padding:21px}.mfoot{padding:15px 21px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:9px}
+/* COMM TABLE */
+.comm-table{width:100%;border-collapse:collapse;font-size:12px}
+.comm-table th{background:var(--s2);color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:8px 10px;border:1px solid var(--bd);font-weight:600;text-align:center}
+.comm-table th:first-child{text-align:left}
+.comm-table td{padding:6px 10px;border:1px solid var(--bd);vertical-align:middle}
+.comm-table td:first-child{color:var(--tx2);font-weight:500;white-space:nowrap}
+.ci{width:68px;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-family:var(--mono);font-size:12px;padding:4px 6px;text-align:right}
+.ci:focus{outline:none;border-color:var(--ac)}
+/* SKU SHEET */
+.ss-wrap{overflow-x:auto;border:1px solid var(--bd);border-radius:var(--r)}
+.ss{width:100%;border-collapse:collapse;font-size:12px}
+.ss th{background:var(--s2);color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:8px 9px;border-bottom:2px solid var(--bd);white-space:nowrap;font-weight:600}
+.ss th.auto-h{color:var(--gr);background:rgba(45,212,160,.05)}
+.ss td{padding:6px 8px;border-bottom:1px solid var(--bd);vertical-align:middle}
+.ss tr:last-child td{border-bottom:none}
+.ss .er td{background:rgba(245,166,35,.04);border-bottom:2px solid var(--ac)}
+.si{background:var(--s2);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:12px;padding:5px 7px;width:100%;transition:border .1s}
+.si:focus{outline:none;border-color:var(--ac)}
+.sse{background:var(--s2);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:12px;padding:5px 7px;cursor:pointer}
+.sse:focus{outline:none;border-color:var(--ac)}
+.av{font-family:var(--mono);font-size:12px;color:var(--gr);font-weight:600;white-space:nowrap}
+.av.na{color:var(--tx3);font-style:italic}
+.gst5{background:rgba(45,212,160,.12);color:var(--gr);font-size:10px;font-weight:700;font-family:var(--mono);padding:2px 5px;border-radius:3px}
+.gst18{background:rgba(245,166,35,.12);color:var(--ac);font-size:10px;font-weight:700;font-family:var(--mono);padding:2px 5px;border-radius:3px}
+/* STATUS ICONS */
+.ico-breach{font-size:15px;cursor:help;filter:drop-shadow(0 0 4px rgba(245,87,92,.6))}
+.ico-ignore{font-size:15px;cursor:pointer;opacity:.6}
+.ico-healthy{font-size:14px;opacity:.5}
+/* THRESHOLD */
+.thr-row{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--bd)}
+.thr-row:last-child{border-bottom:none}
+.thr-input{width:90px;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-family:var(--mono);padding:6px 10px;text-align:right;font-size:13px}
+.thr-input:focus{outline:none;border-color:var(--ac)}
+/* FILTER BAR */
+.filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:var(--s);border:1px solid var(--bd);border-radius:var(--r)}
+.filter-select{background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:12px;padding:5px 9px;cursor:pointer;min-width:120px}
+.filter-select:focus{outline:none;border-color:var(--ac)}
+.filter-sep{width:1px;height:20px;background:var(--bd2);margin:0 2px}
+.filter-label{font-size:11px;color:var(--tx3);white-space:nowrap}
+.filter-clear{font-size:11px;color:var(--ac);cursor:pointer;padding:4px 8px;border:1px solid rgba(245,166,35,.3);border-radius:4px;background:transparent;white-space:nowrap}
+.filter-clear:hover{background:rgba(245,166,35,.1)}
+.active-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.af-chip{background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3);border-radius:12px;padding:2px 9px;font-size:11px;color:var(--ac);cursor:pointer;display:flex;align-items:center;gap:4px}
+.af-chip:hover{background:rgba(245,166,35,.2)}
+/* BRAND CARD */
+.brand-card{background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:15px;transition:border-color .12s}
+.brand-card:hover{border-color:var(--bd2)}
+/* ALERT ITEM */
+.aitem{display:flex;align-items:flex-start;gap:11px;background:rgba(245,87,92,.08);border:1px solid rgba(245,87,92,.25);border-radius:var(--r);padding:11px 14px;margin-bottom:8px}
+/* MISC */
+.info{background:rgba(78,142,247,.07);border:1px solid rgba(78,142,247,.2);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--tx2);margin-bottom:14px}
+.success{background:rgba(45,212,160,.07);border:1px solid rgba(45,212,160,.2);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--gr);margin-bottom:14px}
+.warn{background:rgba(245,87,92,.07);border:1px solid rgba(245,87,92,.2);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--re)}
+.mono{font-family:var(--mono)}.st{font-size:11px;color:var(--tx3)}
+.flex{display:flex;align-items:center}.flexb{display:flex;align-items:center;justify-content:space-between}
+.gap8{gap:8px}.gap12{gap:12px}.gap16{gap:16px}
+.mb8{margin-bottom:8px}.mb12{margin-bottom:12px}.mb16{margin-bottom:16px}.mb20{margin-bottom:20px}
+.toast{position:fixed;bottom:22px;right:22px;background:var(--s);border:1px solid var(--bd2);border-radius:var(--r);padding:11px 17px;font-size:13px;z-index:999;display:flex;align-items:center;gap:9px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:su .18s ease}
+.tg2{border-left:3px solid var(--gr)}.tr2{border-left:3px solid var(--re)}
+@keyframes su{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:3px}
+.playout{display:grid;grid-template-columns:260px 1fr;gap:16px}
+.wfrow{display:flex;align-items:center;gap:9px;padding:7px 11px;background:var(--s2);border:1px solid var(--bd);border-radius:5px;margin-bottom:6px}
+.wfrow.wff{border-color:rgba(78,142,247,.3);background:rgba(78,142,247,.05)}
+.wfrow.wfo{border-color:rgba(45,212,160,.3);background:rgba(45,212,160,.05)}
+.wfrow.wfs{background:var(--s3)}
+/* LEVEL AUTO BADGE */
+.auto-level{font-size:10px;color:var(--gr);padding:1px 5px;border-radius:3px;background:rgba(45,212,160,.12);margin-left:5px}
+/* ROLE BADGES */
+.role-admin{background:rgba(245,166,35,.15);color:var(--ac)}
+.role-manager{background:rgba(78,142,247,.15);color:var(--bl)}
+.role-viewer{background:rgba(139,154,191,.1);color:var(--tx2)}
+/* ── HAMBURGER ──────────────────────────────────────── */
+.hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;background:transparent;border:none;cursor:pointer;padding:6px;border-radius:6px;flex-shrink:0}
+.hamburger:hover{background:var(--s2)}
+.hamburger span{display:block;height:2px;background:var(--tx2);border-radius:2px;transition:all .2s}
+.hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.hamburger.open span:nth-child(2){opacity:0}
+.hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+
+/* ── SIDEBAR OVERLAY (mobile) ───────────────────────── */
+#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;backdrop-filter:blur(2px)}
+#sidebar-overlay.active{display:block}
+
+/* ── MOBILE BREAKPOINTS ─────────────────────────────── */
+@media(max-width:768px){
+  /* Show hamburger */
+  .hamburger{display:flex}
+
+  /* Sidebar: hidden off-screen by default, slides in */
+  .sidebar{transform:translateX(-100%);transition:transform .25s ease;z-index:100;box-shadow:4px 0 24px rgba(0,0,0,.5)}
+  .sidebar.open{transform:translateX(0)}
+
+  /* Main takes full width */
+  .main{margin-left:0}
+
+  /* Topbar */
+  .topbar{padding:10px 16px}
+
+  /* Content padding reduced */
+  .content{padding:14px 14px}
+
+  /* Grids: 4→2→1 cols */
+  .g4{grid-template-columns:repeat(2,1fr);gap:10px}
+  .g3{grid-template-columns:repeat(2,1fr);gap:10px}
+  .g2{grid-template-columns:1fr;gap:12px}
+
+  /* Playout (wireframe + calc): stack vertically */
+  .playout{grid-template-columns:1fr;gap:14px}
+
+  /* Tabs: horizontally scrollable */
+  .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .tabs::-webkit-scrollbar{height:0}
+  .tab{white-space:nowrap;padding:9px 13px;font-size:12px}
+
+  /* Filter bar: wrap nicely */
+  .filter-bar{gap:6px;padding:10px 10px}
+  .filter-select{min-width:0;font-size:11px;padding:5px 7px}
+  .filter-sep{display:none}
+
+  /* SKU sheet: horizontal scroll */
+  .ss-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .ss th,.ss td{padding:6px 7px;font-size:11px}
+  .ss th:nth-child(n+8),.ss td:nth-child(n+8){min-width:70px}
+
+  /* Calc table */
+  .ct td{padding:6px 9px;font-size:12px}
+  .ct input[type=number]{width:80px}
+
+  /* Cards */
+  .card .ch{flex-wrap:wrap;gap:8px}
+  .ch .btn,.ch button{font-size:11px;padding:5px 9px}
+
+  /* Info/warning boxes */
+  .info,.success,.warn{font-size:11px;padding:8px 11px}
+
+  /* Stat cards */
+  .sc{padding:12px 13px}
+  .sv{font-size:18px}
+
+  /* Brand grid */
+  .brand-card{padding:13px}
+
+  /* Alert items */
+  .aitem{padding:10px 12px}
+
+  /* Comm table scrollable */
+  .comm-table{font-size:11px}
+  .comm-table th,.comm-table td{padding:5px 7px}
+  .ci{width:56px;font-size:11px}
+
+  /* Threshold rows */
+  .thr-row{gap:10px}
+  .thr-input{width:80px}
+
+  /* Hide some columns on mobile for SKU table */
+  .ss th:nth-child(8),.ss td:nth-child(8),  /* MRP — keep */
+  .ss th:nth-child(5),.ss td:nth-child(5)   /* Level */
+  {}
+
+  /* Modals full-width on mobile */
+  .modal{width:calc(100vw - 32px);max-height:90vh}
+
+  /* Page title smaller */
+  .pt{font-size:14px}
+
+  /* Wf builder */
+  .wfrow{padding:6px 9px}
+
+  /* Nav items larger touch target */
+  .nav-item{padding:11px 16px;font-size:14px}
+  .nav-sec{padding:14px 16px 6px}
+
+  /* Close sidebar when nav item tapped */
+}
+
+@media(max-width:480px){
+  .g4{grid-template-columns:repeat(2,1fr);gap:9px}
+  .g3{grid-template-columns:1fr;gap:10px}
+  .sv{font-size:20px}
+  .sc{padding:11px 12px}
+  .content{padding:12px 12px}
+  .tabs .tab{font-size:11px;padding:8px 10px}
+  /* Alert badge: shorter text */
+  #alert-badge{font-size:10px;padding:3px 7px}
+  /* Add SKU button compact */
+  .topbar .btn{font-size:11px;padding:5px 8px}
+  /* Filter bar: two rows */
+  .filter-bar{flex-wrap:wrap}
+  .filter-bar .btn{margin-left:0}
+  /* Modal full screen */
+  .modal{width:100vw;max-height:100vh;border-radius:0;border-left:none;border-right:none;border-bottom:none}
+  .movl{align-items:flex-end}
+}
+</style>
+</head>
+<body>
+
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<div class="sidebar" id="sidebar">
+  <div class="logo"><div class="logo-text">PriceDesk</div><div class="logo-sub">Marketplace Pricing</div></div>
+  <nav class="nav">
+    <div class="nav-sec">Main</div>
+    <div class="nav-item active" data-page="dashboard" onclick="nav('dashboard')"><span class="ni">⊡</span> Dashboard</div>
+    <div class="nav-item" data-page="pricing" onclick="nav('pricing')"><span class="ni">◈</span> Pricing Tables</div>
+    <div class="nav-item" data-page="thresholds" onclick="nav('thresholds')"><span class="ni">△</span> Thresholds</div>
+    <div class="nav-sec">Configuration</div>
+    <div class="nav-item" data-page="brands" onclick="nav('brands')"><span class="ni">◎</span> Brands</div>
+    <div class="nav-item" data-page="commission" onclick="nav('commission')"><span class="ni">%</span> Commission Settings</div>
+    <div class="nav-item" data-page="logistics" onclick="nav('logistics')"><span class="ni">⇅</span> Logistics</div>
+    <div class="nav-sec">Products</div>
+    <div class="nav-item" data-page="skus" onclick="nav('skus')"><span class="ni">⊟</span> SKUs</div>
+    <div class="nav-item" data-page="categories" onclick="nav('categories')"><span class="ni">⊞</span> Categories</div>
+    <div class="nav-sec">Admin</div>
+    <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni">⊠</span> Wireframe Builder</div>
+    <div class="nav-item" data-page="users" onclick="nav('users')"><span class="ni">◉</span> User Access</div>
+  </nav>
+  <div class="sb-btm">
+    <div class="flex gap8"><div class="ava">A</div><div><div style="font-size:12px;color:var(--tx2)">Admin User</div><div style="font-size:10px;color:var(--tx3)">Administrator</div></div></div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <div class="flex gap12">
+      <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="pt" id="pageTitle">Dashboard</div>
+    </div>
+    <div class="flex gap12">
+      <div id="alert-badge" style="background:var(--re);color:#fff;border-radius:12px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;animation:pulse 2s infinite;display:none" onclick="nav('thresholds')"></div>
+      <button class="btn bp bsm" onclick="nav('skus')">+ Add SKU</button>
+    </div>
+  </div>
+  <div class="content">
+
+<!-- ═══ DASHBOARD ═══ -->
+<div class="page active" id="page-dashboard">
+  <div class="g4 mb20">
+    <div class="sc"><div class="sl">Total SKUs</div><div class="sv" style="color:var(--bl)" id="dash-sku">0</div><div class="ss">Across all brands</div></div>
+    <div class="sc"><div class="sl">Active Brands</div><div class="sv" style="color:var(--pu)" id="dash-brands">0</div></div>
+    <div class="sc"><div class="sl">Threshold Breaches</div><div class="sv" style="color:var(--re)" id="dash-breaches">0</div><div class="ss">Not ignored</div></div>
+    <div class="sc"><div class="sl">Commission Models</div><div class="sv" style="color:var(--ac)">3</div><div class="ss">Myntra · PPMP · CC</div></div>
+  </div>
+  <div id="dash-alerts"></div>
+  <div class="ch" style="background:var(--s);border:1px solid var(--bd);border-radius:var(--r) var(--r) 0 0;padding:13px 17px">
+    <div style="font-size:13px;font-weight:600">Profit by Brand & Commission Model</div>
+  </div>
+  <div class="card" style="border-radius:0 0 var(--r) var(--r);border-top:none">
+    <table class="dt"><thead><tr><th>Brand</th><th>Marketplace</th><th>Model</th><th>SKUs</th><th>Avg Commission</th><th>Avg Net Profit (₹)</th><th>Status</th></tr></thead><tbody id="brand-summary-body"></tbody></table>
+  </div>
+</div>
+
+<!-- ═══ PRICING TABLES ═══ -->
+<div class="page" id="page-pricing">
+  <div class="info">💡 Commission auto-fetched from category slab. GST auto: 5% if SP &lt; ₹2,500 / 18% if SP ≥ ₹2,500. Ajio CC = commission only, no logistics.</div>
+  <div class="tabs">
+    <div class="tab tm-t active" onclick="switchMP('myntra',this)"><span class="tdot" style="background:var(--mn)"></span>Myntra</div>
+    <div class="tab taj-t" onclick="switchMP('ajio-ppmp',this)"><span class="tdot" style="background:var(--aj)"></span>Ajio — PPMP</div>
+    <div class="tab taj-t" onclick="switchMP('ajio-cc',this)"><span class="tdot" style="background:var(--gr)"></span>Ajio — CC</div>
+    <div class="tab tamz-t" onclick="switchMP('amazon',this)"><span class="tdot" style="background:var(--amz)"></span>Amazon</div>
+  </div>
+  <div id="mp-myntra"><div class="playout">
+    <div><div class="st mb8" style="text-transform:uppercase;letter-spacing:1px">Structure</div><div id="wfp-myntra"></div></div>
+    <div>
+      <div class="flexb mb12">
+        <div class="st" style="text-transform:uppercase;letter-spacing:1px">Live Calculator</div>
+        <select class="fi" id="cat-sel-myntra" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('myntra')">
+          <option value="">Select Category</option>
+        </select>
+      </div>
+      <div class="card"><div style="padding:0"><table class="ct" id="ct-myntra"></table></div></div>
+    </div>
+  </div></div>
+  <div id="mp-ajio-ppmp" style="display:none"><div class="playout">
+    <div><div class="st mb8" style="text-transform:uppercase;letter-spacing:1px">PPMP Structure</div><div id="wfp-ajio-ppmp"></div></div>
+    <div>
+      <div class="flexb mb12">
+        <div><div style="font-size:13px;font-weight:600">Ajio — PPMP</div><div class="st">Commission + Logistics + Platform Fees</div></div>
+        <select class="fi" id="cat-sel-ajio-ppmp" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('ajio-ppmp')"><option value="">Select Category</option></select>
+      </div>
+      <div class="card"><div style="padding:0"><table class="ct" id="ct-ajio-ppmp"></table></div></div>
+    </div>
+  </div></div>
+  <div id="mp-ajio-cc" style="display:none"><div class="playout">
+    <div><div class="st mb8" style="text-transform:uppercase;letter-spacing:1px">CC Structure</div><div id="wfp-ajio-cc"></div></div>
+    <div>
+      <div class="flexb mb12">
+        <div><div style="font-size:13px;font-weight:600">Ajio — CC</div><div class="st">Commission Only — Ajio handles all logistics</div></div>
+        <select class="fi" id="cat-sel-ajio-cc" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('ajio-cc')"><option value="">Select Category</option></select>
+      </div>
+      <div class="card"><div style="padding:0"><table class="ct" id="ct-ajio-cc"></table></div></div>
+      <div class="success" style="margin-top:10px">✓ CC Model: Only commission is deducted. No other charges.</div>
+    </div>
+  </div></div>
+  <div id="mp-amazon" style="display:none"><div class="playout">
+    <div><div class="st mb8" style="text-transform:uppercase;letter-spacing:1px">Amazon Structure</div><div id="wfp-amazon"></div></div>
+    <div>
+      <div class="flexb mb12">
+        <div class="st" style="text-transform:uppercase;letter-spacing:1px">Live Calculator</div>
+        <select class="fi" id="cat-sel-amazon" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('amazon')"><option value="">Select Category</option></select>
+      </div>
+      <div class="card"><div style="padding:0"><table class="ct" id="ct-amazon"></table></div></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- ═══ THRESHOLDS ═══ -->
+<div class="page" id="page-thresholds">
+  <div class="g2">
+    <div class="card">
+      <div class="ch">
+        <div>
+          <div style="font-size:13px;font-weight:600">Category Profit Thresholds</div>
+          <div class="st" style="margin-top:3px">Alert when <strong style="color:var(--tx)">Net Profit in ₹</strong> drops below this amount for any SKU</div>
+        </div>
+        <button class="btn bp bsm" onclick="saveThr()">Save Thresholds</button>
+      </div>
+      <div class="cb">
+        <div class="info mb12">Set minimum profit in <strong style="color:var(--tx)">Rupees (₹)</strong>. Example: Set ₹500 for Lehenga Choli — any SKU earning less than ₹500 net profit triggers a daily alert.</div>
+        <div id="thr-list"></div>
+      </div>
+    </div>
+    <div>
+      <div class="card mb16">
+        <div class="ch"><div style="font-size:13px;font-weight:600">⚠ Active Breaches</div></div>
+        <div id="thr-breach-list" style="padding:0"></div>
+      </div>
+      <div class="card">
+        <div class="ch"><div style="font-size:13px;font-weight:600">Alert Settings</div></div>
+        <div class="cb">
+          <div class="fg"><label class="fl">Alert Email</label><input class="fi" type="email" value="admin@yourcompany.com"></div>
+          <div class="fg"><label class="fl">Frequency</label>
+            <select class="fi" style="appearance:none">
+              <option>Daily (every day at 9 AM)</option>
+              <option>Immediately on breach</option>
+              <option>Weekly Summary</option>
+            </select>
+          </div>
+          <button class="btn bp bsm" onclick="toast('Settings saved','green')">Save Settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ BRANDS ═══ -->
+<div class="page" id="page-brands">
+  <div class="info">Brands group SKUs. Each brand links to a marketplace and commission model. Ajio brands specify PPMP or CC. Set a commission override per brand if needed.</div>
+  <div class="flexb mb16">
+    <div class="st" id="brand-count"></div>
+    <button class="btn bp bsm" onclick="openBrandModal()">+ Add Brand</button>
+  </div>
+  <div class="g3" id="brand-grid"></div>
+</div>
+
+<!-- ═══ COMMISSION SETTINGS ═══ -->
+<div class="page" id="page-commission">
+  <div class="info">Commission rates auto-fetched when selecting category in SKU sheet. Changes update all calculators instantly.</div>
+  <div class="tabs">
+    <div class="tab tm-t active" onclick="switchCommTab('myntra',this)"><span class="tdot" style="background:var(--mn)"></span>Myntra (Category + Slab)</div>
+    <div class="tab taj-t" onclick="switchCommTab('ajio',this)"><span class="tdot" style="background:var(--aj)"></span>Ajio (PPMP &amp; CC)</div>
+    <div class="tab tamz-t" onclick="switchCommTab('amazon',this)"><span class="tdot" style="background:var(--amz)"></span>Amazon (Fixed %)</div>
+  </div>
+  <div id="comm-myntra">
+    <div class="success mb12">Myntra charges by <strong>category + selling price slab</strong>. Edit any cell and Save.</div>
+    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Commission % — Category × Price Slab</div><button class="btn bp bsm" onclick="saveComm()">✓ Save & Apply</button></div>
+    <div style="padding:0;overflow-x:auto"><table class="comm-table" id="comm-myntra-table"></table></div></div>
+  </div>
+  <div id="comm-ajio" style="display:none">
+    <div class="g2">
+      <div class="card"><div class="ch"><div><span class="bdg bppmp" style="margin-right:6px">PPMP</span>Fixed Commission + Logistics</div><button class="btn bp bsm" onclick="saveComm()">✓ Save</button></div>
+        <div class="cb"><table class="comm-table" id="comm-ajio-ppmp-table"></table>
+          <div class="fg" style="margin-top:14px"><label class="fl">Additional Platform Fee (₹/order)</label><input class="fi" type="number" id="ajio-platform-fee" value="0" placeholder="0"></div>
+        </div>
+      </div>
+      <div class="card"><div class="ch"><div><span class="bdg bcc" style="margin-right:6px">CC</span>Commission Only</div><button class="btn bp bsm" onclick="saveComm()">✓ Save</button></div>
+        <div class="cb"><div class="info mb12">CC: Only commission deducted. No logistics, no other charges.</div>
+          <table class="comm-table" id="comm-ajio-cc-table"></table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="comm-amazon" style="display:none">
+    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Amazon Referral Fee % by Category</div><button class="btn bp bsm" onclick="saveComm()">✓ Save & Apply</button></div>
+    <div style="padding:0"><table class="comm-table" id="comm-amazon-table"></table></div></div>
+  </div>
+</div>
+
+<!-- ═══ LOGISTICS ═══ -->
+<div class="page" id="page-logistics">
+  <div class="info">Set logistics per marketplace. Level-based uses Myntra's GT Charges / Reverse Fee slabs.</div>
+  <div class="tabs">
+    <div class="tab tm-t active" onclick="switchLogTab('myntra',this)"><span class="tdot" style="background:var(--mn)"></span>Myntra</div>
+    <div class="tab taj-t" onclick="switchLogTab('ajio',this)"><span class="tdot" style="background:var(--aj)"></span>Ajio (PPMP only)</div>
+    <div class="tab tamz-t" onclick="switchLogTab('amazon',this)"><span class="tdot" style="background:var(--amz)"></span>Amazon</div>
+  </div>
+  <div id="log-myntra"><div class="g2 mb16">
+    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">🟢 Forward (GT Charges)</div></div><div class="cb">
+      <div class="fg"><label class="fl">Mode</label><div class="flex gap12">
+        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="level" checked style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Level-based</label>
+        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Fixed</label>
+      </div></div>
+      <div id="mfwd-level"><table class="dt" style="font-size:12px"><thead><tr><th>Level</th><th>₹</th></tr></thead><tbody>
+        <tr><td>Level 1</td><td><input class="ci" id="mfwd-l1" value="207"></td></tr>
+        <tr><td>Level 2</td><td><input class="ci" id="mfwd-l2" value="230"></td></tr>
+        <tr><td>Level 3</td><td><input class="ci" id="mfwd-l3" value="266"></td></tr>
+        <tr><td>Level 4</td><td><input class="ci" id="mfwd-l4" value="313"></td></tr>
+      </tbody></table></div>
+      <div id="mfwd-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Rate (₹)</label><input class="fi" type="number" id="mfwd-fix" value="230"></div></div>
+      <div style="margin-top:14px">
+        <div class="fg"><label class="fl">Collection Fee (₹)</label><input class="fi" type="number" id="myn-coll" value="61"></div>
+        <div class="fg"><label class="fl">Payment Gateway (₹)</label><input class="fi" type="number" id="myn-pg" value="50.22"></div>
+      </div>
+    </div></div>
+    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">🔴 Return (Reverse Fees)</div></div><div class="cb">
+      <div class="fg"><label class="fl">Mode</label><div class="flex gap12">
+        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="level" checked style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Level-based</label>
+        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Fixed</label>
+      </div></div>
+      <div id="mret-level"><table class="dt" style="font-size:12px"><thead><tr><th>Level</th><th>₹</th></tr></thead><tbody>
+        <tr><td>Level 1</td><td><input class="ci" id="mret-l1" value="167"></td></tr>
+        <tr><td>Level 2</td><td><input class="ci" id="mret-l2" value="218"></td></tr>
+        <tr><td>Level 3</td><td><input class="ci" id="mret-l3" value="259"></td></tr>
+        <tr><td>Level 4</td><td><input class="ci" id="mret-l4" value="331"></td></tr>
+      </tbody></table></div>
+      <div id="mret-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Return Rate (₹)</label><input class="fi" type="number" id="mret-fix" value="218"></div></div>
+      <button class="btn bp bsm" style="margin-top:12px" onclick="toast('Logistics saved','green');triggerRecalc()">✓ Save</button>
+    </div></div>
+  </div></div>
+  <div id="log-ajio" style="display:none">
+    <div class="g2">
+      <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">PPMP — Forward (₹)</div></div><div class="cb">
+        <div class="fg"><label class="fl">Forward Rate (₹)</label><input class="fi" type="number" id="ajfwd-fix" value="70"></div>
+      </div></div>
+      <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">PPMP — Return (₹)</div></div><div class="cb">
+        <div class="fg"><label class="fl">Return Rate (₹)</label><input class="fi" type="number" id="ajret-fix" value="70"></div>
+        <button class="btn bp bsm" onclick="toast('Ajio logistics saved','green');triggerRecalc()">✓ Save</button>
+      </div></div>
+    </div>
+  </div>
+  <div id="log-amazon" style="display:none">
+    <div class="g2">
+      <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">FBA &amp; Fees</div></div><div class="cb">
+        <div class="fg"><label class="fl">FBA Fee (₹)</label><input class="fi" type="number" id="amz-fba" value="55"></div>
+        <div class="fg"><label class="fl">Closing Fee (₹)</label><input class="fi" type="number" id="amz-close" value="15"></div>
+      </div></div>
+      <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Return (₹)</div></div><div class="cb">
+        <div class="fg"><label class="fl">Return Fee (₹)</label><input class="fi" type="number" id="amz-ret" value="55"></div>
+        <button class="btn bp bsm" onclick="toast('Amazon logistics saved','green');triggerRecalc()">✓ Save</button>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SKUs ═══ -->
+<div class="page" id="page-skus">
+  <!-- FILTER BAR -->
+  <div class="filter-bar">
+    <span class="filter-label">Filters:</span>
+    <div style="position:relative">
+      <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:14px;pointer-events:none">⌕</span>
+      <input id="f-search" class="filter-select" style="padding-left:27px;min-width:160px" placeholder="Search Style ID…" oninput="renderSKUs()">
+    </div>
+    <span class="filter-sep"></span>
+    <select id="f-brand" class="filter-select" onchange="renderSKUs()"><option value="">All Brands</option></select>
+    <select id="f-cat" class="filter-select" onchange="renderSKUs()"><option value="">All Categories</option></select>
+    <select id="f-model" class="filter-select" onchange="renderSKUs()">
+      <option value="">All Models</option>
+      <option value="myntra">Myntra</option>
+      <option value="ajio-ppmp">Ajio PPMP</option>
+      <option value="ajio-cc">Ajio CC</option>
+      <option value="amazon">Amazon</option>
+    </select>
+    <select id="f-level" class="filter-select" onchange="renderSKUs()">
+      <option value="">All Levels</option>
+      <option>Level 1</option><option>Level 2</option><option>Level 3</option><option>Level 4</option>
+    </select>
+    <select id="f-status" class="filter-select" onchange="renderSKUs()">
+      <option value="">All Statuses</option>
+      <option value="breached">Threshold Breached ⚠️</option>
+      <option value="ignored">Threshold Ignored 🔕</option>
+      <option value="healthy">Healthy ✓</option>
+    </select>
+    <span class="filter-sep"></span>
+    <button class="filter-clear" onclick="clearFilters()">✕ Clear</button>
+    <div class="btn bp bsm" onclick="addRow()" style="margin-left:auto">+ Add Row</div>
+    <button class="btn bg bsm" onclick="openImport()">⬆ Import</button>
+    <button class="btn bg bsm" onclick="dlTemplate()">⬇ Template</button>
+  </div>
+  <div id="active-filter-chips" class="active-filters"></div>
+  <div class="info mb8">
+    <strong style="color:var(--tx)">Auto-fill:</strong> Select Brand → Category (Myntra auto-sets Level) → fill Cost & Markup → <span style="color:var(--gr)">MRP / SP / GST / Commission % / Net Profit ₹ all compute live.</span>
+    Icons: <span title="Threshold breached">⚠️</span> Breach &nbsp; <span title="Threshold ignored">🔕</span> Ignored &nbsp; <span title="Threshold OK">✅</span> Healthy
+  </div>
+  <div class="st mb8" id="sku-count"></div>
+  <div class="ss-wrap">
+    <table class="ss">
+      <thead><tr>
+        <th style="width:36px">Img</th>
+        <th>Style ID</th>
+        <th>Brand / Model</th>
+        <th>Category</th>
+        <th>Level <span class="st">(Myntra)</span></th>
+        <th>Cost ₹</th>
+        <th>Markup %</th>
+        <th class="auto-h">MRP ↗</th>
+        <th class="auto-h">SP ↗</th>
+        <th class="auto-h">GST ↗</th>
+        <th class="auto-h">Comm % ↗</th>
+        <th class="auto-h">Net Profit ₹ ↗</th>
+        <th style="width:90px">Status / Act</th>
+      </tr></thead>
+      <tbody id="sku-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ CATEGORIES ═══ -->
+<div class="page" id="page-categories">
+  <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Categories &amp; Commission by Model</div></div>
+  <table class="dt"><thead><tr><th>Category</th><th>Myntra Level</th><th>Myntra Comm (top slab)</th><th>Ajio PPMP</th><th>Ajio CC</th><th>Amazon</th><th>Threshold (₹)</th></tr></thead><tbody id="cat-table-body"></tbody></table>
+  </div>
+</div>
+
+<!-- ═══ WIREFRAME ═══ -->
+<div class="page" id="page-wireframe">
+  <div class="g2">
+    <div>
+      <div class="flexb mb12">
+        <div><div style="font-size:13px;font-weight:600">Wireframe Builder</div><div class="st">Define calculation rows per marketplace</div></div>
+        <select class="fi" style="width:165px" id="wf-sel" onchange="renderWFBuilder()">
+          <option value="myntra">Myntra</option>
+          <option value="ajio-ppmp">Ajio — PPMP</option>
+          <option value="ajio-cc">Ajio — CC</option>
+          <option value="amazon">Amazon</option>
+        </select>
+      </div>
+      <div id="wf-builder-list"></div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">
+        <button onclick="addWFRow('input')" style="padding:5px 11px;border-radius:5px;border:1px dashed var(--bd2);cursor:pointer;font-size:12px;color:var(--pu);background:transparent">+ Input</button>
+        <button onclick="addWFRow('formula')" style="padding:5px 11px;border-radius:5px;border:1px dashed var(--bd2);cursor:pointer;font-size:12px;color:var(--bl);background:transparent">+ Formula</button>
+        <button onclick="addWFRow('output')" style="padding:5px 11px;border-radius:5px;border:1px dashed var(--bd2);cursor:pointer;font-size:12px;color:var(--gr);background:transparent">+ Output</button>
+        <button onclick="addWFRow('section')" style="padding:5px 11px;border-radius:5px;border:1px dashed var(--bd2);cursor:pointer;font-size:12px;color:var(--tx3);background:transparent">+ Section</button>
+      </div>
+      <button class="btn bp bsm" style="margin-top:12px" onclick="toast('Wireframe saved','green')">✓ Save</button>
+    </div>
+    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Row Types</div></div><div class="cb" style="font-size:12px">
+      <div class="wfrow mb8"><span style="color:var(--pu);font-weight:600">INPUT</span><span style="color:var(--tx3);margin-left:8px">→ User enters value</span></div>
+      <div class="wfrow wff mb8"><span style="color:var(--bl);font-weight:600">FORMULA</span><span style="color:var(--tx3);margin-left:8px">→ Auto-calculated</span></div>
+      <div class="wfrow wfo mb8"><span style="color:var(--gr);font-weight:600">OUTPUT</span><span style="color:var(--tx3);margin-left:8px">→ Final result, vs threshold</span></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- ═══ USERS ═══ -->
+<div class="page" id="page-users">
+  <div class="flexb mb16">
+    <div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:3px">User Access</div>
+      <div class="st">Control who can view and edit pricing data.</div>
+    </div>
+    <button class="btn bp bsm" onclick="openUserModal()">+ Add User</button>
+  </div>
+  <div class="card">
+    <table class="dt"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Added</th><th>Action</th></tr></thead>
+    <tbody id="users-table-body"></tbody></table>
+  </div>
+</div>
+
+  </div>
+</div>
+<div id="modal-root"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CATEGORY → LEVEL MAP (Myntra only)
+// ═══════════════════════════════════════════════════════
+const CAT_LEVEL = {
+  'Kurtas':         'Level 2',
+  'Kurta Sets':     'Level 2',
+  'Sarees':         'Level 2',
+  'Lehenga Choli':  'Level 4',
+  'Ethnic Dresses': 'Level 1',
+  'Co-Ords':        'Level 1',
+  'Jumpsuit':       'Level 1',
+  'Tops':           'Level 1',
+  'Dresses':        'Level 1',
+};
+const CATS=['Kurta Sets','Lehenga Choli','Ethnic Dresses','Sarees','Co-Ords','Jumpsuit','Tops','Kurtas'];
+const LEVELS=['Level 1','Level 2','Level 3','Level 4'];
+const SLABS=[{label:'0–300',min:0,max:300},{label:'300–500',min:300,max:500},{label:'500–1000',min:500,max:1000},{label:'1000–2000',min:1000,max:2000},{label:'2000+',min:2000,max:Infinity}];
+
+// ═══════════════════════════════════════════════════════
+// COMMISSION DATA
+// ═══════════════════════════════════════════════════════
+let COMM_MYNTRA={'Kurta Sets':[0,0,21.24,17.70,18.88],'Lehenga Choli':[0,0,28.32,18.88,18.88],'Ethnic Dresses':[0,7.08,23.60,20.06,22.42],'Sarees':[0,0,23.60,20.06,22.42],'Co-Ords':[0,4.72,23.60,20.06,21.24],'Jumpsuit':[0,2.36,23.60,20.06,21.24],'Tops':[0,0,22.42,21.24,18.88],'Kurtas':[0,0,21.24,17.70,18.88]};
+let COMM_AJIO_PPMP={'Kurta Sets':18.88,'Lehenga Choli':18.88,'Ethnic Dresses':22.42,'Sarees':22.42,'Co-Ords':21.24,'Jumpsuit':21.24,'Tops':18.88,'Kurtas':18.88};
+let COMM_AJIO_CC={'Kurta Sets':18.88,'Lehenga Choli':18.88,'Ethnic Dresses':22.42,'Sarees':22.42,'Co-Ords':21.24,'Jumpsuit':21.24,'Tops':18.88,'Kurtas':18.88};
+let COMM_AMAZON={'Kurta Sets':17.0,'Lehenga Choli':19.0,'Ethnic Dresses':17.0,'Sarees':17.0,'Co-Ords':17.0,'Jumpsuit':17.0,'Tops':17.0,'Kurtas':17.0};
+
+// ═══════════════════════════════════════════════════════
+// THRESHOLD DATA (in ₹)
+// ═══════════════════════════════════════════════════════
+let THRESHOLDS={
+  'Kurta Sets':300,'Lehenga Choli':500,'Ethnic Dresses':250,
+  'Sarees':300,'Co-Ords':250,'Jumpsuit':250,'Tops':150,'Kurtas':300,
+};
+
+// ═══════════════════════════════════════════════════════
+// BRANDS
+// ═══════════════════════════════════════════════════════
+let brands=[
+  {id:'b1',name:'Fusionic — Myntra',  marketplace:'Myntra', model:'myntra',    commOverride:null},
+  {id:'b2',name:'Fusionic — Ajio PPMP',marketplace:'Ajio',  model:'ajio-ppmp', commOverride:null},
+  {id:'b3',name:'Fusionic — Ajio CC', marketplace:'Ajio',   model:'ajio-cc',   commOverride:null},
+  {id:'b4',name:'LNB — Amazon',       marketplace:'Amazon', model:'amazon',    commOverride:null},
+];
+
+// ═══════════════════════════════════════════════════════
+// USERS
+// ═══════════════════════════════════════════════════════
+let users=[
+  {id:'u1',name:'Admin User',  email:'admin@yourcompany.com',  role:'admin',   added:'2026-01-01'},
+  {id:'u2',name:'Priya Sharma',email:'priya@yourcompany.com',  role:'manager', added:'2026-02-10'},
+  {id:'u3',name:'Rahul Patel', email:'rahul@yourcompany.com',  role:'viewer',  added:'2026-03-05'},
+];
+
+// ═══════════════════════════════════════════════════════
+// SKU DATABASE
+// ═══════════════════════════════════════════════════════
+let skuDB=[
+  {id:'s1',styleId:'SP39-ORANGE-M',brandId:'b1',category:'Kurta Sets',   level:'Level 2',cost:950,  markup:78,img:'',ignoreThreshold:false},
+  {id:'s2',styleId:'NKB59-XS',     brandId:'b2',category:'Kurta Sets',   level:'Level 2',cost:1050, markup:52,img:'',ignoreThreshold:false},
+  {id:'s3',styleId:'NKB55-WINE-XS',brandId:'b3',category:'Kurta Sets',   level:'Level 2',cost:1250, markup:60,img:'',ignoreThreshold:false},
+  {id:'s4',styleId:'TF-202',       brandId:'b4',category:'Lehenga Choli',level:'Level 4',cost:1650, markup:81,img:'',ignoreThreshold:false},
+  {id:'s5',styleId:'DRS142-XS',    brandId:'b1',category:'Ethnic Dresses',level:'Level 1',cost:2110,markup:29,img:'',ignoreThreshold:false},
+];
+
+let editId=null, newImg='';
+
+// ═══════════════════════════════════════════════════════
+// CALC HELPERS
+// ═══════════════════════════════════════════════════════
+function autoGST(sp){return sp>=2500?0.18:0.05;}
+function gstBadge(sp){return sp>=2500?'<span class="gst18">18%</span>':'<span class="gst5">5%</span>';}
+function getMyntraComm(cat,sp){
+  const slabs=COMM_MYNTRA[cat];if(!slabs)return 18.88;
+  for(let i=0;i<SLABS.length;i++){if(sp>=SLABS[i].min&&sp<SLABS[i].max)return slabs[i];}
+  return slabs[slabs.length-1];
+}
+function getMynFwd(level){const m={'Level 1':+el('mfwd-l1')?.value||207,'Level 2':+el('mfwd-l2')?.value||230,'Level 3':+el('mfwd-l3')?.value||266,'Level 4':+el('mfwd-l4')?.value||313};return m[level]||230;}
+function getMynRet(level){const m={'Level 1':+el('mret-l1')?.value||167,'Level 2':+el('mret-l2')?.value||218,'Level 3':+el('mret-l3')?.value||259,'Level 4':+el('mret-l4')?.value||331};return m[level]||218;}
+function el(id){return document.getElementById(id);}
+function fixImg(url){if(!url)return'';url=url.replace('www.dropbox.com','dl.dropboxusercontent.com').replace(/[?&]dl=[01]/g,'');if(url.includes('dropboxusercontent')&&!url.includes('raw=1'))url+=(url.includes('?')?'&':'?')+'raw=1';return url;}
+
+function calcSKU(s){
+  const mrp=Math.round(s.cost*(1+s.markup/100));
+  const sp=Math.round(mrp*3/100)*100||mrp*3;
+  const gst=autoGST(sp);
+  const brand=brands.find(b=>b.id===s.brandId)||{model:'myntra',commOverride:null};
+  let comm=0;
+  if(brand.commOverride!=null) comm=brand.commOverride;
+  else if(brand.model==='myntra') comm=getMyntraComm(s.category,sp);
+  else if(brand.model==='ajio-ppmp') comm=COMM_AJIO_PPMP[s.category]||18.88;
+  else if(brand.model==='ajio-cc') comm=COMM_AJIO_CC[s.category]||18.88;
+  else comm=COMM_AMAZON[s.category]||17;
+  const commAmt=sp*comm/100;
+  const gstAmt=commAmt*gst;
+  let payout;
+  if(brand.model==='ajio-cc'){payout=sp-commAmt-gstAmt;}
+  else if(brand.model==='myntra'){const fwd=getMynFwd(s.level),ret=getMynRet(s.level),coll=+el('myn-coll')?.value||61,pg=+el('myn-pg')?.value||50.22;payout=sp-commAmt-gstAmt-fwd-ret-coll-pg;}
+  else if(brand.model==='ajio-ppmp'){const fwd=+el('ajfwd-fix')?.value||70,ret=+el('ajret-fix')?.value||70,platFee=+el('ajio-platform-fee')?.value||0;payout=sp-commAmt-gstAmt-fwd-ret-platFee;}
+  else{const fba=+el('amz-fba')?.value||55,close=+el('amz-close')?.value||15,allFees=commAmt+close+fba,gstAmt2=allFees*gst;payout=sp-allFees-gstAmt2;}
+  const profitRs=payout-s.cost;
+  const profitPct=(profitRs/sp*100).toFixed(1);
+  const threshold=THRESHOLDS[s.category]||0;
+  const isBreach=!s.ignoreThreshold&&profitRs<threshold;
+  return{mrp,sp,gst,comm,payout,profitRs,profitPct,isBreach,threshold};
+}
+
+// ═══════════════════════════════════════════════════════
+// CALC STATE
+// ═══════════════════════════════════════════════════════
+const CD={
+  myntra:  {cost:950, markup:78,cat:'Kurta Sets',retPct:8,inc:3},
+  ajioppmp:{cost:950, markup:78,cat:'Kurta Sets',retRate:10,inc:0},
+  ajiocc:  {cost:950, markup:78,cat:'Kurta Sets',inc:0},
+  amazon:  {cost:1650,markup:81,cat:'Lehenga Choli',ads:80,retRate:5,inc:0},
+};
+
+function renderMyntra(){
+  const d=CD.myntra;const mrp=Math.round(d.cost*(1+d.markup/100));const sp=Math.round(mrp*3/100)*100||mrp*3;
+  const gst=autoGST(sp);const rawComm=getMyntraComm(d.cat,sp);const eff=Math.max(0,rawComm-d.inc);
+  const commAmt=sp*eff/100;const gstAmt=commAmt*gst;const fwd=getMynFwd('Level 2');const ret=getMynRet('Level 2');
+  const coll=+el('myn-coll')?.value||61;const pg=+el('myn-pg')?.value||50.22;const retProv=d.retPct/100*ret;
+  const total=commAmt+gstAmt+fwd+ret+coll+pg+retProv;const payout=sp-total;const profRs=(payout-d.cost).toFixed(0);
+  const pp=(+(payout-d.cost)/sp*100).toFixed(1);const br=parseFloat(pp)<0||(payout-d.cost)<(THRESHOLDS[d.cat]||0);
+  const t=el('ct-myntra');if(!t)return;
+  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — Category: ${d.cat}</td></tr>
+    <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.myntra.cost=+this.value;renderMyntra()"></td></tr>
+    <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.myntra.markup=+this.value;renderMyntra()"></td></tr>
+    <tr class="cform"><td>MRP = Cost × (1+Markup%)</td><td class="mono" style="color:var(--bl)">₹${mrp.toLocaleString('en-IN')}</td></tr>
+    <tr class="cform"><td>SP = MRP × 3</td><td class="mono" style="color:var(--bl)">₹${sp.toLocaleString('en-IN')}</td></tr>
+    <tr class="sh cauto"><td colspan="2">Commission (auto from slab) ${d.inc>0?`<span style="color:var(--gr);font-size:10px;margin-left:6px">✓ −${d.inc}% incentive</span>`:''}</td></tr>
+    <tr class="cauto"><td>GST Rate (auto) ${gstBadge(sp)}</td><td class="mono" style="color:var(--ac)">${(gst*100).toFixed(0)}%</td></tr>
+    <tr class="cauto"><td>Commission % (slab: ${rawComm}%, eff: ${eff}%)</td><td class="mono" style="color:var(--ac)">${eff}%</td></tr>
+    <tr class="ir"><td>Incentive %</td><td><input type="number" value="${d.inc}" onchange="CD.myntra.inc=+this.value;renderMyntra()"></td></tr>
+    <tr><td>Commission Amount</td><td class="mono" style="color:var(--re)">−₹${commAmt.toFixed(0)}</td></tr>
+    <tr><td>GST on Commission</td><td class="mono" style="color:var(--re)">−₹${gstAmt.toFixed(0)}</td></tr>
+    <tr class="sh"><td colspan="2">Logistics (Level 2)</td></tr>
+    <tr><td>Forward</td><td class="mono" style="color:var(--re)">−₹${fwd}</td></tr>
+    <tr><td>Return</td><td class="mono" style="color:var(--re)">−₹${ret}</td></tr>
+    <tr><td>Collection + PG</td><td class="mono" style="color:var(--re)">−₹${(coll+pg).toFixed(0)}</td></tr>
+    <tr class="ir"><td>Return % (provision)</td><td><input type="number" value="${d.retPct}" onchange="CD.myntra.retPct=+this.value;renderMyntra()"></td></tr>
+    <tr><td>Return Provision</td><td class="mono" style="color:var(--re)">−₹${retProv.toFixed(0)}</td></tr>
+    <tr class="sh"><td colspan="2">Result</td></tr>
+    <tr><td>Net Payout</td><td class="mono">₹${payout.toFixed(0)}</td></tr>
+    <tr><td>Net Profit (₹) <span class="st">Threshold: ₹${THRESHOLDS[d.cat]||0}</span></td><td class="mono" style="color:${profRs>0?'var(--gr)':'var(--re)'}">₹${profRs}</td></tr>
+    <tr class="${br?'cbreach':'ctotal'}"><td>Net Profit % ${br?'⚠ Below Threshold':''}</td><td>${pp}%</td></tr>`;
+}
+function renderAjioPPMP(){
+  const d=CD.ajioppmp;const mrp=Math.round(d.cost*(1+d.markup/100));const sp=Math.round(mrp*3/100)*100||mrp*3;
+  const gst=autoGST(sp);const rawComm=COMM_AJIO_PPMP[d.cat]||18.88;const eff=Math.max(0,rawComm-d.inc);
+  const commAmt=sp*eff/100;const gstAmt=commAmt*gst;const fwd=+el('ajfwd-fix')?.value||70;const ret=+el('ajret-fix')?.value||70;
+  const platFee=+el('ajio-platform-fee')?.value||0;const retProv=d.retRate/100*ret;
+  const payout=sp-commAmt-gstAmt-fwd-ret-platFee-retProv;const profRs=(payout-d.cost).toFixed(0);
+  const pp=((payout-d.cost)/sp*100).toFixed(1);const br=(payout-d.cost)<(THRESHOLDS[d.cat]||0);
+  const t=el('ct-ajio-ppmp');if(!t)return;
+  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${d.cat}</td></tr>
+    <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.ajioppmp.cost=+this.value;renderAjioPPMP()"></td></tr>
+    <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.ajioppmp.markup=+this.value;renderAjioPPMP()"></td></tr>
+    <tr class="cform"><td>MRP</td><td class="mono" style="color:var(--bl)">₹${mrp.toLocaleString('en-IN')}</td></tr>
+    <tr class="cform"><td>SP = MRP × 3</td><td class="mono" style="color:var(--bl)">₹${sp.toLocaleString('en-IN')}</td></tr>
+    <tr class="sh cauto"><td colspan="2">Ajio PPMP Commission</td></tr>
+    <tr class="cauto"><td>GST ${gstBadge(sp)}</td><td class="mono" style="color:var(--ac)">${(gst*100).toFixed(0)}%</td></tr>
+    <tr class="cauto"><td>Commission % (${rawComm}%, eff: ${eff}%)</td><td class="mono" style="color:var(--ac)">${eff}%</td></tr>
+    <tr class="ir"><td>Incentive %</td><td><input type="number" value="${d.inc}" onchange="CD.ajioppmp.inc=+this.value;renderAjioPPMP()"></td></tr>
+    <tr><td>Commission + GST</td><td class="mono" style="color:var(--re)">−₹${(commAmt+gstAmt).toFixed(0)}</td></tr>
+    <tr class="sh"><td colspan="2">Logistics</td></tr>
+    <tr><td>Forward + Return</td><td class="mono" style="color:var(--re)">−₹${(fwd+ret).toFixed(0)}</td></tr>
+    <tr class="ir"><td>Return Rate %</td><td><input type="number" value="${d.retRate}" onchange="CD.ajioppmp.retRate=+this.value;renderAjioPPMP()"></td></tr>
+    <tr><td>Return Provision</td><td class="mono" style="color:var(--re)">−₹${retProv.toFixed(0)}</td></tr>
+    <tr class="sh"><td colspan="2">Result</td></tr>
+    <tr><td>Net Profit (₹) <span class="st">Threshold: ₹${THRESHOLDS[d.cat]||0}</span></td><td class="mono" style="color:${profRs>0?'var(--gr)':'var(--re)'}">₹${profRs}</td></tr>
+    <tr class="${br?'cbreach':'ctotal'}"><td>Net Profit % ${br?'⚠':''}</td><td>${pp}%</td></tr>`;
+}
+function renderAjioCC(){
+  const d=CD.ajiocc;const mrp=Math.round(d.cost*(1+d.markup/100));const sp=Math.round(mrp*3/100)*100||mrp*3;
+  const gst=autoGST(sp);const rawComm=COMM_AJIO_CC[d.cat]||18.88;const eff=Math.max(0,rawComm-d.inc);
+  const commAmt=sp*eff/100;const gstAmt=commAmt*gst;const payout=sp-commAmt-gstAmt;
+  const profRs=(payout-d.cost).toFixed(0);const pp=((payout-d.cost)/sp*100).toFixed(1);const br=(payout-d.cost)<(THRESHOLDS[d.cat]||0);
+  const t=el('ct-ajio-cc');if(!t)return;
+  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${d.cat}</td></tr>
+    <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.ajiocc.cost=+this.value;renderAjioCC()"></td></tr>
+    <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.ajiocc.markup=+this.value;renderAjioCC()"></td></tr>
+    <tr class="cform"><td>MRP</td><td class="mono" style="color:var(--bl)">₹${mrp.toLocaleString('en-IN')}</td></tr>
+    <tr class="cform"><td>SP = MRP × 3</td><td class="mono" style="color:var(--bl)">₹${sp.toLocaleString('en-IN')}</td></tr>
+    <tr class="sh cauto"><td colspan="2">Ajio CC — Commission ONLY</td></tr>
+    <tr class="cauto"><td>GST ${gstBadge(sp)}</td><td class="mono" style="color:var(--ac)">${(gst*100).toFixed(0)}%</td></tr>
+    <tr class="cauto"><td>Commission % (${rawComm}%, eff: ${eff}%)</td><td class="mono" style="color:var(--ac)">${eff}%</td></tr>
+    <tr class="ir"><td>Incentive %</td><td><input type="number" value="${d.inc}" onchange="CD.ajiocc.inc=+this.value;renderAjioCC()"></td></tr>
+    <tr><td>Commission + GST</td><td class="mono" style="color:var(--re)">−₹${(commAmt+gstAmt).toFixed(0)}</td></tr>
+    <tr class="sh" style="background:rgba(45,212,160,.05)"><td colspan="2" style="color:var(--gr)">✓ No logistics — Ajio handles all</td></tr>
+    <tr class="sh"><td colspan="2">Result</td></tr>
+    <tr><td>Net Profit (₹) <span class="st">Threshold: ₹${THRESHOLDS[d.cat]||0}</span></td><td class="mono" style="color:${profRs>0?'var(--gr)':'var(--re)'}">₹${profRs}</td></tr>
+    <tr class="${br?'cbreach':'ctotal'}"><td>Net Profit % ${br?'⚠':''}</td><td>${pp}%</td></tr>`;
+}
+function renderAmazon(){
+  const d=CD.amazon;const mrp=Math.round(d.cost*(1+d.markup/100));const sp=Math.round(mrp*3/100)*100||mrp*3;
+  const gst=autoGST(sp);const rawComm=COMM_AMAZON[d.cat]||17;const eff=Math.max(0,rawComm-d.inc);
+  const rf=sp*eff/100;const fba=+el('amz-fba')?.value||55;const close=+el('amz-close')?.value||15;const retFee=+el('amz-ret')?.value||55;
+  const allFees=rf+close+fba;const gstAmt=allFees*gst;const retProv=d.retRate/100*retFee;
+  const payout=sp-allFees-gstAmt-d.ads-retProv;const profRs=(payout-d.cost).toFixed(0);
+  const pp=((payout-d.cost)/sp*100).toFixed(1);const br=(payout-d.cost)<(THRESHOLDS[d.cat]||0);
+  const t=el('ct-amazon');if(!t)return;
+  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${d.cat}</td></tr>
+    <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.amazon.cost=+this.value;renderAmazon()"></td></tr>
+    <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.amazon.markup=+this.value;renderAmazon()"></td></tr>
+    <tr class="cform"><td>MRP</td><td class="mono" style="color:var(--bl)">₹${mrp.toLocaleString('en-IN')}</td></tr>
+    <tr class="cform"><td>SP = MRP × 3</td><td class="mono" style="color:var(--bl)">₹${sp.toLocaleString('en-IN')}</td></tr>
+    <tr class="sh cauto"><td colspan="2">Amazon Fees — ${d.cat} ${d.inc>0?`<span style="color:var(--gr);font-size:10px;margin-left:5px">✓ −${d.inc}% incentive</span>`:''}</td></tr>
+    <tr class="cauto"><td>GST ${gstBadge(sp)}</td><td class="mono" style="color:var(--ac)">${(gst*100).toFixed(0)}%</td></tr>
+    <tr class="cauto"><td>Referral % (${rawComm}%, eff: ${eff}%)</td><td class="mono" style="color:var(--ac)">${eff}%</td></tr>
+    <tr class="ir"><td>Incentive %</td><td><input type="number" value="${d.inc}" onchange="CD.amazon.inc=+this.value;renderAmazon()"></td></tr>
+    <tr><td>Ref + Closing + FBA + GST</td><td class="mono" style="color:var(--re)">−₹${(allFees+gstAmt).toFixed(0)}</td></tr>
+    <tr class="ir"><td>Ad Spend (₹)</td><td><input type="number" value="${d.ads}" onchange="CD.amazon.ads=+this.value;renderAmazon()"></td></tr>
+    <tr class="ir"><td>Return Rate %</td><td><input type="number" value="${d.retRate}" onchange="CD.amazon.retRate=+this.value;renderAmazon()"></td></tr>
+    <tr><td>Return Provision</td><td class="mono" style="color:var(--re)">−₹${retProv.toFixed(0)}</td></tr>
+    <tr class="sh"><td colspan="2">Result</td></tr>
+    <tr><td>Net Profit (₹) <span class="st">Threshold: ₹${THRESHOLDS[d.cat]||0}</span></td><td class="mono" style="color:${profRs>0?'var(--gr)':'var(--re)'}">₹${profRs}</td></tr>
+    <tr class="${br?'cbreach':'ctotal'}"><td>Net Profit % ${br?'⚠':''}</td><td>${pp}%</td></tr>`;
+}
+
+function onCatChange(mp){
+  const sel=el('cat-sel-'+mp);if(!sel)return;
+  const cat=sel.value||'Kurta Sets';
+  if(mp==='myntra'){CD.myntra.cat=cat;renderMyntra();}
+  else if(mp==='ajio-ppmp'){CD.ajioppmp.cat=cat;renderAjioPPMP();}
+  else if(mp==='ajio-cc'){CD.ajiocc.cat=cat;renderAjioCC();}
+  else if(mp==='amazon'){CD.amazon.cat=cat;renderAmazon();}
+}
+function triggerRecalc(){renderMyntra();renderAjioPPMP();renderAjioCC();renderAmazon();}
+
+// ═══════════════════════════════════════════════════════
+// COMMISSION TABLES
+// ═══════════════════════════════════════════════════════
+function buildCommMyntra(){
+  const t=el('comm-myntra-table');if(!t)return;
+  let h=`<thead><tr><th>Category</th>${SLABS.map(s=>`<th>${s.label}</th>`).join('')}</tr></thead><tbody>`;
+  CATS.forEach(cat=>{const sl=COMM_MYNTRA[cat]||[0,0,18.88,18.88,18.88];
+    h+=`<tr><td>${cat}</td>${sl.map((v,i)=>`<td><input class="ci" value="${v}" onchange="COMM_MYNTRA['${cat}'][${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
+  t.innerHTML=h+'</tbody>';
+}
+function buildCommAjioPPMP(){
+  const t=el('comm-ajio-ppmp-table');if(!t)return;
+  let h='<thead><tr><th>Category</th><th>Commission %</th></tr></thead><tbody>';
+  CATS.forEach(cat=>{h+=`<tr><td>${cat}</td><td><input class="ci" value="${COMM_AJIO_PPMP[cat]||18.88}" onchange="COMM_AJIO_PPMP['${cat}']=+this.value;triggerRecalc()"></td></tr>`;});
+  t.innerHTML=h+'</tbody>';
+}
+function buildCommAjioCC(){
+  const t=el('comm-ajio-cc-table');if(!t)return;
+  let h='<thead><tr><th>Category</th><th>Commission %</th></tr></thead><tbody>';
+  CATS.forEach(cat=>{h+=`<tr><td>${cat}</td><td><input class="ci" value="${COMM_AJIO_CC[cat]||18.88}" onchange="COMM_AJIO_CC['${cat}']=+this.value;triggerRecalc()"></td></tr>`;});
+  t.innerHTML=h+'</tbody>';
+}
+function buildCommAmazon(){
+  const t=el('comm-amazon-table');if(!t)return;
+  let h='<thead><tr><th>Category</th><th>Referral Fee %</th></tr></thead><tbody>';
+  CATS.forEach(cat=>{h+=`<tr><td>${cat}</td><td><input class="ci" value="${COMM_AMAZON[cat]||17}" onchange="COMM_AMAZON['${cat}']=+this.value;triggerRecalc()"></td></tr>`;});
+  t.innerHTML=h+'</tbody>';
+}
+function saveComm(){triggerRecalc();renderSKUs();toast('✓ Commission saved','green');}
+
+// ═══════════════════════════════════════════════════════
+// THRESHOLD (in ₹)
+// ═══════════════════════════════════════════════════════
+function renderThresholds(){
+  const tl=el('thr-list');if(!tl)return;
+  tl.innerHTML=CATS.map(cat=>{
+    const breachedSKUs=skuDB.filter(s=>s.category===cat&&!s.ignoreThreshold&&calcSKU(s).isBreach);
+    const status=breachedSKUs.length?`<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(245,87,92,.12);color:var(--re)">${breachedSKUs.length} breach${breachedSKUs.length>1?'es':''}</span>`:`<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(45,212,160,.12);color:var(--gr)">✓ OK</span>`;
+    return`<div class="thr-row">
+      <div style="flex:1">
+        <strong>${cat}</strong>
+        <div class="st" style="margin-top:2px">${skuDB.filter(s=>s.category===cat).length} SKUs</div>
+      </div>
+      <div class="flex gap8" style="align-items:center">
+        <span style="font-size:13px;color:var(--ac)">₹</span>
+        <input class="thr-input" type="number" data-cat="${cat}" value="${THRESHOLDS[cat]||0}" min="0" oninput="THRESHOLDS['${cat}']=+this.value;updateAlerts();renderBreachList()">
+      </div>
+      ${status}
+    </div>`;
+  }).join('');
+  renderBreachList();
+}
+
+function renderBreachList(){
+  const t=el('thr-breach-list');if(!t)return;
+  const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+  if(!breached.length){t.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:12px">✓ No active breaches</div>`;return;}
+  t.innerHTML=`<table class="dt"><thead><tr><th>SKU</th><th>Category</th><th>Brand</th><th>Net Profit (₹)</th><th>Threshold (₹)</th></tr></thead><tbody>`+
+    breached.map(s=>{
+      const c=calcSKU(s);
+      const brand=brands.find(b=>b.id===s.brandId);
+      return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${s.styleId}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td></tr>`;
+    }).join('')+'</tbody></table>';
+}
+
+function saveThr(){triggerRecalc();renderSKUs();updateAlerts();toast('✓ Thresholds saved','green');renderBreachList();}
+
+function updateAlerts(){
+  const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+  const badge=el('alert-badge');const dashBreaches=el('dash-breaches');const dashAlerts=el('dash-alerts');
+  if(badge){badge.textContent=`⚠ ${breached.length} Alert${breached.length!==1?'s':''}`;badge.style.display=breached.length?'':'none';}
+  if(dashBreaches)dashBreaches.textContent=breached.length;
+  if(dashAlerts){
+    dashAlerts.innerHTML=breached.slice(0,5).map(s=>{
+      const c=calcSKU(s);const brand=brands.find(b=>b.id===s.brandId);
+      return`<div class="aitem"><div style="font-size:15px">⚠️</div><div><div style="font-size:13px"><strong style="color:var(--re)">Threshold Breach</strong> — <strong>${s.styleId}</strong> · ${brand?.name||''} · ${s.category}</div><div class="st" style="margin-top:3px">Net Profit: <span style="color:var(--re);font-family:var(--mono)">₹${c.profitRs.toFixed(0)}</span> · Threshold: ₹${c.threshold} · <a href="#" onclick="toggleIgnore('${s.id}');return false" style="color:var(--ac);text-decoration:none">Ignore this SKU →</a></div></div></div>`;
+    }).join('');
+    if(breached.length>5)dashAlerts.innerHTML+=`<div class="st" style="padding:8px 14px">…and ${breached.length-5} more. <a href="#" onclick="nav('thresholds');return false" style="color:var(--ac)">View all →</a></div>`;
+  }
+}
+
+function toggleIgnore(id){
+  const s=skuDB.find(x=>x.id===id);if(!s)return;
+  s.ignoreThreshold=!s.ignoreThreshold;
+  renderSKUs();updateAlerts();renderBreachList();renderBrands();
+  // Also refresh threshold page if it's currently open
+  if(el('page-thresholds')?.classList.contains('active')) renderThresholds();
+  toast(s.ignoreThreshold?`🔕 ${s.styleId} threshold ignored`:`⚠️ ${s.styleId} threshold re-enabled`,'green');
+}
+
+// ═══════════════════════════════════════════════════════
+// BRANDS
+// ═══════════════════════════════════════════════════════
+function renderBrands(){
+  const grid=el('brand-grid');if(!grid)return;
+  el('brand-count').textContent=`${brands.length} brand${brands.length!==1?'s':''} configured`;
+  el('dash-brands').textContent=brands.length;
+  const mpTags={'myntra':'tm','ajio-ppmp':'taj','ajio-cc':'tg','amazon':'tamz'};
+  const modelLabels={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
+  grid.innerHTML=brands.map(b=>{
+    const skus=skuDB.filter(s=>s.brandId===b.id);
+    const profits=skus.map(s=>calcSKU(s).profitRs);
+    const avgProfit=profits.length?(profits.reduce((a,v)=>a+v,0)/profits.length).toFixed(0):'—';
+    const breached=skus.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach).length;
+    return`<div class="brand-card">
+      <div class="flexb mb12">
+        <div>
+          <div style="font-size:14px;font-weight:700">${b.name}</div>
+          <div class="flex gap8" style="margin-top:5px;flex-wrap:wrap">
+            <span class="tag ${mpTags[b.model]||'ta'}">${b.marketplace}</span>
+            <span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${modelLabels[b.model]}</span>
+          </div>
+        </div>
+        <div class="flex gap8">
+          <button class="btn bg bxs" onclick="openBrandModal('${b.id}')">✎</button>
+          <button class="btn br bxs" onclick="deleteBrand('${b.id}')">✕</button>
+        </div>
+      </div>
+      ${b.commOverride!=null?`<div class="st mb8">🔒 Commission override: <span class="mono" style="color:var(--ac)">${b.commOverride}%</span></div>`:'<div class="st mb8">Auto commission from settings</div>'}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
+        <div style="background:var(--s2);border-radius:6px;padding:8px;text-align:center"><div class="st mb4">SKUs</div><div class="mono" style="font-size:16px;color:var(--bl)">${skus.length}</div></div>
+        <div style="background:var(--s2);border-radius:6px;padding:8px;text-align:center"><div class="st mb4">Avg ₹ Profit</div><div class="mono" style="font-size:16px;color:${parseFloat(avgProfit)>0?'var(--gr)':'var(--re)'}">₹${avgProfit}</div></div>
+        <div style="background:var(--s2);border-radius:6px;padding:8px;text-align:center"><div class="st mb4">Breaches</div><div class="mono" style="font-size:16px;color:${breached?'var(--re)':'var(--gr)'}">${breached}</div></div>
+      </div>
+    </div>`;
+  }).join('');
+  renderBrandSummary();
+}
+
+function renderBrandSummary(){
+  const t=el('brand-summary-body');if(!t)return;
+  const mpTags={'myntra':'tm','ajio-ppmp':'taj','ajio-cc':'tg','amazon':'tamz'};
+  const modelLabels={'myntra':'Standard','ajio-ppmp':'PPMP','ajio-cc':'CC','amazon':'Fixed'};
+  t.innerHTML=brands.map(b=>{
+    const skus=skuDB.filter(s=>s.brandId===b.id);
+    if(!skus.length)return`<tr><td><strong>${b.name}</strong></td><td><span class="tag ${mpTags[b.model]||'ta'}">${b.marketplace}</span></td><td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${modelLabels[b.model]}</span></td><td class="mono st">0</td><td>—</td><td>—</td><td><span class="tag bs">No SKUs</span></td></tr>`;
+    const calcs=skus.map(s=>calcSKU(s));
+    const avgComm=(calcs.reduce((a,c)=>a+c.comm,0)/calcs.length).toFixed(1);
+    const avgProfit=(calcs.reduce((a,c)=>a+c.profitRs,0)/calcs.length).toFixed(0);
+    const breached=calcs.filter((c,i)=>!skus[i].ignoreThreshold&&c.isBreach).length;
+    return`<tr>
+      <td><strong>${b.name}</strong></td>
+      <td><span class="tag ${mpTags[b.model]||'ta'}">${b.marketplace}</span></td>
+      <td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${modelLabels[b.model]}</span></td>
+      <td class="mono">${skus.length}</td>
+      <td class="mono">${avgComm}%</td>
+      <td class="mono" style="color:${parseFloat(avgProfit)>0?'var(--gr)':'var(--re)'}">₹${avgProfit}</td>
+      <td>${breached?`<span class="tag tr">⚠ ${breached} breach${breached>1?'es':''}</span>`:'<span class="tag tg">✓ Healthy</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openBrandModal(id){
+  const _default={id:'',name:'',marketplace:'Myntra',model:'myntra',commOverride:null};
+  const b=id?(brands.find(x=>x.id===id)||_default):_default;
+  const isEdit=!!(id&&b.id);
+  const mpOpts=['Myntra','Ajio','Amazon'].map(m=>`<option ${b.marketplace===m?'selected':''}>${m}</option>`).join('');
+  setModal(`<div class="mhdr"><div class="mtl">${isEdit?'✎ Edit Brand':'+ New Brand'}</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="fg"><label class="fl">Brand Name</label><input class="fi" id="bn-name" placeholder="e.g. Fusionic — Ajio CC" value="${b.name}"></div>
+      <div class="frow">
+        <div class="fg"><label class="fl">Marketplace</label><select class="fi" id="bn-mp" style="appearance:none">${mpOpts}</select></div>
+        <div class="fg"><label class="fl">Commission Model</label>
+          <select class="fi" id="bn-model" style="appearance:none" onchange="updateBrandModelNote()">
+            <option value="myntra" ${b.model==='myntra'?'selected':''}>Myntra (category slab)</option>
+            <option value="ajio-ppmp" ${b.model==='ajio-ppmp'?'selected':''}>Ajio — PPMP</option>
+            <option value="ajio-cc" ${b.model==='ajio-cc'?'selected':''}>Ajio — CC (commission only)</option>
+            <option value="amazon" ${b.model==='amazon'?'selected':''}>Amazon (referral %)</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">Commission Override % <span class="st" style="text-transform:none;font-size:10px">(blank = auto from settings)</span></label>
+        <input class="fi" id="bn-comm" type="number" step="0.01" placeholder="Leave blank for auto" value="${b.commOverride!=null?b.commOverride:''}">
+      </div>
+      <div class="info" id="bn-model-note" style="margin-top:0"></div>
+    </div>
+    <div class="mfoot">
+      ${isEdit?`<button class="btn br bsm" onclick="if(deleteBrand('${b.id}'))closeModal()" style="margin-right:auto">Delete</button>`:''}
+      <button class="btn bg" onclick="closeModal()">Cancel</button>
+      <button class="btn bp" onclick="saveBrand('${isEdit?b.id:''}')">Save Brand</button>
+    </div>`);
+  updateBrandModelNote();
+}
+
+function updateBrandModelNote(){
+  const model=el('bn-model')?.value;
+  const note=el('bn-model-note');if(!note)return;
+  const notes={'myntra':'Myntra: Commission varies by category + price slab. Logistics apply.','ajio-ppmp':'Ajio PPMP: Fixed commission + logistics + platform fees.','ajio-cc':'Ajio CC: Only commission deducted. No logistics, no other charges.','amazon':'Amazon: Fixed referral % + FBA + closing fee per order.'};
+  note.textContent=notes[model]||'';
+}
+
+function saveBrand(eid){
+  const name=el('bn-name')?.value.trim();const mp=el('bn-mp')?.value;const model=el('bn-model')?.value;
+  const commVal=el('bn-comm')?.value;const comm=commVal===''?null:parseFloat(commVal);
+  if(!name){toast('Brand name required','red');return;}
+  if(eid){const b=brands.find(x=>x.id===eid);if(b)Object.assign(b,{name,marketplace:mp,model,commOverride:comm});toast(`✓ ${name} updated`,'green');}
+  else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm});toast(`✓ ${name} added`,'green');}
+  closeModal();renderBrands();populateFilters();renderSKUs();
+}
+function deleteBrand(id){if(!confirm('Delete brand? SKUs assigned to this brand will still exist.'))return false;brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();toast('Brand deleted','red');return true;}
+
+// ═══════════════════════════════════════════════════════
+// SKU SHEET
+// ═══════════════════════════════════════════════════════
+function populateFilters(){
+  ['f-brand','f-cat'].forEach(fid=>{
+    const e=el(fid);if(!e)return;
+    const cur=e.value;
+    if(fid==='f-brand') e.innerHTML='<option value="">All Brands</option>'+brands.map(b=>`<option value="${b.id}" ${b.id===cur?'selected':''}>${b.name}</option>`).join('');
+    else e.innerHTML='<option value="">All Categories</option>'+CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');
+  });
+  ['myntra','ajio-ppmp','ajio-cc','amazon'].forEach(mp=>{
+    const e=el('cat-sel-'+mp);if(!e)return;
+    const cur=e.value;
+    e.innerHTML='<option value="">Select Category</option>'+CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');
+  });
+}
+
+function filteredSKUs(){
+  const q=(el('f-search')?.value||'').toLowerCase();
+  const fBrand=el('f-brand')?.value||'';
+  const fCat=el('f-cat')?.value||'';
+  const fModel=el('f-model')?.value||'';
+  const fLevel=el('f-level')?.value||'';
+  const fStatus=el('f-status')?.value||'';
+  return skuDB.filter(s=>{
+    if(q&&!s.styleId.toLowerCase().includes(q))return false;
+    if(fBrand&&s.brandId!==fBrand)return false;
+    if(fCat&&s.category!==fCat)return false;
+    if(fLevel&&s.level!==fLevel)return false;
+    const brand=brands.find(b=>b.id===s.brandId);
+    if(fModel&&brand?.model!==fModel)return false;
+    if(fStatus){
+      const c=calcSKU(s);
+      if(fStatus==='breached'&&(!c.isBreach||s.ignoreThreshold))return false;
+      if(fStatus==='ignored'&&!s.ignoreThreshold)return false;
+      if(fStatus==='healthy'&&(c.isBreach||s.ignoreThreshold))return false;
+    }
+    return true;
+  });
+}
+
+function renderActiveFilterChips(){
+  const chips=[];
+  const labels={'f-brand':'Brand','f-cat':'Category','f-model':'Model','f-level':'Level','f-status':'Status'};
+  ['f-brand','f-cat','f-model','f-level','f-status'].forEach(fid=>{
+    const e=el(fid);
+    if(e&&e.value){
+      const text=e.options[e.selectedIndex]?.text||e.value;
+      chips.push(`<span class="af-chip" onclick="el('${fid}').value='';renderSKUs()">${labels[fid]}: ${text} ✕</span>`);
+    }
+  });
+  const sc=el('active-filter-chips');
+  if(sc)sc.innerHTML=chips.join('');
+}
+
+function clearFilters(){
+  ['f-search','f-brand','f-cat','f-model','f-level','f-status'].forEach(fid=>{const e=el(fid);if(e)e.value='';});
+  renderSKUs();
+}
+
+function renderSKUs(){
+  const list=filteredSKUs();
+  renderActiveFilterChips();
+  el('sku-count').textContent=`Showing ${list.length} of ${skuDB.length} SKUs`;
+  el('dash-sku').textContent=skuDB.length;
+  const t=el('sku-body');if(!t)return;
+  const modelLabels={'myntra':'M','ajio-ppmp':'PPMP','ajio-cc':'CC','amazon':'AMZ'};
+  let html=list.map(s=>{
+    if(editId===s.id)return renderEditRow(s);
+    const c=calcSKU(s);
+    const brand=brands.find(b=>b.id===s.brandId);
+    const pp=c.profitRs;
+    const profColor=pp<0?'var(--re)':c.isBreach?'var(--ac)':'var(--gr)';
+    // Status icon
+    let statusIcon='';
+    if(s.ignoreThreshold) statusIcon=`<span class="ico-ignore" title="Threshold ignored — click to re-enable" onclick="toggleIgnore('${s.id}')">🔕</span>`;
+    else if(c.isBreach) statusIcon=`<span class="ico-breach" title="Threshold breached! Net profit ₹${c.profitRs.toFixed(0)} < ₹${c.threshold}">⚠️</span>`;
+    else statusIcon=`<span class="ico-healthy" title="Healthy ✓">✅</span>`;
+    return`<tr>
+      <td><div onclick="promptImg('${s.id}')" style="cursor:pointer" title="Click to set image">${s.img?`<img src="${fixImg(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">🖼</div>`}</div></td>
+      <td class="mono" style="font-size:11px;font-weight:600">${s.styleId}</td>
+      <td>${brand?`<div style="font-size:12px;font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${brand.name}">${brand.name}</div><span class="bdg ${brand.model==='ajio-ppmp'?'bppmp':brand.model==='ajio-cc'?'bcc':'bi'}" style="font-size:10px">${modelLabels[brand.model]||'?'}</span>`:'<span class="st">—</span>'}</td>
+      <td><span class="tag tb" style="font-size:10px">${s.category}</span></td>
+      <td>${brand?.model==='myntra'?`<span class="bdg bi" style="font-size:10px">${s.level}</span>`:
+              `<span class="st" style="font-size:10px">N/A</span>`}</td>
+      <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
+      <td class="mono">${s.markup}%</td>
+      <td class="av">₹${c.mrp.toLocaleString('en-IN')}</td>
+      <td class="av">₹${c.sp.toLocaleString('en-IN')}</td>
+      <td>${gstBadge(c.sp)}</td>
+      <td class="av" style="color:var(--ac)">${c.comm}%${brand?.commOverride!=null?' 🔒':''}</td>
+      <td class="av" style="color:${profColor}">₹${c.profitRs.toFixed(0)}</td>
+      <td>
+        <div class="flex gap8">
+          ${statusIcon}
+          <button class="btn bg bxs" onclick="startEdit('${s.id}')" title="Edit">✎</button>
+          <button class="btn br bxs" onclick="delSKU('${s.id}')" title="Delete">✕</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  if(editId==='new')html+=renderNewRow();
+  t.innerHTML=html||`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs found. <a href="#" onclick="addRow();return false" style="color:var(--ac)">Add one?</a></td></tr>`;
+  t.querySelectorAll('[data-lc]').forEach(e=>e.addEventListener('input',()=>liveCalcRow(e.closest('tr'))));
+}
+
+// ── Category → Level auto-fill (Myntra only) ──────────
+function onCatSelectChange(prefix){
+  const catEl=el(prefix+'-cat');const brandEl=el(prefix+'-brand');const lvlEl=el(prefix+'-lvl');
+  if(!catEl||!brandEl||!lvlEl)return;
+  const cat=catEl.value;
+  const brand=brands.find(b=>b.id===brandEl.value);
+  // Only auto-fill level for Myntra model
+  if(brand&&brand.model==='myntra'&&CAT_LEVEL[cat]){
+    lvlEl.value=CAT_LEVEL[cat];
+    // Show visual feedback
+    lvlEl.style.borderColor='var(--gr)';
+    setTimeout(()=>{if(lvlEl)lvlEl.style.borderColor='';},2000);
+  }
+  liveCalcRow(catEl.closest('tr'));
+}
+
+function renderEditRow(s){
+  const brandOpts=brands.map(b=>`<option value="${b.id}" ${b.id===s.brandId?'selected':''}>${b.name}</option>`).join('');
+  const catOpts=CATS.map(c=>`<option ${c===s.category?'selected':''}>${c}</option>`).join('');
+  const brand=brands.find(b=>b.id===s.brandId);
+  const isMyntra=brand?.model==='myntra';
+  const lvlOpts=LEVELS.map(l=>`<option ${l===s.level?'selected':''}>${l}</option>`).join('');
+  const c=calcSKU(s);
+  return`<tr class="er" id="er-${s.id}">
+    <td><div onclick="promptImg('${s.id}')" style="cursor:pointer">${s.img?`<img src="${fixImg(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div>`}</div></td>
+    <td><input class="si" id="e-sid" value="${s.styleId}" style="width:115px"></td>
+    <td><select class="sse" id="e-brand" onchange="onCatSelectChange('e')">${brandOpts}</select></td>
+    <td><select class="sse" id="e-cat" onchange="onCatSelectChange('e')">${catOpts}</select></td>
+    <td>${isMyntra?`<select class="sse" id="e-lvl">${lvlOpts}</select>`:`<select class="sse" id="e-lvl" disabled style="opacity:.4">${lvlOpts}</select>`}</td>
+    <td><input class="si" data-lc id="e-cost" type="number" value="${s.cost}" style="width:70px"></td>
+    <td><input class="si" data-lc id="e-mkp" type="number" value="${s.markup}" style="width:52px"></td>
+    <td><div class="av" id="e-mrp">₹${c.mrp.toLocaleString('en-IN')}</div></td>
+    <td><div class="av" id="e-sp">₹${c.sp.toLocaleString('en-IN')}</div></td>
+    <td><div id="e-gst">${gstBadge(c.sp)}</div></td>
+    <td><div class="av" id="e-comm" style="color:var(--ac)">${c.comm}%</div></td>
+    <td><div class="av" id="e-pp" style="color:${c.profitRs>0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</div></td>
+    <td><div class="flex gap8"><button class="btn bp bxs" onclick="saveEdit('${s.id}')">✓</button><button class="btn bg bxs" onclick="cancelEdit()">✕</button></div></td>
+  </tr>`;
+}
+
+function renderNewRow(){
+  const brandOpts=brands.map(b=>`<option value="${b.id}">${b.name}</option>`).join('');
+  const catOpts=CATS.map(c=>`<option>${c}</option>`).join('');
+  const lvlOpts=LEVELS.map(l=>`<option ${l==='Level 2'?'selected':''}>${l}</option>`).join('');
+  const firstBrand=brands[0];
+  const isMyntra=firstBrand?.model==='myntra';
+  return`<tr class="er" id="er-new">
+    <td><div onclick="promptImgNew()" style="cursor:pointer;width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div></td>
+    <td><input class="si" id="n-sid" placeholder="Style ID" style="width:115px"></td>
+    <td><select class="sse" id="n-brand" onchange="onCatSelectChange('n')">${brandOpts}</select></td>
+    <td><select class="sse" id="n-cat" onchange="onCatSelectChange('n')">${catOpts}</select></td>
+    <td><select class="sse" id="n-lvl" ${!isMyntra?'disabled style="opacity:.4"':''}>${lvlOpts}</select></td>
+    <td><input class="si" data-lc id="n-cost" type="number" placeholder="Cost" style="width:70px"></td>
+    <td><input class="si" data-lc id="n-mkp" type="number" placeholder="Mkp%" style="width:52px"></td>
+    <td><div class="av na" id="n-mrp">—</div></td>
+    <td><div class="av na" id="n-sp">—</div></td>
+    <td><div id="n-gst">—</div></td>
+    <td><div class="av na" id="n-comm">—</div></td>
+    <td><div class="av na" id="n-pp">—</div></td>
+    <td><div class="flex gap8"><button class="btn bp bxs" onclick="saveNew()">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()">✕</button></div></td>
+  </tr>`;
+}
+
+function liveCalcRow(row){
+  const isNew=row.id==='er-new';
+  const pfx=isNew?'n-':'e-';
+  const costEl=el(pfx+'cost'),mkpEl=el(pfx+'mkp'),brandEl=el(pfx+'brand'),catEl=el(pfx+'cat'),lvlEl=el(pfx+'lvl');
+  // Update level disabled state based on brand model
+  if(brandEl&&lvlEl){
+    const brand=brands.find(b=>b.id===brandEl.value);
+    const isMyntra=brand?.model==='myntra';
+    lvlEl.disabled=!isMyntra;
+    lvlEl.style.opacity=isMyntra?'1':'0.4';
+  }
+  const cost=parseFloat(costEl?.value)||0;const mkp=parseFloat(mkpEl?.value)||0;
+  if(cost<=0||mkp<=0){
+    // Clear auto-computed fields instead of leaving stale values
+    [pfx+'mrp',pfx+'sp',pfx+'gst',pfx+'comm',pfx+'pp'].forEach(id=>{
+      const e=el(id);if(e){e.innerHTML='—';e.classList.add('na');}
+    });
+    return;
+  }
+  const brandId=brandEl?.value;const cat=catEl?.value||CATS[0];const level=lvlEl?.value||'Level 2';
+  const mrp=Math.round(cost*(1+mkp/100));const sp=Math.round(mrp*3/100)*100||mrp*3;
+  const gst=autoGST(sp);
+  const brand=brands.find(b=>b.id===brandId)||{model:'myntra',commOverride:null};
+  let comm=0;
+  if(brand.commOverride!=null) comm=brand.commOverride;
+  else if(brand.model==='myntra') comm=getMyntraComm(cat,sp);
+  else if(brand.model==='ajio-ppmp') comm=COMM_AJIO_PPMP[cat]||18.88;
+  else if(brand.model==='ajio-cc') comm=COMM_AJIO_CC[cat]||18.88;
+  else comm=COMM_AMAZON[cat]||17;
+  const commAmt=sp*comm/100,gstAmt=commAmt*gst;
+  let payout;
+  if(brand.model==='ajio-cc') payout=sp-commAmt-gstAmt;
+  else if(brand.model==='myntra'){const fwd=getMynFwd(level),ret=getMynRet(level),coll=+el('myn-coll')?.value||61,pg=+el('myn-pg')?.value||50.22;payout=sp-commAmt-gstAmt-fwd-ret-coll-pg;}
+  else if(brand.model==='ajio-ppmp'){const fwd=+el('ajfwd-fix')?.value||70,ret=+el('ajret-fix')?.value||70;payout=sp-commAmt-gstAmt-fwd-ret;}
+  else{const fba=+el('amz-fba')?.value||55,close=+el('amz-close')?.value||15,allFees=commAmt+close+fba,gstAmt2=allFees*gst;payout=sp-allFees-gstAmt2;}
+  const profRs=(payout-cost);const pp=(profRs/sp*100).toFixed(1);
+  const mrpEl=el(pfx+'mrp'),spEl=el(pfx+'sp'),gstEl=el(pfx+'gst'),commEl=el(pfx+'comm'),ppEl=el(pfx+'pp');
+  if(mrpEl){mrpEl.innerHTML=`₹${mrp.toLocaleString('en-IN')}`;mrpEl.classList.remove('na');}
+  if(spEl){spEl.innerHTML=`₹${sp.toLocaleString('en-IN')}`;spEl.classList.remove('na');}
+  if(gstEl)gstEl.innerHTML=gstBadge(sp);
+  if(commEl){commEl.innerHTML=`${comm}%`;commEl.style.color='var(--ac)';commEl.classList.remove('na');}
+  if(ppEl){ppEl.innerHTML=`₹${profRs.toFixed(0)}`;ppEl.style.color=profRs>0?'var(--gr)':'var(--re)';ppEl.classList.remove('na');}
+}
+
+function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sid')?.focus(),50);}
+function startEdit(id){editId=id;renderSKUs();setTimeout(()=>el('e-sid')?.focus(),50);}
+function cancelEdit(){editId=null;newImg='';renderSKUs();}
+function promptImg(id){const s=skuDB.find(x=>x.id===id);if(!s)return;const u=prompt(`Image URL for ${s.styleId}\n\nDropbox: change ?dl=0 → ?raw=1`,s.img||'');if(u!==null){s.img=u;renderSKUs();}}
+function promptImgNew(){const u=prompt('Image URL (Dropbox ?raw=1 or CDN)','');if(u!==null)newImg=u;}
+
+function saveNew(){
+  const sid=el('n-sid')?.value.trim(),brandId=el('n-brand')?.value,cat=el('n-cat')?.value,lvl=el('n-lvl')?.value;
+  const cost=parseFloat(el('n-cost')?.value)||0,mkp=parseFloat(el('n-mkp')?.value)||0;
+  if(!sid){toast('Style ID required','red');return;}
+  if(!cost||cost<=0){toast('Cost price required','red');return;}
+  if(!mkp||mkp<=0){toast('Markup % required (must be > 0)','red');return;}
+  if(skuDB.find(x=>x.styleId===sid)){toast('Style ID already exists','red');return;}
+  skuDB.push({id:'s'+Date.now(),styleId:sid,brandId,category:cat,level:lvl,cost,markup:mkp,img:newImg||'',ignoreThreshold:false});
+  newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();toast(`✓ ${sid} added`,'green');
+}
+
+function saveEdit(id){
+  const s=skuDB.find(x=>x.id===id);if(!s)return;
+  const sid=el('e-sid')?.value.trim(),cost=parseFloat(el('e-cost')?.value)||0,mkp=parseFloat(el('e-mkp')?.value)||0;
+  if(!sid||!cost){toast('Fill required fields','red');return;}
+  Object.assign(s,{styleId:sid,brandId:el('e-brand')?.value,category:el('e-cat')?.value,level:el('e-lvl')?.value,cost,markup:mkp});
+  editId=null;renderSKUs();renderBrands();updateAlerts();toast(`✓ ${sid} updated`,'green');
+}
+
+function delSKU(id){
+  const s=skuDB.find(x=>x.id===id);if(!s||!confirm(`Delete "${s.styleId}"?`))return;
+  skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();toast(`${s.styleId} deleted`,'red');
+}
+
+// ═══════════════════════════════════════════════════════
+// USERS
+// ═══════════════════════════════════════════════════════
+const ROLES=['admin','manager','viewer'];
+const ROLE_LABELS={admin:'Admin',manager:'Manager',viewer:'Viewer'};
+const ROLE_COLORS={admin:'role-admin',manager:'role-manager',viewer:'role-viewer'};
+const ROLE_ACCESS={admin:'Full access — edit everything',manager:'Edit pricing & SKUs, no user management',viewer:'View only — no editing'};
+
+function renderUsers(){
+  const t=el('users-table-body');if(!t)return;
+  t.innerHTML=users.map(u=>`<tr>
+    <td><strong>${u.name}</strong></td>
+    <td class="mono st">${u.email}</td>
+    <td><span class="bdg ${ROLE_COLORS[u.role]}">${ROLE_LABELS[u.role]}</span></td>
+    <td class="st">${u.added}</td>
+    <td><div class="flex gap8">
+      <button class="btn bg bxs" onclick="openUserModal('${u.id}')">✎ Edit</button>
+      ${u.id!=='u1'?`<button class="btn br bxs" onclick="deleteUser('${u.id}')">✕ Remove</button>`:''}
+    </div></td>
+  </tr>`).join('');
+}
+
+function openUserModal(id){
+  const _udefault={id:'',name:'',email:'',role:'viewer',added:new Date().toISOString().slice(0,10)};
+  const u=id?(users.find(x=>x.id===id)||_udefault):_udefault;
+  const isEdit=!!(id&&u.id);
+  const roleOpts=ROLES.map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${ROLE_LABELS[r]} — ${ROLE_ACCESS[r]}</option>`).join('');
+  setModal(`<div class="mhdr"><div class="mtl">${isEdit?'✎ Edit User':'+ Add User'}</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="fg"><label class="fl">Full Name *</label><input class="fi" id="u-name" placeholder="e.g. Priya Sharma" value="${u.name}"></div>
+      <div class="fg"><label class="fl">Email Address *</label><input class="fi" id="u-email" type="email" placeholder="priya@yourcompany.com" value="${u.email}"></div>
+      <div class="fg">
+        <label class="fl">Role *</label>
+        <select class="fi" id="u-role" style="appearance:none">${roleOpts}</select>
+      </div>
+      <div class="info" style="margin-top:0">
+        <strong>Admin:</strong> Full access &nbsp;·&nbsp; <strong>Manager:</strong> Edit pricing & SKUs &nbsp;·&nbsp; <strong>Viewer:</strong> Read only
+      </div>
+    </div>
+    <div class="mfoot">
+      ${isEdit&&id!=='u1'?`<button class="btn br bsm" onclick="if(deleteUser('${id}'))closeModal()" style="margin-right:auto">Remove User</button>`:''}
+      <button class="btn bg" onclick="closeModal()">Cancel</button>
+      <button class="btn bp" onclick="saveUser('${isEdit?id:''}')">${isEdit?'Update User':'Add User'}</button>
+    </div>`);
+}
+
+function saveUser(eid){
+  const name=el('u-name')?.value.trim();const email=el('u-email')?.value.trim();const role=el('u-role')?.value;
+  if(!name){toast('Name required','red');return;}
+  if(!email||!email.includes('@')){toast('Valid email required','red');return;}
+  if(eid){
+    const u=users.find(x=>x.id===eid);if(u)Object.assign(u,{name,email,role});toast(`✓ ${name} updated`,'green');
+  } else {
+    if(users.find(u=>u.email===email)){toast('Email already exists','red');return;}
+    users.push({id:'u'+Date.now(),name,email,role,added:new Date().toISOString().slice(0,10)});toast(`✓ ${name} added`,'green');
+  }
+  closeModal();renderUsers();
+}
+
+function deleteUser(id){
+  if(id==='u1'){toast('Cannot remove the admin account','red');return false;}
+  const u=users.find(x=>x.id===id);if(!u||!confirm(`Remove "${u.name}"?`))return false;
+  users=users.filter(x=>x.id!==id);renderUsers();toast(`${u.name} removed`,'red');return true;
+}
+
+// ═══════════════════════════════════════════════════════
+// CATEGORIES PAGE
+// ═══════════════════════════════════════════════════════
+function renderCatTable(){
+  const t=el('cat-table-body');if(!t)return;
+  t.innerHTML=CATS.map(cat=>{
+    const slabs=COMM_MYNTRA[cat]||[];const topComm=slabs[slabs.length-1]||'—';
+    return`<tr>
+      <td><strong>${cat}</strong></td>
+      <td><span class="bdg bi">${CAT_LEVEL[cat]||'Level 2'}</span></td>
+      <td class="mono st">${topComm}%</td>
+      <td class="mono">${COMM_AJIO_PPMP[cat]||'—'}%</td>
+      <td class="mono">${COMM_AJIO_CC[cat]||'—'}%</td>
+      <td class="mono">${COMM_AMAZON[cat]||'—'}%</td>
+      <td class="mono" style="color:var(--ac)">₹${THRESHOLDS[cat]||0}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// WIREFRAME
+// ═══════════════════════════════════════════════════════
+const WF={myntra:[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'Commission (auto from category slab)'},{id:7,t:'formula',l:'GST Rate = 5%/<₹2500 or 18%/≥₹2500'},{id:8,t:'formula',l:'Comm% = slab_lookup(category, SP)'},{id:9,t:'formula',l:'Commission + GST on Commission'},{id:10,t:'section',l:'Logistics (Level-based)'},{id:11,t:'formula',l:'Forward GT Charge + Return Reverse Fee'},{id:12,t:'formula',l:'Collection Fee + Payment Gateway'},{id:13,t:'section',l:'Result'},{id:14,t:'output',l:'Net Profit ₹ & %'}],'ajio-ppmp':[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'PPMP Commission'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Comm% (from PPMP settings)'},{id:9,t:'formula',l:'Commission + GST + Logistics'},{id:10,t:'section',l:'Result'},{id:11,t:'output',l:'Net Profit ₹ & %'}],'ajio-cc':[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'CC Model — Commission Only'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Comm% (from CC settings)'},{id:9,t:'formula',l:'Payout = SP − Commission − GST'},{id:10,t:'section',l:'No logistics / No other charges'},{id:11,t:'output',l:'Net Profit ₹ & %'}],amazon:[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'Amazon Fees'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Referral % (fixed per category)'},{id:9,t:'formula',l:'Referral + FBA + Closing + GST on Fees'},{id:10,t:'input',l:'Ad Spend (₹)'},{id:11,t:'formula',l:'Return Provision'},{id:12,t:'output',l:'Net Profit ₹ & %'}]};
+let wfN=200;
+
+function renderWFPreviews(){
+  Object.entries(WF).forEach(([mp,rows])=>{
+    const e=el('wfp-'+mp);if(!e)return;
+    e.innerHTML=rows.map(r=>`<div class="wfrow ${r.t==='formula'?'wff':r.t==='output'?'wfo':r.t==='section'?'wfs':''}" style="margin-bottom:5px">
+      <span style="font-size:12px;color:var(--tx2);flex:1">${r.l}</span>
+      <span class="bdg ${r.t==='formula'?'bf':r.t==='output'?'bo':r.t==='section'?'bs':'bi'}">${r.t.toUpperCase()}</span>
+    </div>`).join('');
+  });
+}
+
+function renderWFBuilder(){
+  const m=el('wf-sel').value;
+  el('wf-builder-list').innerHTML=WF[m].map(r=>`<div class="wfrow ${r.t==='formula'?'wff':r.t==='output'?'wfo':r.t==='section'?'wfs':''}" style="margin-bottom:5px">
+    <span style="color:var(--tx3);cursor:grab;margin-right:4px">⠿</span>
+    <input style="flex:1;background:transparent;border:none;color:var(--tx);font-size:12px;font-family:var(--sans)" value="${r.l}" onchange="WF['${m}'].find(x=>x.id===${r.id}).l=this.value">
+    <span class="bdg ${r.t==='formula'?'bf':r.t==='output'?'bo':r.t==='section'?'bs':'bi'}">${r.t.toUpperCase()}</span>
+    <span style="color:var(--tx3);cursor:pointer;font-size:12px;margin-left:6px;opacity:.4" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4" onclick="WF['${m}']=WF['${m}'].filter(x=>x.id!==${r.id});renderWFBuilder()">✕</span>
+  </div>`).join('');
+}
+function addWFRow(type){const m=el('wf-sel').value;const def={input:'New Input',formula:'New Formula',output:'New Output',section:'— Section —'};WF[m].push({id:++wfN,t:type,l:def[type]});renderWFBuilder();}
+
+// ═══════════════════════════════════════════════════════
+// NAV & TABS
+// ═══════════════════════════════════════════════════════
+const TITLES={dashboard:'Dashboard',pricing:'Pricing Tables',thresholds:'Thresholds',brands:'Brands',commission:'Commission Settings',logistics:'Logistics Settings',skus:'SKUs',categories:'Categories',wireframe:'Wireframe Builder',users:'User Access'};
+function nav(p){
+  document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
+  // Reliable match via data-page attribute (fixes Users + all nav items)
+  const navEl=document.querySelector(`.nav-item[data-page="${p}"]`);
+  if(navEl) navEl.classList.add('active');
+  const pg=el('page-'+p);if(pg)pg.classList.add('active');
+  el('pageTitle').textContent=TITLES[p]||p;
+  if(p==='pricing'){
+    populateFilters();
+    // Sync dropdowns to match calculator defaults
+    const catSels={'myntra':CD.myntra.cat,'ajio-ppmp':CD.ajioppmp.cat,'ajio-cc':CD.ajiocc.cat,'amazon':CD.amazon.cat};
+    Object.entries(catSels).forEach(([mp,cat])=>{const s=el('cat-sel-'+mp);if(s)s.value=cat;});
+    renderMyntra();renderAjioPPMP();renderAjioCC();renderAmazon();renderWFPreviews();
+  }
+  if(p==='commission'){buildCommMyntra();buildCommAjioPPMP();buildCommAjioCC();buildCommAmazon();}
+  if(p==='wireframe')renderWFBuilder();
+  if(p==='brands')renderBrands();
+  if(p==='skus'){populateFilters();renderSKUs();}
+  if(p==='categories')renderCatTable();
+  if(p==='thresholds')renderThresholds();
+  if(p==='users')renderUsers();
+}
+
+function switchMP(mp,el_){
+  document.querySelectorAll('#page-pricing .tabs .tab').forEach(t=>t.classList.remove('active'));
+  el_.classList.add('active');
+  ['myntra','ajio-ppmp','ajio-cc','amazon'].forEach(m=>{const e=el('mp-'+m);if(e)e.style.display=(m===mp?'':'none');});
+}
+function switchCommTab(tab,e_){
+  document.querySelectorAll('#page-commission .tabs .tab').forEach(t=>t.classList.remove('active'));
+  e_.classList.add('active');
+  ['myntra','ajio','amazon'].forEach(t=>el('comm-'+t).style.display=(t===tab?'':'none'));
+}
+function switchLogTab(mp,e_){
+  document.querySelectorAll('#page-logistics .tabs .tab').forEach(t=>t.classList.remove('active'));
+  e_.classList.add('active');
+  ['myntra','ajio','amazon'].forEach(m=>el('log-'+m).style.display=(m===mp?'':'none'));
+}
+function logMode(name,mode){
+  const t=['level','fixed','cat'];t.forEach(x=>{const e=el(name+'-'+x);if(e)e.style.display=(x===mode?'':'none');});
+}
+
+// ═══════════════════════════════════════════════════════
+// MODAL / TOAST / UTIL
+// ═══════════════════════════════════════════════════════
+function setModal(html){el('modal-root').innerHTML=`<div class="movl" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;}
+function closeModal(){el('modal-root').innerHTML='';}
+function toast(msg,type){
+  const ex=el('app-toast');if(ex)ex.remove();
+  const d=document.createElement('div');d.id='app-toast';d.className=`toast ${type==='green'?'tg2':'tr2'}`;
+  d.innerHTML=`<span>${type==='green'?'✓':'⚠'}</span> ${msg}`;
+  document.body.appendChild(d);setTimeout(()=>d.remove(),3500);
+}
+
+function dlTemplate(){
+  if(typeof XLSX==='undefined'){toast('SheetJS loading…','red');return;}
+  const ws=XLSX.utils.aoa_to_sheet([['STYLE_ID*','BRAND_NAME*','CATEGORY*','COST_PRICE*','MARKUP_PCT*','IMAGE_URL'],['SP39-ORANGE-M','Fusionic — Myntra','Kurta Sets',950,78,''],['TF-202','Fusionic — Ajio PPMP','Lehenga Choli',1650,81,''],['NKB55-WINE-XS','Fusionic — Ajio CC','Kurta Sets',1250,60,''],['LNB1228-RED','LNB — Amazon','Lehenga Choli',1000,100,'']]);
+  ws['!cols']=[{wch:18},{wch:22},{wch:16},{wch:12},{wch:12},{wch:50}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'SKUs');
+  XLSX.writeFile(wb,'PriceDesk_SKU_Template.xlsx');toast('✓ Template downloaded','green');
+}
+
+function openImport(){
+  setModal(`<div class="mhdr"><div class="mtl">⬆ Bulk Import SKUs</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div style="background:var(--s2);border:2px dashed var(--bd2);border-radius:8px;padding:28px;text-align:center;cursor:pointer" onclick="document.getElementById('xi').click()">
+        <div style="font-size:32px;margin-bottom:10px">📊</div>
+        <div style="font-size:13px;color:var(--tx2)">Drop Excel or CSV, or click to browse</div>
+        <div id="xi-filename" class="st" style="margin-top:8px"></div>
+      </div>
+      <input type="file" id="xi" accept=".xlsx,.xls,.csv" style="display:none" onchange="previewImport(this)">
+      <div class="info" style="margin-top:14px">Required columns: <span class="mono" style="color:var(--ac)">STYLE_ID, BRAND_NAME, CATEGORY, COST_PRICE, MARKUP_PCT</span> &nbsp;·&nbsp; Optional: IMAGE_URL</div>
+      <div id="xi-preview" style="margin-top:14px"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg" onclick="closeModal()">Cancel</button>
+      <button class="btn bg bsm" onclick="dlTemplate()">⬇ Template</button>
+      <button class="btn bp" id="xi-confirm" style="display:none" onclick="confirmImport()">✓ Import SKUs</button>
+    </div>`);
+}
+
+let importRows=[];
+function previewImport(input){
+  const file=input.files[0];if(!file)return;
+  document.getElementById('xi-filename').textContent=file.name;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      let rows=[];
+      if(file.name.endsWith('.csv')){
+        const lines=e.target.result.split('\n').filter(l=>l.trim());
+        const headers=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toUpperCase());
+        rows=lines.slice(1).map(line=>{
+          const vals=line.split(',').map(v=>v.trim().replace(/^"|"$/g,''));
+          const obj={};headers.forEach((h,i)=>obj[h]=vals[i]||'');
+          return obj;
+        });
+      } else {
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
+        rows=raw.map(r=>{const n={};Object.keys(r).forEach(k=>n[k.trim().toUpperCase()]=String(r[k]));return n;});
+      }
+      // Validate and map
+      importRows=[];const errors=[];const preview=[];
+      rows.forEach((r,i)=>{
+        const sid=(r['STYLE_ID']||r['SKU_CODE']||'').trim();
+        const bname=(r['BRAND_NAME']||'').trim();
+        const cat=(r['CATEGORY']||'').trim();
+        const cost=parseFloat(r['COST_PRICE']||r['COST']||0);
+        const mkp=parseFloat(r['MARKUP_PCT']||r['MARKUP']||0);
+        const img=(r['IMAGE_URL']||'').trim();
+        if(!sid){errors.push(`Row ${i+2}: Missing Style ID`);return;}
+        if(!cost||cost<=0){errors.push(`Row ${i+2} (${sid}): Missing/invalid cost`);return;}
+        const brand=brands.find(b=>b.name.toLowerCase()===bname.toLowerCase())||brands[0];
+        const validCat=CATS.includes(cat)?cat:CATS[0];
+        const level=(brand?.model==='myntra'&&CAT_LEVEL[validCat])?CAT_LEVEL[validCat]:'Level 2';
+        if(skuDB.find(x=>x.styleId===sid)){errors.push(`Row ${i+2}: "${sid}" already exists — will be skipped`);return;}
+        importRows.push({id:'s'+Date.now()+i,styleId:sid,brandId:brand?.id||brands[0]?.id,category:validCat,level,cost,markup:mkp||0,img,ignoreThreshold:false});
+        preview.push({sid,brand:brand?.name||bname,cat:validCat,cost,mkp});
+      });
+      // Show preview
+      const prev=document.getElementById('xi-preview');
+      let html='';
+      if(preview.length){
+        html+=`<div class="success" style="margin-bottom:10px">✓ ${preview.length} SKU${preview.length>1?'s':''} ready to import</div>`;
+        html+=`<div style="overflow-x:auto;max-height:200px;overflow-y:auto"><table class="dt" style="font-size:11px"><thead><tr><th>Style ID</th><th>Brand</th><th>Category</th><th>Cost</th><th>Markup%</th></tr></thead><tbody>`;
+        html+=preview.slice(0,20).map(p=>`<tr><td class="mono">${p.sid}</td><td>${p.brand}</td><td>${p.cat}</td><td class="mono">₹${p.cost}</td><td class="mono">${p.mkp}%</td></tr>`).join('');
+        if(preview.length>20)html+=`<tr><td colspan="5" class="st" style="text-align:center">…and ${preview.length-20} more</td></tr>`;
+        html+='</tbody></table></div>';
+      }
+      if(errors.length) html+=`<div class="warn" style="margin-top:10px;font-size:11px">${errors.map(e=>`<div>⚠ ${e}</div>`).join('')}</div>`;
+      if(prev)prev.innerHTML=html;
+      const btn=document.getElementById('xi-confirm');
+      if(btn)btn.style.display=importRows.length?'':'none';
+    } catch(err){
+      const prev=document.getElementById('xi-preview');
+      if(prev)prev.innerHTML=`<div class="warn">Error reading file: ${err.message}</div>`;
+    }
+  };
+  if(file.name.endsWith('.csv')) reader.readAsText(file);
+  else reader.readAsArrayBuffer(file);
+}
+
+function confirmImport(){
+  if(!importRows.length){toast('No valid rows to import','red');return;}
+  skuDB.push(...importRows);
+  const count=importRows.length;
+  importRows=[];
+  closeModal();
+  renderSKUs();renderBrands();updateAlerts();
+  toast(`✓ Imported ${count} SKU${count>1?'s':''}`, 'green');
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  populateFilters();
+  renderBrandSummary();
+  renderWFPreviews();
+  updateAlerts();
+  renderUsers();
+});
+</script>
+<script>
+// ═══════════════════════════════════════════════════════
+// MOBILE SIDEBAR TOGGLE
+// ═══════════════════════════════════════════════════════
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('sidebar-overlay');
+  const hb=document.querySelector('.hamburger');
+  if(sb.classList.contains('open')){closeSidebar();}
+  else{sb.classList.add('open');ov.classList.add('active');hb.classList.add('open');document.body.style.overflow='hidden';}
+}
+function closeSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('sidebar-overlay');
+  const hb=document.querySelector('.hamburger');
+  if(sb)sb.classList.remove('open');
+  if(ov)ov.classList.remove('active');
+  if(hb)hb.classList.remove('open');
+  document.body.style.overflow='';
+}
+// Auto-close sidebar when a nav item is tapped on mobile
+(function(){
+  const _navFn = window.nav;
+  window.nav = function(p){
+    _navFn(p);
+    if(window.innerWidth <= 768) closeSidebar();
+  };
+})();
+// Close on resize back to desktop
+window.addEventListener('resize',()=>{if(window.innerWidth>768)closeSidebar();});
+</script>
+</body>
+</html>
