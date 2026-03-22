@@ -180,6 +180,30 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .login-sub{font-size:12px;color:var(--tx3);letter-spacing:2px;text-transform:uppercase;margin-bottom:28px}
 .login-err{background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--re);margin-bottom:14px;display:none}
 .login-footer{font-size:11px;color:var(--tx3);margin-top:16px}
+/* ── VISUAL FORMULA BUILDER ─────────────────────────── */
+#fb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:600;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#fb-overlay.active{display:flex}
+.fb-box{background:var(--s);border:1px solid var(--bd2);border-radius:12px;width:700px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column}
+.fb-hdr{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:12px}
+.fb-body{padding:20px;overflow-y:auto;flex:1}
+.fb-foot{padding:14px 20px;border-top:1px solid var(--bd);display:flex;gap:10px;align-items:center}
+.fb-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:40px;padding:10px 12px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;margin-bottom:12px}
+.fb-part{display:flex;align-items:center;gap:4px;background:var(--s3);border:1px solid var(--bd2);border-radius:5px;padding:0 2px 0 8px;height:30px;font-size:12px}
+.fb-part.fb-var{border-color:rgba(78,142,247,.4);background:rgba(78,142,247,.08);color:var(--bl)}
+.fb-part.fb-num{border-color:rgba(45,212,160,.4);background:rgba(45,212,160,.08);color:var(--gr)}
+.fb-part.fb-op{border-color:rgba(245,166,35,.4);background:rgba(245,166,35,.08);color:var(--ac);padding:0 4px;font-weight:700;font-size:14px}
+.fb-part.fb-paren{border-color:rgba(155,109,255,.4);background:rgba(155,109,255,.08);color:var(--pu);padding:0 6px;font-size:16px;font-weight:700}
+.fb-part.fb-fn{border-color:rgba(220,90,200,.4);background:rgba(220,90,200,.08);color:#dc5ac8;font-family:var(--mono)}
+.fb-del{width:18px;height:18px;border-radius:50%;background:rgba(245,87,92,.2);border:none;color:var(--re);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;margin-left:2px}
+.fb-del:hover{background:rgba(245,87,92,.4)}
+.fb-add-section{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px}
+.fb-add-section label{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:8px}
+.fb-op-btn{padding:4px 12px;border-radius:5px;border:1px solid rgba(245,166,35,.4);background:rgba(245,166,35,.08);color:var(--ac);font-size:14px;font-weight:700;cursor:pointer}
+.fb-op-btn:hover{background:rgba(245,166,35,.2)}
+.fb-paren-btn{padding:4px 10px;border-radius:5px;border:1px solid rgba(155,109,255,.4);background:rgba(155,109,255,.08);color:var(--pu);font-size:15px;font-weight:700;cursor:pointer}
+.fb-paren-btn:hover{background:rgba(155,109,255,.2)}
+.fb-preview-val{font-family:var(--mono);color:var(--gr);font-size:14px;font-weight:600}
+.fb-preview-err{font-family:var(--mono);color:var(--re);font-size:12px}
 /* ── IMAGE MODAL (zoom) ─────────────────────────────── */
 #img-zoom-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:500;display:none;align-items:center;justify-content:center;cursor:zoom-out;backdrop-filter:blur(6px)}
 #img-zoom-overlay.active{display:flex}
@@ -337,6 +361,127 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="fg" style="margin-bottom:20px"><label class="fl" style="text-align:left">Password</label><input class="fi" id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn bp" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button>
     <div class="login-footer"><a href="#" onclick="openForgotPassword();return false" style="color:var(--ac);text-decoration:none">Forgot password?</a></div>
+  </div>
+</div>
+
+<!-- ═══ VISUAL FORMULA BUILDER ═══ -->
+<div id="fb-overlay">
+  <div class="fb-box">
+    <div class="fb-hdr">
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:600" id="fb-title">Edit Formula</div>
+        <div style="font-size:12px;color:var(--tx3);margin-top:2px" id="fb-subtitle">Build your formula by adding parts below</div>
+      </div>
+      <span onclick="closeFB()" style="cursor:pointer;color:var(--tx3);font-size:22px;line-height:1">×</span>
+    </div>
+    <div class="fb-body">
+
+      <!-- Row name -->
+      <div class="fg" style="margin-bottom:16px">
+        <label class="fl">Row Name (label shown on screen)</label>
+        <input class="fi" id="fb-name" placeholder="e.g. TCS Deduction">
+      </div>
+
+      <!-- Variable name -->
+      <div style="display:flex;gap:12px;margin-bottom:16px">
+        <div class="fg" style="flex:1;margin-bottom:0">
+          <label class="fl">Variable Name <span class="st">(used in other formulas)</span></label>
+          <input class="fi" id="fb-var" placeholder="e.g. tcs" style="font-family:var(--mono)">
+        </div>
+        <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+          <div style="font-size:12px;color:var(--tx3);padding:8px 0">= <span id="fb-expr-preview" style="font-family:monospace;color:var(--ac)">…</span></div>
+        </div>
+      </div>
+
+      <!-- Live preview -->
+      <div style="background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:12px;color:var(--tx3)">Live result (sample: Cost ₹950, Markup 78%, Discount 55%):</span>
+        <span id="fb-live-val" class="fb-preview-val">—</span>
+      </div>
+
+      <!-- Formula block row -->
+      <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:8px">Formula</label>
+      <div class="fb-row" id="fb-parts-row">
+        <span style="font-size:12px;color:var(--tx3)">Add parts below ↓</span>
+      </div>
+
+      <!-- Add parts -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+
+        <!-- Add variable -->
+        <div class="fb-add-section" style="flex:1;min-width:200px">
+          <label>Add Variable</label>
+          <div style="display:flex;gap:8px">
+            <select class="fi" id="fb-var-pick" style="flex:1;font-family:var(--mono);font-size:12px">
+              <optgroup label="Pricing">
+                <option value="cost">cost — Cost Price</option>
+                <option value="markup">markup — Markup %</option>
+                <option value="discount">discount — Discount %</option>
+                <option value="mrp">mrp — MRP</option>
+                <option value="custPaid">custPaid — Customer Paid</option>
+                <option value="gtCharge">gtCharge — GT Charge</option>
+                <option value="sellerPrice">sellerPrice — Seller Price</option>
+              </optgroup>
+              <optgroup label="Tax">
+                <option value="gstRate">gstRate — GST Rate</option>
+                <option value="taxableAmt">taxableAmt — Taxable Amount</option>
+                <option value="tcs">tcs — TCS Amount</option>
+                <option value="tds">tds — TDS Amount</option>
+              </optgroup>
+              <optgroup label="Commission">
+                <option value="commPct">commPct — Commission %</option>
+                <option value="effCommPct">effCommPct — Effective Comm %</option>
+                <option value="commAmt">commAmt — Commission Amount</option>
+                <option value="gstOnComm">gstOnComm — GST on Commission</option>
+                <option value="incentive">incentive — Incentive %</option>
+              </optgroup>
+              <optgroup label="Logistics">
+                <option value="retFee">retFee — Return Fee</option>
+                <option value="collFee">collFee — Collection Fee</option>
+                <option value="pgFee">pgFee — PG Fee</option>
+                <option value="retProv">retProv — Return Provision</option>
+                <option value="retPct">retPct — Return %</option>
+              </optgroup>
+              <optgroup label="Result">
+                <option value="payout">payout — Net Payout</option>
+                <option value="profit">profit — Net Profit</option>
+              </optgroup>
+            </select>
+            <button class="btn bp bsm" onclick="fbAddVar()">Add</button>
+          </div>
+        </div>
+
+        <!-- Add number -->
+        <div class="fb-add-section" style="flex:1;min-width:160px">
+          <label>Add Number / %</label>
+          <div style="display:flex;gap:8px">
+            <input class="fi" id="fb-num-val" type="number" placeholder="e.g. 0.001" style="flex:1">
+            <button class="btn bp bsm" onclick="fbAddNum()">Add</button>
+          </div>
+          <div class="st" style="margin-top:5px">For 0.1% type 0.001 · For 18% type 0.18</div>
+        </div>
+
+        <!-- Operators -->
+        <div class="fb-add-section" style="min-width:200px">
+          <label>Operator</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="fb-op-btn" onclick="fbAddOp('+')">+</button>
+            <button class="fb-op-btn" onclick="fbAddOp('-')">−</button>
+            <button class="fb-op-btn" onclick="fbAddOp('*')">×</button>
+            <button class="fb-op-btn" onclick="fbAddOp('/')">÷</button>
+            <button class="fb-paren-btn" onclick="fbAddOp('(')">(</button>
+            <button class="fb-paren-btn" onclick="fbAddOp(')')">)</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="fb-foot">
+      <button class="btn bg" style="flex:1" onclick="closeFB()">Cancel</button>
+      <button class="btn br bsm" onclick="fbClear()">✕ Clear all</button>
+      <button class="btn bp" style="flex:2" onclick="saveFB()">✓ Save Formula</button>
+    </div>
   </div>
 </div>
 
@@ -1997,14 +2142,17 @@ function renderWFBuilder(){
       ? `<span style="font-size:10px;color:var(--gr);font-family:var(--mono);margin-right:6px;flex-shrink:0">${
           typeof preview[r.var]==='number' ? (Number.isInteger(preview[r.var]) ? '₹'+preview[r.var] : '₹'+preview[r.var].toFixed(2)) : preview[r.var]
         }</span>` : '';
-    const exprField = (r.t==='formula'||r.t==='output') && r.expr!==undefined
-      ? `<div style="margin-top:4px;margin-left:22px">
-           <span style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Expression: </span>
-           <input style="font-size:10px;font-family:var(--mono);background:rgba(0,0,0,.2);border:1px solid var(--bd);border-radius:3px;color:var(--gr);padding:2px 6px;width:380px;outline:none"
-             value="${(r.expr||'').replace(/"/g,'&quot;')}"
-             placeholder="e.g. sellerPrice * 0.001"
-             onchange="WF['${m}'][${idx}].expr=this.value;renderWFBuilder();save('wireframe')"
-             onclick="event.stopPropagation()">
+    const exprField = (r.t==='formula'||r.t==='output')
+      ? `<div style="margin-top:5px;margin-left:22px;display:flex;align-items:center;gap:10px">
+           <button
+             style="padding:3px 12px;border-radius:5px;border:1px solid var(--ac);background:rgba(245,166,35,.1);color:var(--ac);font-size:11px;cursor:pointer;font-weight:600"
+             onclick="event.stopPropagation();openFB('${m}',${idx})">
+             ✎ Edit Formula
+           </button>
+           ${r.expr
+             ? `<span style="font-size:10px;font-family:var(--mono);color:var(--tx3);opacity:.8">${(r.expr||'').substring(0,55)}${(r.expr||'').length>55?'…':''}</span>`
+             : `<span style="font-size:10px;color:var(--tx3)">No formula set — click Edit Formula</span>`
+           }
          </div>` : '';
     return `<div class="wfrow ${cls}" style="margin-bottom:6px;transition:opacity .15s;flex-wrap:wrap"
       draggable="true" data-idx="${idx}"
@@ -3030,6 +3178,169 @@ function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){
           commAmt,gstAmt,gstOnComm:gstAmt,taxableAmt,tcs,tds,ret,retFee:ret,coll,collFee:coll,
           pg,pgFee:pg,retProv,payout,profit,profitPct};
 }
+
+
+// ═══════════════════════════════════════════════════════
+// VISUAL FORMULA BUILDER
+// ═══════════════════════════════════════════════════════
+let _fb = {
+  marketplace: 'myntra',
+  rowIdx: -1,
+  parts: [],   // [{type:'var'|'num'|'op'|'paren', val:...}]
+};
+
+const OP_DISPLAY = {'+':'+', '-':'−', '*':'×', '/':'÷', '(':' ( ', ')':' ) '};
+
+function openFB(marketplace, idx){
+  const row = WF[marketplace][idx];
+  if(!row) return;
+  _fb.marketplace = marketplace;
+  _fb.rowIdx = idx;
+
+  // Parse existing expr into parts (best effort)
+  _fb.parts = parseExprToParts(row.expr||'');
+
+  el('fb-name').value = row.l || '';
+  el('fb-var').value  = row.var || '';
+  el('fb-title').textContent = `Edit Formula — ${row.l||'New Formula'}`;
+
+  renderFBParts();
+  document.getElementById('fb-overlay').classList.add('active');
+  document.body.style.overflow='hidden';
+}
+
+function closeFB(){
+  document.getElementById('fb-overlay').classList.remove('active');
+  document.body.style.overflow='';
+}
+
+// Parse an existing expression string back into parts for editing
+function parseExprToParts(expr){
+  if(!expr) return [];
+  const parts = [];
+  // Tokenize: numbers, operators, parens, identifiers
+  const tokens = expr.match(/(\d+\.?\d*|\.\d+|[a-zA-Z_][a-zA-Z0-9_.]*\([^)]*\)|[a-zA-Z_][a-zA-Z0-9_.]*|[+\-*\/()])/g)||[];
+  for(const t of tokens){
+    if(/^[\+\-\*\/]$/.test(t)) parts.push({type:'op', val:t});
+    else if(t==='('||t===')') parts.push({type:'paren', val:t});
+    else if(/^\d/.test(t)) parts.push({type:'num', val:parseFloat(t)});
+    else parts.push({type:'var', val:t});
+  }
+  return parts;
+}
+
+// Convert parts array → JS expression string
+function partsToExpr(parts){
+  return parts.map(p => {
+    if(p.type==='op')    return ' '+p.val+' ';
+    if(p.type==='paren') return p.val;
+    if(p.type==='num')   return p.val;
+    return p.val; // var
+  }).join('').trim();
+}
+
+function renderFBParts(){
+  const row = el('fb-parts-row');
+  if(!row) return;
+
+  if(_fb.parts.length===0){
+    row.innerHTML='<span style="font-size:12px;color:var(--tx3)">Add parts below ↓ Start with a variable or number</span>';
+  } else {
+    row.innerHTML = _fb.parts.map((p,i) => {
+      const cls = p.type==='var'?'fb-var':p.type==='num'?'fb-num':p.type==='paren'?'fb-paren':'fb-op';
+      const disp = p.type==='op' ? (OP_DISPLAY[p.val]||p.val) : p.type==='num' ? p.val : p.val;
+      return `<span class="fb-part ${cls}">
+        <span>${disp}</span>
+        <button class="fb-del" onclick="fbRemovePart(${i})" title="Remove">×</button>
+      </span>`;
+    }).join('');
+  }
+
+  // Update expr preview and live value
+  const expr = partsToExpr(_fb.parts);
+  el('fb-expr-preview').textContent = expr || '…';
+
+  // Evaluate live
+  try{
+    const sampleCtx = {
+      cost:950, markup:78, discount:55, level:'Level 2', cat:'Kurta Sets',
+      incentive:0, retPct:8
+    };
+    const preview = runWFEngine(_fb.marketplace, sampleCtx);
+    const keys = Object.keys(preview);
+    const vals = Object.values(preview);
+    const fn = new Function(...keys, `"use strict"; return (${expr||0});`);
+    const result = fn(...vals);
+    const lv = el('fb-live-val');
+    if(lv){
+      lv.className='fb-preview-val';
+      lv.textContent = typeof result==='number' ? '₹'+result.toFixed(2) : String(result);
+    }
+  } catch(e){
+    const lv = el('fb-live-val');
+    if(lv){ lv.className='fb-preview-err'; lv.textContent='Error: '+e.message; }
+  }
+}
+
+function fbAddVar(){
+  const v = el('fb-var-pick').value;
+  if(!v) return;
+  _fb.parts.push({type:'var', val:v});
+  renderFBParts();
+}
+
+function fbAddNum(){
+  const raw = el('fb-num-val').value.trim();
+  if(raw==='') return;
+  const n = parseFloat(raw);
+  if(isNaN(n)){ toast('Enter a valid number','red'); return; }
+  _fb.parts.push({type:'num', val:n});
+  el('fb-num-val').value = '';
+  renderFBParts();
+}
+
+function fbAddOp(op){
+  _fb.parts.push({type: op==='('||op===')' ? 'paren' : 'op', val:op});
+  renderFBParts();
+}
+
+function fbRemovePart(i){
+  _fb.parts.splice(i,1);
+  renderFBParts();
+}
+
+function fbClear(){
+  _fb.parts = [];
+  renderFBParts();
+}
+
+function saveFB(){
+  const name  = el('fb-name').value.trim();
+  const vname = el('fb-var').value.trim().replace(/[^a-zA-Z0-9_]/g,'');
+  const expr  = partsToExpr(_fb.parts);
+
+  if(!name){ toast('Enter a row name','red'); return; }
+  if(!vname){ toast('Enter a variable name (letters/numbers only)','red'); return; }
+  if(!expr){ toast('Build a formula first','red'); return; }
+
+  const m   = _fb.marketplace;
+  const row = WF[m][_fb.rowIdx];
+  if(!row){ toast('Row not found','red'); return; }
+
+  row.l    = name;
+  row.var  = vname;
+  row.expr = expr;
+
+  save('wireframe');
+  renderWFBuilder();
+  closeFB();
+  toast('✓ Formula saved','green');
+}
+
+// Press Escape to close
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){ closeFB(); closeZoom(); closeModal(); }
+});
 
 // ═══════════════════════════════════════════════════════
 // INIT
