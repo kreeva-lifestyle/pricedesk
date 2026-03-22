@@ -181,6 +181,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .login-err{background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--re);margin-bottom:14px;display:none}
 .login-footer{font-size:11px;color:var(--tx3);margin-top:16px}
 /* ── VISUAL FORMULA BUILDER ─────────────────────────── */
+.fb-shortcut{padding:5px 12px;border-radius:6px;border:1px solid rgba(245,166,35,.35);background:rgba(245,166,35,.07);color:var(--ac);font-size:11px;cursor:pointer;transition:all .12s}
+.fb-shortcut:hover{background:rgba(245,166,35,.18);border-color:var(--ac)}
+.fb-shortcut-field{background:var(--s3);border:1px solid var(--bd2);border-radius:6px;padding:10px 12px;margin-bottom:8px}
+.fb-shortcut-field label{font-size:11px;color:var(--tx3);display:block;margin-bottom:5px}
+.fb-shortcut-select{width:100%;background:var(--s2);border:1px solid var(--bd2);border-radius:5px;color:var(--tx);font-size:12px;padding:6px 10px;font-family:var(--mono)}
 #fb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:600;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 #fb-overlay.active{display:flex}
 .fb-box{background:var(--s);border:1px solid var(--bd2);border-radius:12px;width:700px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column}
@@ -376,105 +381,129 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     </div>
     <div class="fb-body">
 
-      <!-- Row name -->
-      <div class="fg" style="margin-bottom:16px">
-        <label class="fl">Row Name (label shown on screen)</label>
-        <input class="fi" id="fb-name" placeholder="e.g. TCS Deduction">
-      </div>
-
-      <!-- Variable name -->
+      <!-- Row name + variable -->
       <div style="display:flex;gap:12px;margin-bottom:16px">
+        <div class="fg" style="flex:2;margin-bottom:0">
+          <label class="fl">Row Name <span class="st">(shown on screen)</span></label>
+          <input class="fi" id="fb-name" placeholder="e.g. TCS Deduction">
+        </div>
         <div class="fg" style="flex:1;margin-bottom:0">
-          <label class="fl">Variable Name <span class="st">(used in other formulas)</span></label>
+          <label class="fl">Variable Name <span class="st">(use in other formulas)</span></label>
           <input class="fi" id="fb-var" placeholder="e.g. tcs" style="font-family:var(--mono)">
         </div>
-        <div style="display:flex;align-items:flex-end;padding-bottom:2px">
-          <div style="font-size:12px;color:var(--tx3);padding:8px 0">= <span id="fb-expr-preview" style="font-family:monospace;color:var(--ac)">…</span></div>
+      </div>
+
+      <!-- ═══ SMART SHORTCUTS ═══ -->
+      <div style="background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:8px;padding:14px;margin-bottom:16px">
+        <div style="font-size:11px;color:var(--ac);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:10px">⚡ Smart Shortcuts — click to auto-build</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="fb-shortcut" onclick="fbShortcut('pct_of')">% of a value</button>
+          <button class="fb-shortcut" onclick="fbShortcut('fixed_add')">Add fixed amount</button>
+          <button class="fb-shortcut" onclick="fbShortcut('fixed_sub')">Subtract fixed amount</button>
+          <button class="fb-shortcut" onclick="fbShortcut('multiply')">A × B</button>
+          <button class="fb-shortcut" onclick="fbShortcut('divide')">A ÷ B</button>
+          <button class="fb-shortcut" onclick="fbShortcut('pct_markup')">Markup % of cost</button>
+          <button class="fb-shortcut" onclick="fbShortcut('sp_minus_charges')">SP minus deductions</button>
+          <button class="fb-shortcut" onclick="fbShortcut('tcs_formula')">TCS (0.1% of taxable)</button>
+          <button class="fb-shortcut" onclick="fbShortcut('tds_formula')">TDS (0.5% of taxable)</button>
+        </div>
+      </div>
+
+      <!-- Shortcut input area (shown contextually) -->
+      <div id="fb-shortcut-area" style="display:none;background:var(--s2);border:1px solid var(--bd2);border-radius:8px;padding:14px;margin-bottom:14px"></div>
+
+      <!-- ═══ FORMULA BLOCK DISPLAY ═══ -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Formula being built</label>
+        <button onclick="fbClear()" style="font-size:10px;color:var(--re);background:none;border:none;cursor:pointer;opacity:.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">✕ Clear</button>
+      </div>
+      <div class="fb-row" id="fb-parts-row">
+        <span style="font-size:12px;color:var(--tx3)">Use shortcuts above or add parts manually below ↓</span>
+      </div>
+
+      <!-- ═══ MANUAL BUILDER ═══ -->
+      <div style="margin-top:12px">
+        <div style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Or build manually</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+
+          <!-- Add variable -->
+          <div class="fb-add-section" style="flex:2;min-width:220px">
+            <label>Add Variable</label>
+            <div style="display:flex;gap:8px">
+              <select class="fi" id="fb-var-pick" style="flex:1;font-family:var(--mono);font-size:12px">
+                <optgroup label="Pricing">
+                  <option value="cost">cost — Cost Price (₹)</option>
+                  <option value="markup">markup — Markup (number, e.g. 70)</option>
+                  <option value="discount">discount — Discount (number, e.g. 55)</option>
+                  <option value="mrp">mrp — MRP (₹)</option>
+                  <option value="custPaid">custPaid — Customer Paid (₹)</option>
+                  <option value="gtCharge">gtCharge — GT Charge (₹)</option>
+                  <option value="sellerPrice">sellerPrice — Seller Price (₹)</option>
+                </optgroup>
+                <optgroup label="Tax">
+                  <option value="gstRate">gstRate — GST Rate (0.05 or 0.18)</option>
+                  <option value="taxableAmt">taxableAmt — Taxable Amount (₹)</option>
+                  <option value="tcs">tcs — TCS Amount (₹)</option>
+                  <option value="tds">tds — TDS Amount (₹)</option>
+                </optgroup>
+                <optgroup label="Commission">
+                  <option value="commPct">commPct — Commission % (e.g. 21.24)</option>
+                  <option value="effCommPct">effCommPct — Effective Comm %</option>
+                  <option value="commAmt">commAmt — Commission Amount (₹)</option>
+                  <option value="gstOnComm">gstOnComm — GST on Commission (₹)</option>
+                  <option value="incentive">incentive — Incentive (number, e.g. 3)</option>
+                </optgroup>
+                <optgroup label="Logistics">
+                  <option value="retFee">retFee — Return Fee (₹)</option>
+                  <option value="collFee">collFee — Collection Fee (₹)</option>
+                  <option value="pgFee">pgFee — PG Fee (₹)</option>
+                  <option value="retProv">retProv — Return Provision (₹)</option>
+                  <option value="retPct">retPct — Return % (number)</option>
+                </optgroup>
+                <optgroup label="Result">
+                  <option value="payout">payout — Net Payout (₹)</option>
+                  <option value="profit">profit — Net Profit (₹)</option>
+                </optgroup>
+              </select>
+              <button class="btn bp bsm" onclick="fbAddVar()">Add</button>
+            </div>
+          </div>
+
+          <!-- Add number -->
+          <div class="fb-add-section" style="flex:1;min-width:160px">
+            <label>Add Number</label>
+            <div style="display:flex;gap:8px">
+              <input class="fi" id="fb-num-val" type="number" placeholder="e.g. 100" style="flex:1">
+              <button class="btn bp bsm" onclick="fbAddNum()">Add</button>
+            </div>
+            <div class="st" style="margin-top:5px">To convert % to decimal: divide by 100</div>
+          </div>
+
+          <!-- Operators -->
+          <div class="fb-add-section" style="min-width:200px">
+            <label>Operator</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="fb-op-btn" onclick="fbAddOp('+')">+</button>
+              <button class="fb-op-btn" onclick="fbAddOp('-')">−</button>
+              <button class="fb-op-btn" onclick="fbAddOp('*')">×</button>
+              <button class="fb-op-btn" onclick="fbAddOp('/')">÷</button>
+              <button class="fb-paren-btn" onclick="fbAddOp('(')">(</button>
+              <button class="fb-paren-btn" onclick="fbAddOp(')')">)</button>
+            </div>
+          </div>
+
         </div>
       </div>
 
       <!-- Live preview -->
-      <div style="background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
-        <span style="font-size:12px;color:var(--tx3)">Live result (sample: Cost ₹950, Markup 78%, Discount 55%):</span>
-        <span id="fb-live-val" class="fb-preview-val">—</span>
+      <div style="background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px 16px;margin-top:14px;display:flex;align-items:center;gap:12px">
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--tx3);margin-bottom:3px">Live result (sample values: Cost=₹950, Markup=78, Discount=55, SellerPrice=₹2500)</div>
+          <span id="fb-live-val" class="fb-preview-val">—</span>
+        </div>
+        <div style="font-size:11px;color:var(--tx3)">Expression: <span id="fb-expr-preview" style="font-family:monospace;color:var(--ac)">…</span></div>
       </div>
 
-      <!-- Formula block row -->
-      <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:8px">Formula</label>
-      <div class="fb-row" id="fb-parts-row">
-        <span style="font-size:12px;color:var(--tx3)">Add parts below ↓</span>
-      </div>
-
-      <!-- Add parts -->
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-
-        <!-- Add variable -->
-        <div class="fb-add-section" style="flex:1;min-width:200px">
-          <label>Add Variable</label>
-          <div style="display:flex;gap:8px">
-            <select class="fi" id="fb-var-pick" style="flex:1;font-family:var(--mono);font-size:12px">
-              <optgroup label="Pricing">
-                <option value="cost">cost — Cost Price</option>
-                <option value="markup">markup — Markup %</option>
-                <option value="discount">discount — Discount %</option>
-                <option value="mrp">mrp — MRP</option>
-                <option value="custPaid">custPaid — Customer Paid</option>
-                <option value="gtCharge">gtCharge — GT Charge</option>
-                <option value="sellerPrice">sellerPrice — Seller Price</option>
-              </optgroup>
-              <optgroup label="Tax">
-                <option value="gstRate">gstRate — GST Rate</option>
-                <option value="taxableAmt">taxableAmt — Taxable Amount</option>
-                <option value="tcs">tcs — TCS Amount</option>
-                <option value="tds">tds — TDS Amount</option>
-              </optgroup>
-              <optgroup label="Commission">
-                <option value="commPct">commPct — Commission %</option>
-                <option value="effCommPct">effCommPct — Effective Comm %</option>
-                <option value="commAmt">commAmt — Commission Amount</option>
-                <option value="gstOnComm">gstOnComm — GST on Commission</option>
-                <option value="incentive">incentive — Incentive %</option>
-              </optgroup>
-              <optgroup label="Logistics">
-                <option value="retFee">retFee — Return Fee</option>
-                <option value="collFee">collFee — Collection Fee</option>
-                <option value="pgFee">pgFee — PG Fee</option>
-                <option value="retProv">retProv — Return Provision</option>
-                <option value="retPct">retPct — Return %</option>
-              </optgroup>
-              <optgroup label="Result">
-                <option value="payout">payout — Net Payout</option>
-                <option value="profit">profit — Net Profit</option>
-              </optgroup>
-            </select>
-            <button class="btn bp bsm" onclick="fbAddVar()">Add</button>
-          </div>
-        </div>
-
-        <!-- Add number -->
-        <div class="fb-add-section" style="flex:1;min-width:160px">
-          <label>Add Number / %</label>
-          <div style="display:flex;gap:8px">
-            <input class="fi" id="fb-num-val" type="number" placeholder="e.g. 0.001" style="flex:1">
-            <button class="btn bp bsm" onclick="fbAddNum()">Add</button>
-          </div>
-          <div class="st" style="margin-top:5px">For 0.1% type 0.001 · For 18% type 0.18</div>
-        </div>
-
-        <!-- Operators -->
-        <div class="fb-add-section" style="min-width:200px">
-          <label>Operator</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="fb-op-btn" onclick="fbAddOp('+')">+</button>
-            <button class="fb-op-btn" onclick="fbAddOp('-')">−</button>
-            <button class="fb-op-btn" onclick="fbAddOp('*')">×</button>
-            <button class="fb-op-btn" onclick="fbAddOp('/')">÷</button>
-            <button class="fb-paren-btn" onclick="fbAddOp('(')">(</button>
-            <button class="fb-paren-btn" onclick="fbAddOp(')')">)</button>
-          </div>
-        </div>
-
-      </div>
     </div>
 
     <div class="fb-foot">
@@ -3311,7 +3340,200 @@ function fbRemovePart(i){
 
 function fbClear(){
   _fb.parts = [];
+  el('fb-shortcut-area').style.display='none';
   renderFBParts();
+}
+
+// Smart shortcut templates
+const FB_SHORTCUTS = {
+  pct_of: {
+    label: '% of a value',
+    desc: 'Calculate X% of Y  (e.g. 0.1% of taxableAmt)',
+    fields: [
+      {id:'sc_pct',    label:'Percentage value (enter the % number)',          type:'number', placeholder:'e.g. 0.1 for 0.1%, 55 for 55%'},
+      {id:'sc_pct_as', label:'Is this % already decimal (0.001) or whole (0.1)?', type:'select',
+        options:['whole — I will type 0.1 and mean 0.1%','decimal — I will type 0.001 and mean 0.1%']},
+      {id:'sc_base',   label:'% of which variable?',  type:'varselect'},
+    ],
+    build: (vals)=>{
+      const pct = parseFloat(vals.sc_pct)||0;
+      const base = vals.sc_base;
+      const isDec = vals.sc_pct_as.startsWith('decimal');
+      const factor = isDec ? pct : pct/100;
+      return [
+        {type:'var',val:base},
+        {type:'op', val:'*'},
+        {type:'num',val:factor}
+      ];
+    }
+  },
+  fixed_add: {
+    label:'Add fixed amount to a value',
+    fields:[
+      {id:'sc_base', label:'Start with which variable?', type:'varselect'},
+      {id:'sc_amt',  label:'Add this fixed amount (₹)',  type:'number', placeholder:'e.g. 61'},
+    ],
+    build:(vals)=>[
+      {type:'var',val:vals.sc_base},{type:'op',val:'+'},{type:'num',val:parseFloat(vals.sc_amt)||0}
+    ]
+  },
+  fixed_sub: {
+    label:'Subtract fixed amount from a value',
+    fields:[
+      {id:'sc_base', label:'Start with which variable?', type:'varselect'},
+      {id:'sc_amt',  label:'Subtract this fixed amount (₹)', type:'number', placeholder:'e.g. 61'},
+    ],
+    build:(vals)=>[
+      {type:'var',val:vals.sc_base},{type:'op',val:'-'},{type:'num',val:parseFloat(vals.sc_amt)||0}
+    ]
+  },
+  multiply: {
+    label:'Multiply two values (A × B)',
+    fields:[
+      {id:'sc_a', label:'First value (A)', type:'varselect'},
+      {id:'sc_b', label:'Second value (B)', type:'varselect'},
+    ],
+    build:(vals)=>[
+      {type:'var',val:vals.sc_a},{type:'op',val:'*'},{type:'var',val:vals.sc_b}
+    ]
+  },
+  divide: {
+    label:'Divide two values (A ÷ B)',
+    fields:[
+      {id:'sc_a', label:'Value to divide (A)', type:'varselect'},
+      {id:'sc_b', label:'Divide by (B)',       type:'varselect'},
+    ],
+    build:(vals)=>[
+      {type:'var',val:vals.sc_a},{type:'op',val:'/'},{type:'var',val:vals.sc_b}
+    ]
+  },
+  pct_markup: {
+    label:'Markup % applied to cost',
+    desc:'MRP = Cost × (1 + Markup ÷ 100)',
+    fields:[
+      {id:'sc_base', label:'Apply markup to which variable?', type:'varselect', default:'cost'},
+      {id:'sc_pct',  label:'Which variable holds the markup %?', type:'varselect', default:'markup'},
+    ],
+    build:(vals)=>[
+      {type:'var',val:vals.sc_base},{type:'op',val:'*'},
+      {type:'paren',val:'('},{type:'num',val:1},{type:'op',val:'+'},
+      {type:'var',val:vals.sc_pct},{type:'op',val:'/'},
+      {type:'num',val:100},{type:'paren',val:')'}
+    ]
+  },
+  sp_minus_charges: {
+    label:'Seller Price minus multiple deductions',
+    desc:'e.g. sellerPrice − commAmt − gstOnComm − retFee − collFee',
+    fields:[
+      {id:'sc_base',   label:'Start with (Seller Price)', type:'varselect', default:'sellerPrice'},
+      {id:'sc_deduct1',label:'Deduction 1', type:'varselect', default:'commAmt'},
+      {id:'sc_deduct2',label:'Deduction 2', type:'varselect', default:'gstOnComm'},
+      {id:'sc_deduct3',label:'Deduction 3 (optional)', type:'varselect', default:'retFee', optional:true},
+      {id:'sc_deduct4',label:'Deduction 4 (optional)', type:'varselect', default:'collFee', optional:true},
+      {id:'sc_deduct5',label:'Deduction 5 (optional)', type:'varselect', default:'pgFee', optional:true},
+    ],
+    build:(vals)=>{
+      const parts = [{type:'var',val:vals.sc_base}];
+      ['sc_deduct1','sc_deduct2','sc_deduct3','sc_deduct4','sc_deduct5'].forEach(k=>{
+        if(vals[k] && vals[k]!=='—none—'){
+          parts.push({type:'op',val:'-'},{type:'var',val:vals[k]});
+        }
+      });
+      return parts;
+    }
+  },
+  tcs_formula: {
+    label:'TCS — 0.1% of Taxable Amount',
+    desc:'TCS = Taxable Amount × 0.1%  (auto-filled)',
+    fields:[],
+    build:()=>[
+      {type:'var',val:'taxableAmt'},{type:'op',val:'*'},{type:'num',val:0.001}
+    ]
+  },
+  tds_formula: {
+    label:'TDS — 0.5% of Taxable Amount',
+    desc:'TDS = Taxable Amount × 0.5%  (auto-filled)',
+    fields:[],
+    build:()=>[
+      {type:'var',val:'taxableAmt'},{type:'op',val:'*'},{type:'num',val:0.005}
+    ]
+  },
+};
+
+const VAR_OPTIONS = [
+  {v:'cost',l:'cost — Cost Price (₹)'},
+  {v:'markup',l:'markup — Markup % number (e.g. 70)'},
+  {v:'discount',l:'discount — Discount % number (e.g. 55)'},
+  {v:'mrp',l:'mrp — MRP (₹)'},
+  {v:'custPaid',l:'custPaid — Customer Paid (₹)'},
+  {v:'gtCharge',l:'gtCharge — GT Charge (₹)'},
+  {v:'sellerPrice',l:'sellerPrice — Seller Price (₹)'},
+  {v:'gstRate',l:'gstRate — GST Rate (0.05 or 0.18)'},
+  {v:'taxableAmt',l:'taxableAmt — Taxable Amount (₹)'},
+  {v:'tcs',l:'tcs — TCS (₹)'},
+  {v:'tds',l:'tds — TDS (₹)'},
+  {v:'commPct',l:'commPct — Commission % (e.g. 21.24)'},
+  {v:'effCommPct',l:'effCommPct — Effective Comm %'},
+  {v:'commAmt',l:'commAmt — Commission Amount (₹)'},
+  {v:'gstOnComm',l:'gstOnComm — GST on Commission (₹)'},
+  {v:'incentive',l:'incentive — Incentive % number'},
+  {v:'retFee',l:'retFee — Return Fee (₹)'},
+  {v:'collFee',l:'collFee — Collection Fee (₹)'},
+  {v:'pgFee',l:'pgFee — PG Fee (₹)'},
+  {v:'retProv',l:'retProv — Return Provision (₹)'},
+  {v:'retPct',l:'retPct — Return % number'},
+  {v:'payout',l:'payout — Net Payout (₹)'},
+  {v:'profit',l:'profit — Net Profit (₹)'},
+  {v:'—none—',l:'— None / skip —'},
+];
+
+function fbShortcut(type){
+  const sc = FB_SHORTCUTS[type];
+  if(!sc) return;
+
+  // No fields = instant apply
+  if(!sc.fields.length){
+    _fb.parts = sc.build({});
+    renderFBParts();
+    el('fb-shortcut-area').style.display='none';
+    toast('✓ Formula auto-built — check preview below','green');
+    return;
+  }
+
+  // Build the input form
+  const varOpts = VAR_OPTIONS.map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
+  el('fb-shortcut-area').style.display='';
+  el('fb-shortcut-area').innerHTML = `
+    <div style="font-size:12px;font-weight:600;color:var(--ac);margin-bottom:10px">⚡ ${sc.label}${sc.desc?'<span style="color:var(--tx3);font-weight:400"> — '+sc.desc+'</span>':''}</div>
+    ${sc.fields.map(f=>`
+      <div class="fb-shortcut-field">
+        <label>${f.label}</label>
+        ${f.type==='varselect'
+          ? `<select class="fb-shortcut-select" id="${f.id}">
+               ${f.optional?'<option value="—none—">— None / skip —</option>':''}
+               ${VAR_OPTIONS.filter(o=>o.v!=='—none—').map(o=>`<option value="${o.v}"${o.v===(f.default||'')?'selected':''}>${o.l}</option>`).join('')}
+             </select>`
+          : f.type==='select'
+          ? `<select class="fb-shortcut-select" id="${f.id}">${f.options.map(o=>`<option>${o}</option>`).join('')}</select>`
+          : `<input class="fi" id="${f.id}" type="${f.type}" placeholder="${f.placeholder||''}" style="font-size:12px">`
+        }
+      </div>`).join('')}
+    <button class="btn bp bsm" onclick="fbApplyShortcut('${type}')">✓ Build Formula</button>
+    <button class="btn bg bsm" style="margin-left:8px" onclick="el('fb-shortcut-area').style.display='none'">Cancel</button>`;
+}
+
+function fbApplyShortcut(type){
+  const sc = FB_SHORTCUTS[type];
+  if(!sc) return;
+  const vals = {};
+  sc.fields.forEach(f=>{
+    const e = el(f.id);
+    if(e) vals[f.id] = e.value;
+  });
+  _fb.parts = sc.build(vals);
+  renderFBParts();
+  el('fb-shortcut-area').style.display='none';
+  toast('✓ Formula built — check the live preview','green');
 }
 
 function saveFB(){
