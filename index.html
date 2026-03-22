@@ -1072,7 +1072,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         <div class="ch"><div style="font-size:13px;font-weight:600">🧪 Test Emails</div></div>
         <div class="cb">
           <div class="warn" style="margin-bottom:14px">
-            ⚠ <strong>If test emails go to the wrong address:</strong> In EmailJS → open each template → find the <strong>"To Email"</strong> field at the top → make sure it says <code style="background:var(--s3);padding:1px 6px;border-radius:3px;font-family:monospace;color:var(--gr)">{{to_email}}</code> — NOT a fixed email address like <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d6b9a1b8b3a496b7a4afb7b2b3a5bfb1b8a5f8b5b9f8bfb8">[email&#160;protected]</a>. Save the template. Then test again.
+            ⚠ <strong>If test emails go to the wrong address:</strong> In EmailJS → open each template → find the <strong>"To Email"</strong> field at the top → make sure it says <code style="background:var(--s3);padding:1px 6px;border-radius:3px;font-family:monospace;color:var(--gr)">{{to_email}}</code> — NOT a fixed email address like <code style="background:var(--s3);padding:1px 6px;border-radius:3px;font-family:monospace;color:var(--re)">someone@example.com</code>. Save the template. Then test again.
           </div>
           <div class="fg"><label class="fl">Send test to this email</label><input class="fi" id="cfg-test-email" type="email" placeholder="manthankreeva@gmail.com"></div>
           <div style="display:flex;flex-direction:column;gap:9px">
@@ -1137,7 +1137,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 </div>
 <div id="modal-root"></div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
 // ═══════════════════════════════════════════════════════
 // SUPABASE CONFIG — paste your keys here after setup
 // ═══════════════════════════════════════════════════════
@@ -2675,7 +2675,7 @@ function closeZoom(){
   if(ov) ov.classList.remove('active');
   document.body.style.overflow='';
 }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeZoom(); closeModal(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeFB(); closeZoom(); closeModal(); } });
 
 // ═══════════════════════════════════════════════════════
 // DATA EXPORT / IMPORT (JSON backup)
@@ -2783,7 +2783,7 @@ function populateSettingsPage(){
   const statusBox = el('email-cfg-status');
   if(statusBox){
     statusBox.style.display = '';
-    if(cfg.publicKey){
+    if(EMAIL_CONFIG.publicKey && EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY'){
       statusBox.innerHTML = '<div class="success" style="margin:0">✓ EmailJS keys loaded — emails are active. Fields are pre-filled above.</div>';
     } else {
       statusBox.innerHTML = '<div class="warn" style="margin:0">⚠ Not configured yet — paste your EmailJS keys above and click Save & Activate</div>';
@@ -2793,7 +2793,7 @@ function populateSettingsPage(){
   const sbBox = el('sb-cfg-status');
   if(sbBox){
     sbBox.style.display = '';
-    if(cfg.sbUrl){
+    if(SUPABASE_URL){
       sbBox.innerHTML = '<div class="success" style="margin:0">✓ Supabase URL loaded — database connected. Your keys are saved.</div>';
     } else {
       sbBox.innerHTML = '<div class="info" style="margin:0">Not connected yet — paste your Supabase URL and Anon Key above</div>';
@@ -3847,10 +3847,8 @@ function saveFB(){
   toast('✓ Formula saved','green');
 }
 
-// Press Escape to close
-document.addEventListener('keydown', e=>{
-  if(e.key==='Escape'){ closeFB(); closeZoom(); closeModal(); }
-});
+// Escape key already handled in image zoom section — updated to include FB
+
 
 
 // ═══════════════════════════════════════════════════════
@@ -4089,4 +4087,11 @@ function closeSidebar(){
 // Auto-close sidebar when a nav item is tapped on mobile
 (function(){
   const _navFn = window.nav;
-  window.nav
+  window.nav = function(){
+    _navFn.apply(this, arguments);
+    if(window.innerWidth <= 768) closeSidebar();
+  };
+})();
+</script>
+</body>
+</html>
