@@ -708,13 +708,32 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         </select>
       </div>
       <div id="wf-builder-list"></div>
-      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;align-items:center">
+        <span style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Add row:</span>
         <button onclick="addWFRow('input')" style="padding:5px 11px;border-radius:5px;border:1px dashed var(--bd2);cursor:pointer;font-size:12px;color:var(--pu);background:transparent">+ Input</button>
         <button onclick="addWFRow('formula')" style="padding:5px 11px;border-radius:5px;border:1px dashed var(--bd2);cursor:pointer;font-size:12px;color:var(--bl);background:transparent">+ Formula</button>
         <button onclick="addWFRow('output')" style="padding:5px 11px;border-radius:5px;border:1px dashed var(--bd2);cursor:pointer;font-size:12px;color:var(--gr);background:transparent">+ Output</button>
         <button onclick="addWFRow('section')" style="padding:5px 11px;border-radius:5px;border:1px dashed var(--bd2);cursor:pointer;font-size:12px;color:var(--tx3);background:transparent">+ Section</button>
       </div>
-      <button class="btn bp bsm" style="margin-top:12px" onclick="save('wireframe');toast('✓ Wireframe saved to database','green')">✓ Save Wireframe</button>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;align-items:center">
+        <span style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Quick add:</span>
+        <button onclick="addWFPreset('tcs')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ TCS</button>
+        <button onclick="addWFPreset('tds')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ TDS</button>
+        <button onclick="addWFPreset('taxbase')" style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ Taxable Amt</button>
+        <button onclick="addWFPreset('pkg')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ Packaging Cost</button>
+        <button onclick="addWFPreset('ads')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ Ad Spend</button>
+        <button onclick="addWFPreset('custom')"  style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ Custom Charge</button>
+      </div>
+      <div style="background:rgba(78,142,247,.07);border:1px solid rgba(78,142,247,.2);border-radius:6px;padding:10px 14px;margin-top:10px;font-size:11px">
+        <strong style="color:var(--tx)">Variables available in expressions:</strong><br>
+        <span style="font-family:monospace;color:var(--gr);font-size:10px;line-height:1.8">
+          cost · markup · mrp · discount · custPaid · gtCharge · sellerPrice · gstRate<br>
+          taxableAmt · tcs · tds · commPct · effCommPct · commAmt · gstOnComm<br>
+          retFee · collFee · pgFee · retProv · payout · profit · incentive · retPct<br>
+          <span style="color:var(--bl)">Functions:</span> getMynFwd(level, sp) · getMyntraComm(cat, sp) · autoGST(sp) · Math.round() · Math.ceil()
+        </span>
+      </div>
+      <button class="btn bp bsm" style="margin-top:10px" onclick="save('wireframe');toast('✓ Wireframe saved to database','green')">✓ Save Wireframe</button>
     </div>
     <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Row Types</div></div><div class="cb" style="font-size:12px">
       <div class="wfrow mb8"><span style="color:var(--pu);font-weight:600">INPUT</span><span style="color:var(--tx3);margin-left:8px">→ User enters value</span></div>
@@ -1228,13 +1247,11 @@ function calcSKU(s){
   let payout;
   if(brand.model==='ajio-cc'){payout=sp-commAmt-gstAmt;}
   else if(brand.model==='myntra'){
-    const discPct=s.discount||0;
-    const customerPaid=discPct>0?Math.round(mrp*(1-discPct/100)):sp;
-    const fwd=getMynFwd(s.level,customerPaid),ret=getMynRet(s.level);
-    const coll=LOGISTICS_SETTINGS.myn_collection_fee,pg=LOGISTICS_SETTINGS.myn_pg_fee;
-    const sellerPrice=customerPaid-fwd;
-    const commAmt2=sellerPrice*comm/100,gstAmt2=commAmt2*gst;
-    payout=sellerPrice-commAmt2-gstAmt2-ret-coll-pg;
+    // Use WF engine so any formula change in wireframe reflects here too
+    const v2=calcMyntraFull(s.cost,s.markup,s.discount||0,s.level,s.category,0,0);
+    payout=v2.payout;
+    // Override comm for display
+    comm=v2.effComm;
   }
   else if(brand.model==='ajio-ppmp'){const fwd=LOGISTICS_SETTINGS.ajio_fwd,ret=LOGISTICS_SETTINGS.ajio_ret,platFee=LOGISTICS_SETTINGS.ajio_platform_fee;payout=sp-commAmt-gstAmt-fwd-ret-platFee;}
   else{const fba=LOGISTICS_SETTINGS.amz_fba,close=LOGISTICS_SETTINGS.amz_close,allFees=commAmt+close+fba,gstAmt2=allFees*gst;payout=sp-allFees-gstAmt2;}
@@ -1261,23 +1278,29 @@ function renderMyntra(){
   const v=calcMyntraFull(d.cost,d.markup,disc,'Level 2',d.cat,d.inc,d.retPct);
   const br=(v.profit)<(THRESHOLDS[d.cat]||0);
   const t=el('ct-myntra');if(!t)return;
-  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — Category: ${d.cat}</td></tr>
+  t.innerHTML=`
+    <tr class="sh"><td colspan="2">Pricing — Category: ${d.cat}</td></tr>
     <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.myntra.cost=+this.value;renderMyntra()"></td></tr>
     <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.myntra.markup=+this.value;renderMyntra()"></td></tr>
-    <tr class="cform"><td>MRP = Cost × (1+Markup%) → rounded to ₹50</td><td class="mono" style="color:var(--bl)">₹${v.mrpRnd.toLocaleString('en-IN')}</td></tr>
+    <tr class="cform"><td>MRP = Cost × (1+Markup%) → round to ₹50</td><td class="mono" style="color:var(--bl)">₹${v.mrp.toLocaleString('en-IN')}</td></tr>
     <tr class="ir"><td>Discount % <span class="st">(0 = no discount)</span></td><td><input type="number" value="${disc}" min="0" max="99" onchange="CD.myntra.disc=+this.value;renderMyntra()"></td></tr>
     <tr class="cform"><td>Customer Paid = MRP × (1−Discount%)</td><td class="mono" style="color:var(--bl)">₹${Math.round(v.custPaid).toLocaleString('en-IN')}</td></tr>
     <tr class="cform"><td>GT Charge (Level 2 × Customer Paid band)</td><td class="mono" style="color:var(--re)">−₹${v.gtCharge}</td></tr>
-    <tr class="cform"><td>Seller Price = Customer Paid − GT Charge</td><td class="mono" style="color:var(--bl)">₹${Math.round(v.sellerPrice).toLocaleString('en-IN')}</td></tr>
-    <tr class="sh cauto"><td colspan="2">Commission on Seller Price ${d.inc>0?`<span style="color:var(--gr);font-size:10px;margin-left:6px">✓ −${d.inc}% incentive</span>`:''}</td></tr>
+    <tr class="cform"><td><strong>Seller Price</strong> = Customer Paid − GT Charge</td><td class="mono" style="color:var(--bl);font-weight:600">₹${Math.round(v.sellerPrice).toLocaleString('en-IN')}</td></tr>
+    <tr class="sh cauto"><td colspan="2">GST, TCS & TDS</td></tr>
     <tr class="cauto"><td>GST Rate (auto) ${gstBadge(v.custPaid)}</td><td class="mono" style="color:var(--ac)">${(v.gst*100).toFixed(0)}%</td></tr>
+    <tr class="cauto"><td>Taxable Amount = Seller Price ÷ (1+GST) <span class="st">basis for TCS/TDS</span></td><td class="mono" style="color:var(--tx2)">₹${v.taxableAmt.toFixed(0)}</td></tr>
+    <tr class="cauto"><td>TCS = Taxable Amt × 0.1%</td><td class="mono" style="color:var(--re)">−₹${v.tcs.toFixed(2)}</td></tr>
+    <tr class="cauto"><td>TDS = Taxable Amt × 0.5%</td><td class="mono" style="color:var(--re)">−₹${v.tds.toFixed(2)}</td></tr>
+    <tr class="sh cauto"><td colspan="2">Commission on Seller Price ${d.inc>0?`<span style="color:var(--gr);font-size:10px;margin-left:6px">✓ −${d.inc}% incentive</span>`:''}</td></tr>
     <tr class="cauto"><td>Commission % (slab: ${v.rawComm}%, eff: ${v.effComm}%)</td><td class="mono" style="color:var(--ac)">${v.effComm}%</td></tr>
     <tr class="ir"><td>Incentive %</td><td><input type="number" value="${d.inc}" onchange="CD.myntra.inc=+this.value;renderMyntra()"></td></tr>
     <tr><td>Commission Amount</td><td class="mono" style="color:var(--re)">−₹${v.commAmt.toFixed(0)}</td></tr>
     <tr><td>GST on Commission</td><td class="mono" style="color:var(--re)">−₹${v.gstAmt.toFixed(0)}</td></tr>
     <tr class="sh"><td colspan="2">Logistics (Level 2)</td></tr>
     <tr><td>Return Reverse Fee</td><td class="mono" style="color:var(--re)">−₹${v.ret}</td></tr>
-    <tr><td>Collection + PG Fee</td><td class="mono" style="color:var(--re)">−₹${(v.coll+v.pg).toFixed(0)}</td></tr>
+    <tr><td>Collection Fee</td><td class="mono" style="color:var(--re)">−₹${v.coll}</td></tr>
+    <tr><td>Payment Gateway</td><td class="mono" style="color:var(--re)">−₹${v.pg}</td></tr>
     <tr class="ir"><td>Return % (provision)</td><td><input type="number" value="${d.retPct}" onchange="CD.myntra.retPct=+this.value;renderMyntra()"></td></tr>
     <tr><td>Return Provision</td><td class="mono" style="color:var(--re)">−₹${v.retProv.toFixed(0)}</td></tr>
     <tr class="sh"><td colspan="2">Result</td></tr>
@@ -1915,7 +1938,35 @@ function renderCatTable(){
 // ═══════════════════════════════════════════════════════
 // WIREFRAME
 // ═══════════════════════════════════════════════════════
-const WF={myntra:[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:4.5,t:'input',l:'Discount %',hint:'Applied on MRP → Customer Paid = MRP × (1−Discount%)'},{id:5,t:'formula',l:'Customer Paid = MRP × (1−Discount%)'},{id:5.5,t:'formula',l:'GT Charge based on Customer Paid price band'},{id:5.6,t:'formula',l:'Seller Price = Customer Paid − GT Charge'},{id:6,t:'section',l:'Commission (auto from category slab)'},{id:7,t:'formula',l:'GST Rate = 5%/<₹2500 or 18%/≥₹2500'},{id:8,t:'formula',l:'Comm% = slab_lookup(category, Seller Price)'},{id:9,t:'formula',l:'Commission + GST on Commission'},{id:10,t:'section',l:'Logistics'},{id:11,t:'formula',l:'Return Reverse Fee'},{id:12,t:'formula',l:'Collection Fee + Payment Gateway'},{id:13,t:'section',l:'Result'},{id:14,t:'output',l:'Net Profit ₹ & %'}],'ajio-ppmp':[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'PPMP Commission'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Comm% (from PPMP settings)'},{id:9,t:'formula',l:'Commission + GST + Logistics'},{id:10,t:'section',l:'Result'},{id:11,t:'output',l:'Net Profit ₹ & %'}],'ajio-cc':[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'CC Model — Commission Only'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Comm% (from CC settings)'},{id:9,t:'formula',l:'Payout = SP − Commission − GST'},{id:10,t:'section',l:'No logistics / No other charges'},{id:11,t:'output',l:'Net Profit ₹ & %'}],amazon:[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'Amazon Fees'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Referral % (fixed per category)'},{id:9,t:'formula',l:'Referral + FBA + Closing + GST on Fees'},{id:10,t:'input',l:'Ad Spend (₹)'},{id:11,t:'formula',l:'Return Provision'},{id:12,t:'output',l:'Net Profit ₹ & %'}]};
+const WF={myntra:[
+  {id:1, t:'section', l:'Pricing'},
+  {id:2, t:'input',   l:'Cost Price (₹)',   var:'cost'},
+  {id:3, t:'input',   l:'Markup %',         var:'markup'},
+  {id:4, t:'formula', l:'MRP = Cost × (1+Markup%) → ₹50 round-up', expr:'Math.ceil(cost*(1+markup/100)/50)*50', var:'mrp'},
+  {id:4.5,t:'input',  l:'Discount %',       var:'discount', hint:'0 = no discount'},
+  {id:5, t:'formula', l:'Customer Paid = MRP × (1−Discount%)',      expr:'discount>0 ? mrp*(1-discount/100) : mrp', var:'custPaid'},
+  {id:5.5,t:'formula',l:'GT Charge (from price band table)',         expr:'getMynFwd(level||"Level 2", custPaid)', var:'gtCharge'},
+  {id:5.6,t:'formula',l:'Seller Price = Customer Paid − GT Charge', expr:'custPaid - gtCharge', var:'sellerPrice'},
+  {id:6, t:'section', l:'GST & Commission'},
+  {id:7, t:'formula', l:'GST Rate (5% if <₹2500, else 18%)',        expr:'sellerPrice>=2500 ? 0.18 : 0.05', var:'gstRate'},
+  {id:7.1,t:'formula',l:'Taxable Amount = Seller Price ÷ (1+GST)',  expr:'sellerPrice/(1+gstRate)', var:'taxableAmt', hint:'Base for TCS/TDS'},
+  {id:7.2,t:'formula',l:'TCS = Taxable Amount × 0.1%',              expr:'taxableAmt * 0.001', var:'tcs'},
+  {id:7.3,t:'formula',l:'TDS = Taxable Amount × 0.5%',              expr:'taxableAmt * 0.005', var:'tds'},
+  {id:8, t:'formula', l:'Commission % (slab lookup on Seller Price)',expr:'getMyntraComm(cat||"Kurta Sets", sellerPrice)', var:'commPct'},
+  {id:8.5,t:'input',  l:'Incentive % (deduct from commission)',      var:'incentive'},
+  {id:9, t:'formula', l:'Effective Commission % = Comm% − Incentive%', expr:'Math.max(0, commPct-(incentive||0))', var:'effCommPct'},
+  {id:9.1,t:'formula',l:'Commission Amount = Seller Price × Eff.Comm%', expr:'sellerPrice * effCommPct/100', var:'commAmt'},
+  {id:9.2,t:'formula',l:'GST on Commission = Comm × GST Rate',      expr:'commAmt * gstRate', var:'gstOnComm'},
+  {id:10, t:'section',l:'Logistics'},
+  {id:11, t:'formula',l:'Return Reverse Fee',                        expr:'REVERSE_FEES[level||"Level 2"]||218', var:'retFee'},
+  {id:12, t:'formula',l:'Collection Fee',                            expr:'LOGISTICS_SETTINGS.myn_collection_fee||61', var:'collFee'},
+  {id:12.5,t:'formula',l:'Payment Gateway Fee',                     expr:'LOGISTICS_SETTINGS.myn_pg_fee||50.22', var:'pgFee'},
+  {id:12.6,t:'input', l:'Return % (provision)',                     var:'retPct'},
+  {id:12.7,t:'formula',l:'Return Provision = Return% × Reverse Fee',expr:'(retPct||0)/100 * retFee', var:'retProv'},
+  {id:13, t:'section',l:'Result'},
+  {id:13.5,t:'formula',l:'Net Payout = SP − Comm − GST − Logistics − TCS − TDS', expr:'sellerPrice - commAmt - gstOnComm - retFee - collFee - pgFee - retProv - tcs - tds', var:'payout'},
+  {id:14, t:'output', l:'Net Profit ₹ & %',                         expr:'payout - cost', var:'profit'}
+],'ajio-ppmp':[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'PPMP Commission'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Comm% (from PPMP settings)'},{id:9,t:'formula',l:'Commission + GST + Logistics'},{id:10,t:'section',l:'Result'},{id:11,t:'output',l:'Net Profit ₹ & %'}],'ajio-cc':[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'CC Model — Commission Only'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Comm% (from CC settings)'},{id:9,t:'formula',l:'Payout = SP − Commission − GST'},{id:10,t:'section',l:'No logistics / No other charges'},{id:11,t:'output',l:'Net Profit ₹ & %'}],amazon:[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'Amazon Fees'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Referral % (fixed per category)'},{id:9,t:'formula',l:'Referral + FBA + Closing + GST on Fees'},{id:10,t:'input',l:'Ad Spend (₹)'},{id:11,t:'formula',l:'Return Provision'},{id:12,t:'output',l:'Net Profit ₹ & %'}]};
 let wfN=200;
 
 function renderWFPreviews(){
@@ -1934,26 +1985,49 @@ function renderWFBuilder(){
   const m = el('wf-sel').value;
   const list = el('wf-builder-list');
   if(!list) return;
+  // Run the formula engine on sample data to show live preview values
+  const preview = runWFEngine(m, {
+    cost:950, markup:78, discount:55, level:'Level 2',
+    cat:'Kurta Sets', incentive:0, retPct:8
+  });
   list.innerHTML = WF[m].map((r,idx) => {
     const cls = r.t==='formula'?'wff':r.t==='output'?'wfo':r.t==='section'?'wfs':'';
     const badgeCls = r.t==='formula'?'bf':r.t==='output'?'bo':r.t==='section'?'bs':'bi';
-    return `<div class="wfrow ${cls}" style="margin-bottom:6px;transition:opacity .15s"
-      draggable="true"
-      data-idx="${idx}"
+    const previewVal = r.var && preview[r.var] !== undefined
+      ? `<span style="font-size:10px;color:var(--gr);font-family:var(--mono);margin-right:6px;flex-shrink:0">${
+          typeof preview[r.var]==='number' ? (Number.isInteger(preview[r.var]) ? '₹'+preview[r.var] : '₹'+preview[r.var].toFixed(2)) : preview[r.var]
+        }</span>` : '';
+    const exprField = (r.t==='formula'||r.t==='output') && r.expr!==undefined
+      ? `<div style="margin-top:4px;margin-left:22px">
+           <span style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Expression: </span>
+           <input style="font-size:10px;font-family:var(--mono);background:rgba(0,0,0,.2);border:1px solid var(--bd);border-radius:3px;color:var(--gr);padding:2px 6px;width:380px;outline:none"
+             value="${(r.expr||'').replace(/"/g,'&quot;')}"
+             placeholder="e.g. sellerPrice * 0.001"
+             onchange="WF['${m}'][${idx}].expr=this.value;renderWFBuilder();save('wireframe')"
+             onclick="event.stopPropagation()">
+         </div>` : '';
+    return `<div class="wfrow ${cls}" style="margin-bottom:6px;transition:opacity .15s;flex-wrap:wrap"
+      draggable="true" data-idx="${idx}"
       ondragstart="wfDragStart(event,${idx})"
       ondragover="wfDragOver(event)"
       ondragleave="wfDragLeave(event)"
       ondrop="wfDrop(event,'${m}',${idx})"
       ondragend="wfDragEnd(event)">
-      <span style="color:var(--ac);cursor:grab;margin-right:6px;font-size:16px;user-select:none" title="Drag to reorder">⠿</span>
-      <input style="flex:1;background:transparent;border:none;color:var(--tx);font-size:12px;font-family:var(--sans);outline:none"
-        value="${r.l.replace(/"/g,'&quot;')}"
-        onchange="WF['${m}'][${idx}].l=this.value;save('wireframe')">
-      ${r.hint ? `<span style="font-size:10px;color:var(--bl);opacity:.7;margin-right:6px">${r.hint}</span>` : ''}
-      <span class="bdg ${badgeCls}" style="flex-shrink:0">${r.t.toUpperCase()}</span>
-      <span style="color:var(--tx3);cursor:pointer;font-size:14px;margin-left:8px;opacity:.4;flex-shrink:0"
-        onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4"
-        onclick="WF['${m}'].splice(${idx},1);renderWFBuilder();save('wireframe')">✕</span>
+      <div style="display:flex;align-items:center;width:100%;gap:6px">
+        <span style="color:var(--ac);cursor:grab;font-size:16px;user-select:none;flex-shrink:0" title="Drag to reorder">⠿</span>
+        <input style="flex:1;background:transparent;border:none;color:var(--tx);font-size:12px;font-family:var(--sans);outline:none"
+          value="${r.l.replace(/"/g,'&quot;')}"
+          onchange="WF['${m}'][${idx}].l=this.value;save('wireframe')"
+          onclick="event.stopPropagation()">
+        ${r.var ? `<span style="font-size:9px;color:var(--tx3);font-family:var(--mono);flex-shrink:0">[${r.var}]</span>` : ''}
+        ${previewVal}
+        ${r.hint ? `<span style="font-size:10px;color:var(--bl);opacity:.7;flex-shrink:0">${r.hint}</span>` : ''}
+        <span class="bdg ${badgeCls}" style="flex-shrink:0">${r.t.toUpperCase()}</span>
+        <span style="color:var(--tx3);cursor:pointer;font-size:14px;margin-left:4px;opacity:.4;flex-shrink:0"
+          onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4"
+          onclick="WF['${m}'].splice(${idx},1);renderWFBuilder();save('wireframe')">✕</span>
+      </div>
+      ${exprField}
     </div>`;
   }).join('');
 }
@@ -1991,7 +2065,40 @@ function wfDragEnd(e){
   e.currentTarget.style.opacity = '';
   _wfDragSrc = null;
 }
-function addWFRow(type){const m=el('wf-sel').value;const def={input:'New Input',formula:'New Formula',output:'New Output',section:'— Section —'};WF[m].push({id:++wfN,t:type,l:def[type]});renderWFBuilder();}
+function addWFRow(type){
+  const m=el('wf-sel').value;
+  const defs={
+    input:   {l:'New Input',   var:'myInput'},
+    formula: {l:'New Formula', var:'myFormula', expr:'0'},
+    output:  {l:'Net Profit',  var:'profit',    expr:'payout - cost'},
+    section: {l:'— Section —'}
+  };
+  WF[m].push({id:++wfN, t:type, ...defs[type]});
+  renderWFBuilder();
+  save('wireframe');
+}
+
+// Add quick-insert for common formulas
+function addWFPreset(preset){
+  const m = el('wf-sel').value;
+  const presets = {
+    tcs:    {t:'formula', l:'TCS = Taxable Amount × 0.1%',            var:'tcs',    expr:'taxableAmt * 0.001'},
+    tds:    {t:'formula', l:'TDS = Taxable Amount × 0.5%',            var:'tds',    expr:'taxableAmt * 0.005'},
+    taxbase:{t:'formula', l:'Taxable Amount = SP ÷ (1+GST)',           var:'taxableAmt', expr:'sellerPrice/(1+gstRate)'},
+    pkg:    {t:'input',   l:'Packaging Cost (₹)',                      var:'pkgCost'},
+    ads:    {t:'input',   l:'Ad Spend (₹)',                            var:'adSpend'},
+    custom: {t:'formula', l:'Custom Charge',                           var:'customCharge', expr:'0'},
+  };
+  const row = presets[preset];
+  if(!row){ toast('Unknown preset','red'); return; }
+  // Check if var already exists
+  const exists = WF[m].find(r=>r.var===row.var);
+  if(exists){ toast(`${row.l} already in list`,'red'); return; }
+  WF[m].push({id:++wfN, ...row});
+  renderWFBuilder();
+  save('wireframe');
+  toast(`✓ ${row.l} added — drag to reorder`,'green');
+}
 
 // ═══════════════════════════════════════════════════════
 // NAV & TABS
@@ -2844,25 +2951,84 @@ function populateLogisticsInputs(){
 // ═══════════════════════════════════════════════════════
 // MYNTRA CALCULATOR — full formula with discount
 // ═══════════════════════════════════════════════════════
+// calcMyntraFull now powered by WF engine above ↑
+
+
+// ═══════════════════════════════════════════════════════
+// WIREFRAME FORMULA ENGINE
+// Executes WF rows in order, each row's expr populates its var
+// Complex formulas (TCS, TDS, custom charges) all supported
+// ═══════════════════════════════════════════════════════
+
+// Available functions inside expr strings
+const WF_FUNCTIONS = {
+  getMynFwd, getMynRet, getMyntraComm, autoGST,
+  Math, REVERSE_FEES: ()=>REVERSE_FEES,
+  LOGISTICS_SETTINGS: ()=>LOGISTICS_SETTINGS,
+};
+
+function runWFEngine(marketplace, inputs){
+  const rows = WF[marketplace] || [];
+  // Start context with all inputs + helper functions
+  const ctx = {
+    ...inputs,
+    getMynFwd: (lvl, sp) => getMynFwd(lvl||inputs.level||'Level 2', sp),
+    getMynRet: (lvl) => getMynRet(lvl||inputs.level||'Level 2'),
+    getMyntraComm: (cat, sp) => getMyntraComm(cat||inputs.cat||'Kurta Sets', sp),
+    autoGST: autoGST,
+    REVERSE_FEES, LOGISTICS_SETTINGS, Math,
+    level: inputs.level||'Level 2',
+    cat: inputs.cat||'Kurta Sets',
+  };
+
+  for(const row of rows){
+    if(!row.expr || !row.var) continue;
+    try{
+      // Build function from expression with all context variables
+      const keys = Object.keys(ctx);
+      const vals = Object.values(ctx);
+      const fn = new Function(...keys, `"use strict"; return (${row.expr});`);
+      const result = fn(...vals);
+      ctx[row.var] = typeof result === 'number' ? result : result;
+    } catch(e){
+      ctx[row.var] = null;
+      console.warn(`WF expr error [${row.var}]: ${row.expr}`, e.message);
+    }
+  }
+  return ctx;
+}
+
+// ── Update calcMyntraFull to use WF engine (TCS/TDS auto-included) ──
 function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){
-  const mrp     = Math.round(cost*(1+markup/100));
-  const mrpRnd  = Math.ceil(mrp/50)*50; // round up to nearest 50
-  const custPaid = discPct>0 ? mrpRnd*(1-discPct/100) : mrpRnd;
-  const gtCharge = getMynFwd(level, custPaid);
-  const sellerPrice = custPaid - gtCharge;
-  const gst       = autoGST(custPaid);
-  const rawComm   = getMyntraComm(cat, sellerPrice);
-  const effComm   = Math.max(0, rawComm - (incPct||0));
-  const commAmt   = sellerPrice * effComm / 100;
-  const gstAmt    = commAmt * gst;
-  const ret       = REVERSE_FEES[level] || 218;
-  const coll      = LOGISTICS_SETTINGS.myn_collection_fee;
-  const pg        = LOGISTICS_SETTINGS.myn_pg_fee;
-  const retProv   = (retPct||0)/100 * ret;
-  const payout    = sellerPrice - commAmt - gstAmt - ret - coll - pg - retProv;
-  const profit    = payout - cost;
-  const profitPct = custPaid>0 ? (profit/custPaid*100).toFixed(1) : '0';
-  return {mrp,mrpRnd,custPaid,gtCharge,sellerPrice,gst,rawComm,effComm,commAmt,gstAmt,ret,coll,pg,retProv,payout,profit,profitPct};
+  const result = runWFEngine('myntra', {
+    cost, markup, discount: discPct||0,
+    level: level||'Level 2', cat: cat||'Kurta Sets',
+    incentive: incPct||0, retPct: retPct||0
+  });
+  // Map engine output to expected return shape
+  const mrp      = result.mrp      || Math.round(cost*(1+markup/100));
+  const mrpRnd   = mrp;
+  const custPaid = result.custPaid || mrp;
+  const gtCharge = result.gtCharge || 0;
+  const sellerPrice = result.sellerPrice || custPaid;
+  const gst      = result.gstRate  || autoGST(custPaid);
+  const rawComm  = result.commPct  || 0;
+  const effComm  = result.effCommPct || rawComm;
+  const commAmt  = result.commAmt  || 0;
+  const gstAmt   = result.gstOnComm || 0;
+  const taxableAmt = result.taxableAmt || sellerPrice/(1+gst);
+  const tcs      = result.tcs      || taxableAmt*0.001;
+  const tds      = result.tds      || taxableAmt*0.005;
+  const ret      = result.retFee   || REVERSE_FEES[level]||218;
+  const coll     = result.collFee  || LOGISTICS_SETTINGS.myn_collection_fee||61;
+  const pg       = result.pgFee    || LOGISTICS_SETTINGS.myn_pg_fee||50.22;
+  const retProv  = result.retProv  || 0;
+  const payout   = result.payout   || (sellerPrice-commAmt-gstAmt-ret-coll-pg-retProv-tcs-tds);
+  const profit   = result.profit   || (payout-cost);
+  const profitPct= custPaid>0 ? (profit/custPaid*100).toFixed(1) : '0';
+  return {mrp,mrpRnd,custPaid,gtCharge,sellerPrice,gst,gstRate:gst,rawComm,effComm,effCommPct:effComm,
+          commAmt,gstAmt,gstOnComm:gstAmt,taxableAmt,tcs,tds,ret,retFee:ret,coll,collFee:coll,
+          pg,pgFee:pg,retProv,payout,profit,profitPct};
 }
 
 // ═══════════════════════════════════════════════════════
