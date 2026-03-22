@@ -852,13 +852,17 @@ function getDB(){
   return _db;
 }
 
-const STORAGE_KEY = 'pricedesk_v1';
+const STORAGE_KEY = 'pricedesk_v2'; // bumped to v2 — clears old cached data on all browsers
+// On first load with v2, old v1 data is ignored and fresh defaults load correctly
 
 // ── Save: Supabase first, localStorage as fallback ────
 async function save(){
+  // Include email/supabase config in main payload so it persists everywhere
+  const cfgStored = JSON.parse(localStorage.getItem(CFG_KEY)||'{}');
   const payload = {
     skuDB, brands, users, THRESHOLDS,
-    COMM_MYNTRA, COMM_AJIO_PPMP, COMM_AJIO_CC, COMM_AMAZON
+    COMM_MYNTRA, COMM_AJIO_PPMP, COMM_AJIO_CC, COMM_AMAZON,
+    _cfg: cfgStored
   };
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch(e){}
   const db = getDB();
@@ -907,6 +911,12 @@ function applyData(d){
   if(d.COMM_AMAZON)    COMM_AMAZON    = d.COMM_AMAZON;
   // Merge users: start with saved users, then add any DEFAULT_USERS missing from saved
   if(d.users) users = d.users;
+  // Restore saved email/supabase config
+  if(d._cfg){
+    try{
+      localStorage.setItem(CFG_KEY, JSON.stringify(d._cfg));
+    } catch(e){}
+  }
   DEFAULT_USERS.forEach(def=>{
     const exists = users.find(u=>u.email.toLowerCase()===def.email.toLowerCase());
     if(!exists) users.unshift({...def}); // add missing default users at top
@@ -2123,9 +2133,19 @@ function populateSettingsPage(){
   if(statusBox){
     statusBox.style.display = '';
     if(cfg.publicKey){
-      statusBox.innerHTML = '<div class="success" style="margin:0">✓ EmailJS configured — emails are active</div>';
+      statusBox.innerHTML = '<div class="success" style="margin:0">✓ EmailJS keys loaded — emails are active. Fields are pre-filled above.</div>';
     } else {
-      statusBox.innerHTML = '<div class="warn" style="margin:0">⚠ Not configured yet — paste your keys above and click Save</div>';
+      statusBox.innerHTML = '<div class="warn" style="margin:0">⚠ Not configured yet — paste your EmailJS keys above and click Save & Activate</div>';
+    }
+  }
+  // Show Supabase status
+  const sbBox = el('sb-cfg-status');
+  if(sbBox){
+    sbBox.style.display = '';
+    if(cfg.sbUrl){
+      sbBox.innerHTML = '<div class="success" style="margin:0">✓ Supabase URL loaded — database connected. Your keys are saved.</div>';
+    } else {
+      sbBox.innerHTML = '<div class="info" style="margin:0">Not connected yet — paste your Supabase URL and Anon Key above</div>';
     }
   }
 }
@@ -2153,6 +2173,7 @@ function saveEmailSettings(){
   EMAIL_CONFIG.publicKey       = publicKey;
 
   if(typeof emailjs !== 'undefined') emailjs.init(publicKey);
+  save(); // also push config to Supabase so it never gets lost
 
   const statusBox = el('email-cfg-status');
   if(statusBox){
