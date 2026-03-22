@@ -937,13 +937,20 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         <button onclick="addWFRow('section')" style="padding:5px 11px;border-radius:5px;border:1px dashed var(--bd2);cursor:pointer;font-size:12px;color:var(--tx3);background:transparent">+ Section</button>
       </div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;align-items:center">
-        <span style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Quick add:</span>
-        <button onclick="addWFPreset('tcs')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ TCS</button>
-        <button onclick="addWFPreset('tds')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ TDS</button>
-        <button onclick="addWFPreset('taxbase')" style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ Taxable Amt</button>
-        <button onclick="addWFPreset('pkg')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ Packaging Cost</button>
-        <button onclick="addWFPreset('ads')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ Ad Spend</button>
-        <button onclick="addWFPreset('custom')"  style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">+ Custom Charge</button>
+        <span style="font-size:10px;color:var(--bl);text-transform:uppercase;letter-spacing:1px;margin-right:2px">🔗 Fetch from tables:</span>
+        <button onclick="addWFPreset('gt_fwd')"   style="padding:4px 10px;border-radius:5px;border:1px dashed rgba(78,142,247,.5);cursor:pointer;font-size:11px;color:var(--bl);background:rgba(78,142,247,.06)">GT Forward Charges</button>
+        <button onclick="addWFPreset('rev_fee')"  style="padding:4px 10px;border-radius:5px;border:1px dashed rgba(78,142,247,.5);cursor:pointer;font-size:11px;color:var(--bl);background:rgba(78,142,247,.06)">Reverse Charges</button>
+        <button onclick="addWFPreset('comm')"     style="padding:4px 10px;border-radius:5px;border:1px dashed rgba(78,142,247,.5);cursor:pointer;font-size:11px;color:var(--bl);background:rgba(78,142,247,.06)">Commission %</button>
+        <button onclick="addWFPreset('coll_fee')" style="padding:4px 10px;border-radius:5px;border:1px dashed rgba(78,142,247,.5);cursor:pointer;font-size:11px;color:var(--bl);background:rgba(78,142,247,.06)">Collection Fee</button>
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;align-items:center">
+        <span style="font-size:10px;color:var(--ac);text-transform:uppercase;letter-spacing:1px;margin-right:2px">+ Add row:</span>
+        <button onclick="addWFPreset('tcs')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">TCS (0.1%)</button>
+        <button onclick="addWFPreset('tds')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">TDS (0.5%)</button>
+        <button onclick="addWFPreset('taxbase')" style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">Taxable Amt</button>
+        <button onclick="addWFPreset('pkg')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">Packaging Cost</button>
+        <button onclick="addWFPreset('ads')"     style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">Ad Spend</button>
+        <button onclick="addWFPreset('custom')"  style="padding:4px 10px;border-radius:5px;border:1px dashed var(--ac);cursor:pointer;font-size:11px;color:var(--ac);background:transparent">Custom Charge</button>
       </div>
       <div style="background:rgba(78,142,247,.07);border:1px solid rgba(78,142,247,.2);border-radius:6px;padding:10px 14px;margin-top:10px;font-size:11px">
         <strong style="color:var(--tx)">Variables available in expressions:</strong><br>
@@ -963,9 +970,58 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <div class="wfrow mb8"><span style="color:var(--pu);font-weight:600">INPUT</span><span style="color:var(--tx3);margin-left:8px">→ User enters a number (cost, markup, discount)</span></div>
       <div class="wfrow wff mb8"><span style="color:var(--bl);font-weight:600">FORMULA</span><span style="color:var(--tx3);margin-left:8px">→ Math expression you define (click ✎ Edit Formula)</span></div>
       <div class="wfrow wfo mb8"><span style="color:var(--gr);font-weight:600">OUTPUT</span><span style="color:var(--tx3);margin-left:8px">→ Final result shown vs threshold</span></div>
-      <div class="wfrow mb8" style="border-left:2px solid rgba(78,142,247,.4)"><span style="color:var(--bl);font-weight:600">LOOKUP</span><span style="color:var(--tx3);margin-left:8px">→ Auto-fetched from tables (GT charges, commission, logistics). Cannot be edited.</span></div>
-      <div class="wfrow" style="opacity:.7"><span style="font-size:13px">🔒</span><span style="color:var(--tx3);margin-left:8px">→ Protected row — cannot be deleted. Drag handle is disabled.</span></div>
+      <div class="wfrow mb8" style="border-left:2px solid rgba(78,142,247,.4)">
+        <span style="color:var(--bl);font-weight:600">LOOKUP</span>
+        <span style="color:var(--tx3);margin-left:8px;flex:1">→ Auto-fetched from live tables — GT charges, commission %, reverse fees, collection fee</span>
+      </div>
+      <div style="background:rgba(78,142,247,.06);border:1px solid rgba(78,142,247,.2);border-radius:6px;padding:10px 12px;margin-top:8px;font-size:11px">
+        <div style="color:var(--bl);font-weight:600;margin-bottom:6px">How LOOKUP works:</div>
+        <div style="color:var(--tx3);line-height:1.8">
+          🔗 <strong style="color:var(--tx2)">GT Forward Charges</strong> — reads from Logistics → GT Charges table using Customer Paid price band<br>
+          🔗 <strong style="color:var(--tx2)">Reverse Charges</strong> — reads from Logistics → Reverse Fees table using SKU level<br>
+          🔗 <strong style="color:var(--tx2)">Commission %</strong> — reads from Commission Settings using category × seller price slab<br>
+          🔗 <strong style="color:var(--tx2)">Collection Fee</strong> — reads from Logistics settings (fixed ₹61 by default)<br>
+          <span style="color:var(--ac)">If Myntra changes a rate — update it in Logistics or Commission Settings. The wireframe fetches automatically.</span>
+        </div>
+      </div>
+      <div class="wfrow mt8" style="opacity:.7"><span style="font-size:13px">🔒</span><span style="color:var(--tx3);margin-left:8px">→ Protected row — cannot be deleted</span></div>
     </div></div>
+
+    <!-- BUG DETECTOR -->
+    <div class="card" style="margin-top:16px">
+      <div class="ch">
+        <div>
+          <div style="font-size:13px;font-weight:600">🔍 Agentic Bug Detector</div>
+          <div class="st" style="margin-top:2px">Runs every formula, checks for errors, validates results</div>
+        </div>
+        <button class="btn bp bsm" onclick="runBugDetector()">▶ Run Check</button>
+      </div>
+      <div class="cb">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <div class="fg" style="flex:1;margin-bottom:0;min-width:80px">
+            <label class="fl">Test Cost (₹)</label>
+            <input class="fi" id="bd-cost" type="number" value="1000">
+          </div>
+          <div class="fg" style="flex:1;margin-bottom:0;min-width:70px">
+            <label class="fl">Margin %</label>
+            <input class="fi" id="bd-margin" type="number" value="30">
+          </div>
+          <div class="fg" style="flex:1;margin-bottom:0;min-width:70px">
+            <label class="fl">Discount %</label>
+            <input class="fi" id="bd-discount" type="number" value="55">
+          </div>
+          <div class="fg" style="flex:1;margin-bottom:0;min-width:80px">
+            <label class="fl">Level</label>
+            <select class="fi" id="bd-level">
+              <option>Level 1</option><option selected>Level 2</option>
+              <option>Level 3</option><option>Level 4</option>
+            </select>
+          </div>
+        </div>
+        <div id="bug-detector-results"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -2199,6 +2255,160 @@ const WF={myntra:[
 ],'ajio-ppmp':[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'PPMP Commission'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Comm% (from PPMP settings)'},{id:9,t:'formula',l:'Commission + GST + Logistics'},{id:10,t:'section',l:'Result'},{id:11,t:'output',l:'Net Profit ₹ & %'}],'ajio-cc':[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'CC Model — Commission Only'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Comm% (from CC settings)'},{id:9,t:'formula',l:'Payout = SP − Commission − GST'},{id:10,t:'section',l:'No logistics / No other charges'},{id:11,t:'output',l:'Net Profit ₹ & %'}],amazon:[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'Amazon Fees'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Referral % (fixed per category)'},{id:9,t:'formula',l:'Referral + FBA + Closing + GST on Fees'},{id:10,t:'input',l:'Ad Spend (₹)'},{id:11,t:'formula',l:'Return Provision'},{id:12,t:'output',l:'Net Profit ₹ & %'}]};
 let wfN=200;
 
+// ═══════════════════════════════════════════════════════
+// WIREFRAME BUILDER FUNCTIONS
+// ═══════════════════════════════════════════════════════
+
+function renderWFPreviews(){
+  Object.entries(WF).forEach(([mp,rows])=>{
+    const e=el('wfp-'+mp);if(!e)return;
+    e.innerHTML=rows.map(r=>{
+      const cls=r.t==='formula'?'wff':r.t==='output'?'wfo':r.t==='section'?'wfs':'';
+      const badgeCls=r.t==='lookup'?'bl':r.t==='formula'?'bf':r.t==='output'?'bo':r.t==='section'?'bs':'bi';
+      return `<div class="wfrow ${cls}" style="margin-bottom:5px">
+        <span style="font-size:12px;color:var(--tx2);flex:1">${r.l}</span>
+        <span class="bdg ${badgeCls}">${r.t==='lookup'?'LOOKUP':r.t.toUpperCase()}</span>
+      </div>`;
+    }).join('');
+  });
+}
+
+let _wfDragSrc = null;
+
+function renderWFBuilder(){
+  const m = el('wf-sel').value;
+  const list = el('wf-builder-list');
+  if(!list) return;
+  const preview = runWFEngine(m, {
+    cost:1000, markup:78, margin:30, discount:55, level:'Level 2',
+    cat:'Kurta Sets', incentive:0, retPct:8
+  });
+  list.innerHTML = WF[m].map((r,idx) => {
+    const cls = r.t==='formula'?'wff':r.t==='output'?'wfo':r.t==='section'?'wfs':'';
+    const isLocked  = !!r.locked;
+    const isLookup  = r.t === 'lookup';
+    const badgeCls  = isLookup?'bl':r.t==='formula'?'bf':r.t==='output'?'bo':r.t==='section'?'bs':'bi';
+    const previewVal = r.var && preview[r.var] !== undefined
+      ? `<span style="font-size:10px;color:var(--gr);font-family:var(--mono);margin-right:6px;flex-shrink:0">${
+          typeof preview[r.var]==='number'?(preview[r.var]%1===0?'₹'+preview[r.var]:'₹'+preview[r.var].toFixed(2)):preview[r.var]
+        }</span>` : '';
+    const delBtn = isLocked
+      ? `<span title="${r.desc||'Protected row'}" style="font-size:13px;opacity:.5;flex-shrink:0;cursor:default">🔒</span>`
+      : `<span style="color:var(--tx3);cursor:pointer;font-size:14px;margin-left:4px;opacity:.4;flex-shrink:0"
+           onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4"
+           onclick="WF['${m}'].splice(${idx},1);renderWFBuilder();save('wireframe')">✕</span>`;
+    let actionRow = '';
+    if(isLookup){
+      actionRow = `<div style="margin-top:4px;margin-left:22px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;background:rgba(78,142,247,.12);border:1px solid rgba(78,142,247,.3);border-radius:4px;padding:2px 8px;color:var(--bl)">🔗 Auto-lookup</span>
+        <span style="font-size:10px;color:var(--tx3)">${r.desc||''}</span>
+      </div>`;
+    } else if(r.t==='formula'||r.t==='output'){
+      actionRow = `<div style="margin-top:5px;margin-left:22px;display:flex;align-items:center;gap:10px">
+        ${!isLocked
+          ? `<button style="padding:3px 12px;border-radius:5px;border:1px solid var(--ac);background:rgba(245,166,35,.1);color:var(--ac);font-size:11px;cursor:pointer;font-weight:600"
+               onclick="event.stopPropagation();openFB('${m}',${idx})">✎ Edit Formula</button>`
+          : `<span style="font-size:10px;color:var(--tx3);opacity:.6">🔒 Protected</span>`}
+        <span style="font-size:10px;font-family:var(--mono);color:var(--tx3);opacity:.7">${(r.expr||'').substring(0,60)}${(r.expr||'').length>60?'…':''}</span>
+      </div>`;
+    }
+    return `<div class="wfrow ${cls}${isLocked?'':''}" style="margin-bottom:6px;flex-wrap:wrap${isLocked?';border-left:2px solid rgba(78,142,247,.35)':''}"
+      draggable="${!isLocked}"
+      ondragstart="${isLocked?'':('wfDragStart(event,'+idx+')')}"
+      ondragover="${isLocked?'':'wfDragOver(event)'}"
+      ondragleave="${isLocked?'':'wfDragLeave(event)'}"
+      ondrop="${isLocked?'':`wfDrop(event,'${m}',${idx})`}"
+      ondragend="${isLocked?'':'wfDragEnd(event)'}">
+      <div style="display:flex;align-items:center;width:100%;gap:6px">
+        <span style="color:${isLocked?'var(--tx3)':'var(--ac)'};cursor:${isLocked?'default':'grab'};font-size:16px;user-select:none;flex-shrink:0;opacity:${isLocked?'.3':'1'}">⠿</span>
+        <input style="flex:1;background:transparent;border:none;color:${isLocked?'var(--tx2)':'var(--tx)'};font-size:12px;font-family:var(--sans);outline:none"
+          value="${r.l.replace(/"/g,'&quot;')}"
+          onchange="WF['${m}'][${idx}].l=this.value;save('wireframe')"
+          onclick="event.stopPropagation()" ${isLocked?'readonly':''}>
+        ${r.var ? `<span style="font-size:9px;color:var(--tx3);font-family:var(--mono);flex-shrink:0">[${r.var}]</span>` : ''}
+        ${previewVal}
+        <span class="bdg ${badgeCls}" style="flex-shrink:0">${isLookup?'LOOKUP':r.t.toUpperCase()}</span>
+        ${delBtn}
+      </div>
+      ${actionRow}
+    </div>`;
+  }).join('');
+}
+
+function wfDragStart(e,idx){
+  _wfDragSrc=idx;
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',idx);
+  e.currentTarget.style.opacity='0.4';
+}
+function wfDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  e.currentTarget.style.background='rgba(245,166,35,0.12)';
+  e.currentTarget.style.borderColor='var(--ac)';
+}
+function wfDragLeave(e){
+  e.currentTarget.style.background='';
+  e.currentTarget.style.borderColor='';
+}
+function wfDrop(e,mp,targetIdx){
+  e.preventDefault();
+  e.currentTarget.style.background='';
+  e.currentTarget.style.borderColor='';
+  if(_wfDragSrc===null||_wfDragSrc===targetIdx) return;
+  const rows=WF[mp];
+  const [moved]=rows.splice(_wfDragSrc,1);
+  rows.splice(targetIdx,0,moved);
+  _wfDragSrc=null;
+  renderWFBuilder();
+  save('wireframe');
+  toast('✓ Row reordered','green');
+}
+function wfDragEnd(e){
+  e.currentTarget.style.opacity='';
+  _wfDragSrc=null;
+}
+
+function addWFRow(type){
+  const m=el('wf-sel').value;
+  const defs={
+    input:   {l:'New Input',    var:'myInput'},
+    formula: {l:'New Formula',  var:'myFormula', expr:'0'},
+    output:  {l:'Net Profit',   var:'profit',    expr:'payout - cost'},
+    section: {l:'— Section —'},
+    lookup:  {l:'New Lookup',   var:'myLookup',  fn:'gtCharge', locked:false}
+  };
+  WF[m].push({id:++wfN, t:type, ...defs[type]});
+  renderWFBuilder();
+  save('wireframe');
+}
+
+function addWFPreset(preset){
+  const m = el('wf-sel').value;
+  const presets = {
+    // Tax presets
+    tcs:     {t:'formula', l:'TCS = Taxable Amount × 0.1%',             var:'tcs',          expr:'taxableAmt * 0.001'},
+    tds:     {t:'formula', l:'TDS = Taxable Amount × 0.5%',             var:'tds',          expr:'taxableAmt * 0.005'},
+    taxbase: {t:'formula', l:'Taxable Amount = SP ÷ (1+GST)',           var:'taxableAmt',   expr:'sellerPrice/(1+gstRate)'},
+    // Lookup presets — fetch from live tables
+    gt_fwd:  {t:'lookup',  l:'GT Forward Charges — auto from price band table', var:'gtCharge',  fn:'gtCharge',  locked:true, desc:'Fetched from Logistics → GT Charges table based on Customer Paid price band'},
+    rev_fee: {t:'lookup',  l:'Reverse Shipping — auto from level table',         var:'retFee',    fn:'retFee',    locked:true, desc:'Fetched from Logistics → Reverse Fees table based on level'},
+    comm:    {t:'lookup',  l:'Commission % — auto from category slab',           var:'commPct',   fn:'commPct',   locked:true, desc:'Fetched from Commission Settings based on category × price slab'},
+    coll_fee:{t:'lookup',  l:'Collection Fee — auto from Logistics settings',    var:'collFee',   fn:'collFee',   locked:true, desc:'Fixed fee set in Logistics page'},
+    // Other
+    pkg:     {t:'input',   l:'Packaging Cost (₹)',    var:'packagingCost'},
+    ads:     {t:'input',   l:'Ad Spend (₹)',           var:'adSpend'},
+    custom:  {t:'formula', l:'Custom Charge',          var:'customCharge', expr:'0'},
+  };
+  const row = presets[preset];
+  if(!row){ toast('Unknown preset','red'); return; }
+  const exists = WF[m].find(r=>r.var===row.var);
+  if(exists){ toast(`${row.l} already in list — drag to reorder if needed`,'red'); return; }
+  WF[m].push({id:++wfN, ...row});
+  renderWFBuilder();
+  save('wireframe');
+  toast('✓ '+row.l+' added','green');
+}
 
 // ═══════════════════════════════════════════════════════
 // NAV & TABS
@@ -3641,6 +3851,189 @@ function saveFB(){
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){ closeFB(); closeZoom(); closeModal(); }
 });
+
+
+// ═══════════════════════════════════════════════════════
+// AGENTIC BUG DETECTOR
+// Runs every formula row, checks for errors & bad values
+// ═══════════════════════════════════════════════════════
+function runBugDetector(){
+  const m     = el('wf-sel')?.value || 'myntra';
+  const cost  = +(el('bd-cost')?.value    || 1000);
+  const margin= +(el('bd-margin')?.value  || 30);
+  const disc  = +(el('bd-discount')?.value|| 55);
+  const level = el('bd-level')?.value || 'Level 2';
+  const resultsEl = el('bug-detector-results');
+  if(!resultsEl) return;
+
+  resultsEl.innerHTML = '<div style="color:var(--tx3);font-size:12px">Running checks…</div>';
+
+  // Small delay so UI updates before heavy computation
+  setTimeout(()=>{
+    const issues   = [];
+    const warnings = [];
+    const passed   = [];
+
+    // ── STEP 1: Run engine with test inputs ──────────────
+    const inputs = { cost, margin, markup:margin, discount:disc, level,
+                     cat:'Kurta Sets', incentive:0, retPct:8 };
+    let ctx = {};
+    try{
+      ctx = runWFEngine(m, inputs);
+    } catch(e){
+      issues.push({row:'Engine', msg:'Fatal error running formula engine: '+e.message});
+    }
+
+    // ── STEP 2: Check every row ───────────────────────────
+    const rows = WF[m] || [];
+    rows.forEach(row => {
+      if(!row.var || row.t==='section' || row.t==='input') return;
+      const val = ctx[row.var];
+
+      // Check 1: undefined / null (formula didn't produce a value)
+      if(val === undefined || val === null){
+        issues.push({row:row.l, var:row.var,
+          msg: row.t==='lookup'
+            ? `LOOKUP "${row.fn}" returned null — check WF_LOOKUPS or required upstream variable`
+            : `Formula returned null — expression may reference an undefined variable`
+        });
+        return;
+      }
+
+      // Check 2: NaN
+      if(typeof val === 'number' && isNaN(val)){
+        issues.push({row:row.l, var:row.var,
+          msg:'Result is NaN — likely a missing variable or division by zero in: '+(row.expr||row.fn||'')
+        });
+        return;
+      }
+
+      // Check 3: Infinity
+      if(typeof val === 'number' && !isFinite(val)){
+        issues.push({row:row.l, var:row.var,
+          msg:'Result is Infinity — likely division by zero'
+        });
+        return;
+      }
+
+      // Check 4: Sanity ranges
+      const v = typeof val === 'number' ? val : 0;
+      if(row.var==='mrp' && (v<=0 || v>500000)){
+        warnings.push({row:row.l, var:row.var, val:v, msg:'MRP is outside expected range (₹0–₹5,00,000)'});
+      }
+      if(row.var==='custPaid' && v>ctx.mrp){
+        warnings.push({row:row.l, var:row.var, val:v, msg:'Customer Paid (₹'+v.toFixed(0)+') is greater than MRP (₹'+(ctx.mrp||0).toFixed(0)+') — discount may be negative'});
+      }
+      if(row.var==='sellerPrice' && v<=0){
+        warnings.push({row:row.l, var:row.var, val:v, msg:'Seller Price is ₹'+v.toFixed(0)+' — GT Charges may exceed Customer Paid'});
+      }
+      if(row.var==='gstRate' && (v!==0.05 && v!==0.18)){
+        warnings.push({row:row.l, var:row.var, val:v, msg:'GST Rate is '+v+' — expected 0.05 or 0.18'});
+      }
+      if(row.var==='commPct' && (v<0 || v>50)){
+        warnings.push({row:row.l, var:row.var, val:v, msg:'Commission % is '+v+'% — outside typical 0–50% range'});
+      }
+      if(row.var==='taxableAmt' && ctx.sellerPrice && v > ctx.sellerPrice){
+        warnings.push({row:row.l, var:row.var, val:v, msg:'Taxable Amount exceeds Seller Price — formula may be wrong'});
+      }
+      if((row.var==='tcs'||row.var==='tds') && v<0){
+        warnings.push({row:row.l, var:row.var, val:v, msg:'Deduction is negative (₹'+v.toFixed(2)+')'});
+      }
+      if(row.t==='output' && v<-cost){
+        warnings.push({row:row.l, var:row.var, val:v, msg:'Profit (₹'+v.toFixed(0)+') is a very large loss — check formula chain'});
+      }
+
+      passed.push({row:row.l, var:row.var, val});
+    });
+
+    // ── STEP 3: Cross-check order dependencies ────────────
+    // Check that every variable referenced in an expr exists upstream
+    rows.forEach((row, idx) => {
+      if(!row.expr) return;
+      const varsBefore = new Set(rows.slice(0,idx).map(r=>r.var).filter(Boolean));
+      // Add input keys
+      Object.keys(inputs).forEach(k => varsBefore.add(k));
+      // Extract variable names from expr
+      const refs = (row.expr.match(/[a-z][a-zA-Z0-9_]*/g)||[])
+        .filter(v => !['Math','true','false','null','undefined','return','if','else'].includes(v))
+        .filter(v => isNaN(v));
+      refs.forEach(ref => {
+        if(!varsBefore.has(ref) && !['getMynFwd','getMyntraComm','getMynRet','autoGST','REVERSE_FEES','LOGISTICS_SETTINGS'].includes(ref)){
+          const alreadyFlagged = issues.some(i=>i.var===row.var);
+          if(!alreadyFlagged){
+            warnings.push({row:row.l, var:row.var,
+              msg:`References "${ref}" but this variable is not defined in any row above it`
+            });
+          }
+        }
+      });
+    });
+
+    // ── STEP 4: Render results ────────────────────────────
+    const totalChecks = passed.length + issues.length + warnings.length;
+    let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:8px 14px;flex:1;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--re)">${issues.length}</div>
+        <div style="font-size:11px;color:var(--tx3)">Errors</div>
+      </div>
+      <div style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);border-radius:6px;padding:8px 14px;flex:1;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--ac)">${warnings.length}</div>
+        <div style="font-size:11px;color:var(--tx3)">Warnings</div>
+      </div>
+      <div style="background:rgba(45,212,160,.08);border:1px solid rgba(45,212,160,.2);border-radius:6px;padding:8px 14px;flex:1;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--gr)">${passed.length}</div>
+        <div style="font-size:11px;color:var(--tx3)">Passed</div>
+      </div>
+    </div>`;
+
+    if(issues.length===0 && warnings.length===0){
+      html += `<div style="background:rgba(45,212,160,.08);border:1px solid rgba(45,212,160,.2);border-radius:8px;padding:14px;text-align:center">
+        <div style="font-size:18px;margin-bottom:4px">✅</div>
+        <div style="font-weight:600;color:var(--gr)">All ${totalChecks} checks passed</div>
+        <div style="font-size:12px;color:var(--tx3);margin-top:4px">No errors or warnings found in the ${m} wireframe</div>
+      </div>`;
+    }
+
+    if(issues.length>0){
+      html += `<div style="font-size:11px;color:var(--re);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:600">❌ Errors — must fix</div>`;
+      issues.forEach(i=>{
+        html += `<div style="background:rgba(245,87,92,.08);border:1px solid rgba(245,87,92,.25);border-radius:6px;padding:10px 12px;margin-bottom:8px">
+          <div style="font-size:12px;font-weight:600;color:var(--re)">${i.row||''}${i.var?` <span style="font-family:monospace;opacity:.7">[${i.var}]</span>`:''}</div>
+          <div style="font-size:11px;color:var(--tx2);margin-top:3px">${i.msg}</div>
+        </div>`;
+      });
+    }
+
+    if(warnings.length>0){
+      html += `<div style="font-size:11px;color:var(--ac);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;margin-top:${issues.length?'12px':'0'};font-weight:600">⚠ Warnings — review</div>`;
+      warnings.forEach(w=>{
+        const valStr = w.val!==undefined ? ` → result was ${typeof w.val==='number'?'₹'+w.val.toFixed(2):w.val}` : '';
+        html += `<div style="background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:6px;padding:10px 12px;margin-bottom:8px">
+          <div style="font-size:12px;font-weight:600;color:var(--ac)">${w.row||''}${w.var?` <span style="font-family:monospace;opacity:.7">[${w.var}]</span>`:''}</div>
+          <div style="font-size:11px;color:var(--tx2);margin-top:3px">${w.msg}${valStr}</div>
+        </div>`;
+      });
+    }
+
+    if(passed.length>0 && (issues.length>0||warnings.length>0)){
+      html += `<details style="margin-top:10px">
+        <summary style="font-size:11px;color:var(--tx3);cursor:pointer;user-select:none">✅ ${passed.length} rows passed — click to expand</summary>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+          ${passed.map(p=>{
+            const disp = typeof p.val==='number'?(p.val%1===0?'₹'+p.val.toLocaleString('en-IN'):'₹'+p.val.toFixed(2)):String(p.val);
+            return `<div style="display:flex;gap:8px;font-size:11px;padding:4px 0;border-bottom:1px solid var(--bd)">
+              <span style="flex:1;color:var(--tx2)">${p.row}</span>
+              <span style="font-family:monospace;color:var(--tx3)">[${p.var}]</span>
+              <span style="font-family:monospace;color:var(--gr);min-width:80px;text-align:right">${disp}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </details>`;
+    }
+
+    resultsEl.innerHTML = html;
+  }, 50);
+}
 
 // ═══════════════════════════════════════════════════════
 // INIT
