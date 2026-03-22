@@ -795,8 +795,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
           <button class="btn bp bsm" onclick="saveSupabaseSettings()">✓ Save & Connect</button>
         </div>
         <div class="cb">
-          <div class="fg"><label class="fl">Supabase Project URL</label><input class="fi" id="cfg-sb-url" placeholder="https://xxxx.supabase.co" spellcheck="false"></div>
-          <div class="fg" style="margin-bottom:0"><label class="fl">Supabase Anon Key</label><input class="fi" id="cfg-sb-key" placeholder="eyJhbGci..." type="password" spellcheck="false"><div class="st" style="margin-top:4px">Supabase → Settings → API</div></div>
+          <div class="success" style="margin-bottom:0">
+            ✓ <strong style="color:var(--tx)">Supabase is hardcoded and always connected.</strong><br>
+            Your database: <span style="font-family:monospace;color:var(--ac)">fcmesdnagvrdmjzzuwue.supabase.co</span><br>
+            All data saves automatically. Clearing cache will never affect your data.
+          </div>
           <div id="sb-cfg-status" style="margin-top:14px;display:none"></div>
         </div>
       </div>
@@ -840,12 +843,13 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 // ═══════════════════════════════════════════════════════
 // SUPABASE CONFIG — paste your keys here after setup
 // ═══════════════════════════════════════════════════════
-const SUPABASE_URL  = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL  = 'https://fcmesdnagvrdmjzzuwue.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbWVzZG5hZ3ZyZG1qenp1d3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxNjM4NTgsImV4cCI6MjA4OTczOTg1OH0.fS1ecV898Dmrka6hr3R0RE6gcKlneWUPbDyDPv30_qU';
 
 let _db = null;
 function getDB(){
-  if(!_db && SUPABASE_URL !== 'YOUR_SUPABASE_URL'){
+  // Keys are hardcoded — always connects regardless of cache or localStorage
+  if(!_db){
     try{ _db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
     catch(e){ console.warn('Supabase init failed:', e); }
   }
@@ -2543,8 +2547,10 @@ function exportSKUsToExcel(){
 // INIT
 // ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',async ()=>{
-  // Load saved data first
-  loadConfig(); // load email/supabase config from localStorage
+  // Init Supabase immediately — keys are hardcoded, always available
+  try{ _db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
+  catch(e){ console.warn('Supabase init failed:', e); }
+  loadConfig();
   await loadFromStorage();
   populateFilters();
   renderBrandSummary();
