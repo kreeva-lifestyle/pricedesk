@@ -1191,6 +1191,7 @@ const DB_KEYS = {
   email_cfg:      'pd_email_config',
   alert:          'pd_alert_settings',
   sessions:       'pd_sessions',
+  reset_tokens:   'pd_reset_tokens',
 };
 
 // ── Save a single key to DB ────────────────────────────
@@ -2912,7 +2913,7 @@ async function testEmail(type){
     });
   } else if(type==='reset'){
     result = await sendEmail(EMAIL_CONFIG.templateReset,{
-      ...base, temp_password:'PD-TESTXYZ'
+      ...base, reset_link: window.location.origin+window.location.pathname+'?reset=TEST_TOKEN_DEMO'
     });
   } else if(type==='alert'){
     result = await sendEmail(EMAIL_CONFIG.templateAlert,{
@@ -3052,25 +3053,28 @@ function showLoginErr(msg){
 }
 
 function openForgotPassword(){
-  // Show forgot password modal over login screen
   const overlay = document.createElement('div');
   overlay.id = 'forgot-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
   overlay.innerHTML = `
     <div style="background:var(--s);border:1px solid var(--bd2);border-radius:12px;width:360px;padding:28px">
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Reset Password</div>
-      <div style="font-size:13px;color:var(--tx3);margin-bottom:20px">Enter your email address. If an account exists, a temporary password will be generated.</div>
+      <div style="font-size:13px;color:var(--tx3);margin-bottom:20px">Enter your email address. We'll send you a password reset link.</div>
       <div id="forgot-err" style="background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--re);margin-bottom:14px;display:none"></div>
       <div id="forgot-ok" style="background:rgba(45,212,160,.08);border:1px solid rgba(45,212,160,.2);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--gr);margin-bottom:14px;display:none"></div>
       <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px">Email Address</label>
       <input id="forgot-email" class="fi" type="email" placeholder="your@email.com" style="margin-bottom:16px" onkeydown="if(event.key==='Enter')doForgotPassword()">
       <div style="display:flex;gap:10px">
         <button class="btn bg" style="flex:1" onclick="document.getElementById('forgot-overlay').remove()">Cancel</button>
-        <button class="btn bp" style="flex:1" onclick="doForgotPassword()">Send Reset</button>
+        <button class="btn bp" style="flex:1" onclick="doForgotPassword()">Send Reset Link</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
   setTimeout(()=>document.getElementById('forgot-email')?.focus(), 100);
+}
+
+function generateResetToken(){
+  return crypto.getRandomValues(new Uint8Array(16)).reduce((s,b)=>s+b.toString(16).padStart(2,'0'),'');
 }
 
 async function doForgotPassword(){
@@ -3081,29 +3085,101 @@ async function doForgotPassword(){
     if(errEl){errEl.textContent='Enter a valid email address.';errEl.style.display='block';}
     return;
   }
+  // Always show generic success to avoid email enumeration
+  const genericMsg = 'If an account exists with that email, a password reset link has been sent.';
   const user = users.find(u=>u.email.toLowerCase()===email);
   if(!user){
-    // Don't reveal if email exists — show generic success message
-    if(okEl){okEl.textContent='If an account exists with that email, a reset link has been sent.';okEl.style.display='block';}
+    if(okEl){okEl.textContent=genericMsg;okEl.style.display='block';}
     if(errEl) errEl.style.display='none';
     return;
   }
-  // Generate temp password using crypto-safe random
-  const tempPass = 'PD-'+crypto.getRandomValues(new Uint8Array(4)).reduce((s,b)=>s+b.toString(36),'').toUpperCase().slice(0,8);
-  user.passwordHash = await secureHash(tempPass);
-  await save('users');
-  // Try to send email
+  // Generate reset token and store in Supabase (expires in 30 min)
+  const token = generateResetToken();
+  const tokens = await dbGet(DB_KEYS.reset_tokens) || {};
+  tokens[token] = { userId: user.id, email: user.email, expires: Date.now() + 30*60*1000 };
+  await dbSet(DB_KEYS.reset_tokens, tokens);
+  // Build reset link
+  const baseUrl = window.location.origin + window.location.pathname;
+  const resetLink = baseUrl + '?reset=' + token;
+  // Send email with link
   if(emailReady()){
     sendEmail(EMAIL_CONFIG.templateReset,{
       to_name: user.name, to_email: user.email,
-      temp_password: tempPass, login_url: window.location.href
+      reset_link: resetLink, login_url: baseUrl
     });
-    if(okEl){okEl.textContent='✓ Reset email sent. Check your inbox.';okEl.style.display='block';}
+    if(okEl){okEl.textContent='✓ Reset link sent to your email. Check your inbox.';okEl.style.display='block';}
   } else {
-    if(okEl){okEl.innerHTML=`✓ Temporary password: <strong style="font-family:monospace;color:var(--ac);letter-spacing:1px">${esc(tempPass)}</strong><br><span style="font-size:11px;color:var(--tx3)">Email not configured — copy this password manually.</span>`;okEl.style.display='block';}
+    if(okEl){okEl.innerHTML=`✓ Reset link:<br><a href="${esc(resetLink)}" style="color:var(--ac);word-break:break-all;font-size:11px">${esc(resetLink)}</a><br><span style="font-size:11px;color:var(--tx3)">Email not configured — copy this link manually.</span>`;okEl.style.display='block';}
   }
   if(errEl) errEl.style.display='none';
   if(emailReady()) setTimeout(()=>document.getElementById('forgot-overlay')?.remove(), 8000);
+}
+
+// ── Password Reset Page (shown when ?reset=TOKEN is in URL) ──
+function showResetPasswordPage(token){
+  document.getElementById('login-screen').style.display='none';
+  const overlay = document.createElement('div');
+  overlay.id = 'reset-page';
+  overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:10001;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:var(--s);border:1px solid var(--bd2);border-radius:12px;width:380px;padding:32px;box-shadow:0 8px 40px rgba(0,0,0,.5)">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:36px;margin-bottom:8px">🔐</div>
+        <div style="font-size:18px;font-weight:700;color:var(--tx)">Set New Password</div>
+        <div style="font-size:13px;color:var(--tx3);margin-top:4px">Enter your new password below</div>
+      </div>
+      <div id="reset-err" style="background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--re);margin-bottom:14px;display:none"></div>
+      <div id="reset-ok" style="background:rgba(45,212,160,.08);border:1px solid rgba(45,212,160,.2);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--gr);margin-bottom:14px;display:none"></div>
+      <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px">New Password</label>
+      <input id="reset-pass1" class="fi" type="password" placeholder="Enter new password" style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px">Confirm Password</label>
+      <input id="reset-pass2" class="fi" type="password" placeholder="Confirm new password" style="margin-bottom:18px" onkeydown="if(event.key==='Enter')doResetPassword('${token}')">
+      <button class="btn bp" style="width:100%;padding:10px 0;font-size:14px" onclick="doResetPassword('${token}')">Update Password</button>
+      <div style="text-align:center;margin-top:14px">
+        <a href="${window.location.origin+window.location.pathname}" style="color:var(--tx3);font-size:12px;text-decoration:none">← Back to Sign In</a>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(()=>document.getElementById('reset-pass1')?.focus(), 100);
+}
+
+async function doResetPassword(token){
+  const pass1 = document.getElementById('reset-pass1')?.value;
+  const pass2 = document.getElementById('reset-pass2')?.value;
+  const errEl = document.getElementById('reset-err');
+  const okEl  = document.getElementById('reset-ok');
+  if(!pass1 || pass1.length < 6){
+    if(errEl){errEl.textContent='Password must be at least 6 characters.';errEl.style.display='block';}
+    return;
+  }
+  if(pass1 !== pass2){
+    if(errEl){errEl.textContent='Passwords do not match.';errEl.style.display='block';}
+    return;
+  }
+  // Validate token from Supabase
+  const tokens = await dbGet(DB_KEYS.reset_tokens) || {};
+  const entry = tokens[token];
+  if(!entry || Date.now() > entry.expires){
+    if(errEl){errEl.textContent='This reset link has expired or is invalid. Please request a new one.';errEl.style.display='block';}
+    return;
+  }
+  // Find user and update password
+  const user = users.find(u=>u.id===entry.userId);
+  if(!user){
+    if(errEl){errEl.textContent='User account not found. Contact your admin.';errEl.style.display='block';}
+    return;
+  }
+  user.passwordHash = await secureHash(pass1);
+  await save('users');
+  // Remove used token
+  delete tokens[token];
+  await dbSet(DB_KEYS.reset_tokens, tokens);
+  if(errEl) errEl.style.display='none';
+  if(okEl){okEl.textContent='✓ Password updated successfully! Redirecting to sign in…';okEl.style.display='block';}
+  // Redirect to login after 2 seconds
+  setTimeout(()=>{
+    window.location.href = window.location.origin + window.location.pathname;
+  }, 2000);
 }
 
 async function doLogout(){
@@ -3262,13 +3338,20 @@ function sendWelcomeEmail(user){
   });
 }
 
-function sendPasswordResetEmail(user, tempPass){
+async function sendPasswordResetEmail(user){
+  const token = generateResetToken();
+  const tokens = await dbGet(DB_KEYS.reset_tokens) || {};
+  tokens[token] = { userId: user.id, email: user.email, expires: Date.now() + 30*60*1000 };
+  await dbSet(DB_KEYS.reset_tokens, tokens);
+  const baseUrl = window.location.origin + window.location.pathname;
+  const resetLink = baseUrl + '?reset=' + token;
   sendEmail(EMAIL_CONFIG.templateReset,{
-    to_name:   user.name,
-    to_email:  user.email,
-    temp_password: tempPass,
-    login_url: window.location.href,
+    to_name:    user.name,
+    to_email:   user.email,
+    reset_link: resetLink,
+    login_url:  baseUrl,
   });
+  return resetLink;
 }
 
 function sendThresholdAlertEmail(breachedList, alertEmail){
@@ -3289,11 +3372,19 @@ function sendThresholdAlertEmail(breachedList, alertEmail){
 async function resetUserPassword(userId){
   const user = users.find(u=>u.id===userId);
   if(!user) return;
-  const tempPass = 'PD-'+crypto.getRandomValues(new Uint8Array(4)).reduce((s,b)=>s+b.toString(36),'').toUpperCase().slice(0,8);
-  user.passwordHash = await secureHash(tempPass);
-  await save('users');
-  const sent = sendPasswordResetEmail(user, tempPass);
-  toast(`Temp password: ${esc(tempPass)} — ${emailReady()?'Email sent to '+esc(user.email):'Copy this and share manually'}`, 'green');
+  const resetLink = await sendPasswordResetEmail(user);
+  if(emailReady()){
+    toast(`✓ Reset link sent to ${esc(user.email)}`, 'green');
+  } else {
+    // Show link in a copyable modal if email isn't configured
+    setModal(`<div class="mhdr"><div class="mtl">🔐 Password Reset Link</div><span class="mclose" onclick="closeModal()">×</span></div>
+      <div class="mbody">
+        <div style="font-size:13px;color:var(--tx2);margin-bottom:12px">Email not configured. Share this link with <strong>${esc(user.name)}</strong>:</div>
+        <div style="background:var(--s2);border:1px solid var(--bd2);border-radius:8px;padding:12px;word-break:break-all;font-family:var(--mono);font-size:12px;color:var(--ac);cursor:pointer" onclick="navigator.clipboard.writeText('${escAttr(resetLink)}');this.style.borderColor='var(--gr)';this.insertAdjacentHTML('afterend','<div style=\\'color:var(--gr);font-size:11px;margin-top:6px\\'>✓ Copied!</div>')">${esc(resetLink)}</div>
+        <div class="st" style="margin-top:8px">Click the link to copy. Expires in 30 minutes.</div>
+      </div>
+      <div class="mfoot"><button class="btn bp" onclick="closeModal()">Done</button></div>`);
+  }
 }
 
 // ── SKU EXCEL EXPORT ──────────────────────────────────
@@ -4205,8 +4296,13 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   renderGTTable();
   renderRetTable();
   populateLogisticsInputs();
-  // Check if already logged in (validates session token against DB)
-  if(!(await checkSession())){
+  // Check for password reset link (?reset=TOKEN)
+  const urlParams = new URLSearchParams(window.location.search);
+  const resetToken = urlParams.get('reset');
+  if(resetToken){
+    showResetPasswordPage(resetToken);
+  } else if(!(await checkSession())){
+    // Check if already logged in (validates session token against DB)
     document.getElementById('login-screen').style.display='flex';
   }
   // Init EmailJS if configured
