@@ -2744,8 +2744,8 @@ function toast(msg,type){
 
 function dlTemplate(){
   if(typeof XLSX==='undefined'){toast('SheetJS loading…','red');return;}
-  const ws=XLSX.utils.aoa_to_sheet([['STYLE_ID*','BRAND_NAME*','CATEGORY*','COST_PRICE*','MARKUP_PCT*','IMAGE_URL'],['SP39-ORANGE-M','Fusionic — Myntra','Kurta Sets',950,78,''],['TF-202','Fusionic — Ajio PPMP','Lehenga Choli',1650,81,''],['NKB55-WINE-XS','Fusionic — Ajio CC','Kurta Sets',1250,60,''],['LNB1228-RED','LNB — Amazon','Lehenga Choli',1000,100,'']]);
-  ws['!cols']=[{wch:18},{wch:22},{wch:16},{wch:12},{wch:12},{wch:50}];
+  const ws=XLSX.utils.aoa_to_sheet([['STYLE_ID*','BRAND_NAME*','CATEGORY*','COST_PRICE*','MARKUP_PCT*','DISCOUNT','IMAGE_URL'],['SP39-ORANGE-M','Fusionic — Myntra','Kurta Sets',950,78,55,''],['TF-202','Fusionic — Ajio PPMP','Lehenga Choli',1650,81,50,''],['NKB55-WINE-XS','Fusionic — Ajio CC','Kurta Sets',1250,60,45,''],['LNB1228-RED','LNB — Amazon','Lehenga Choli',1000,100,0,'']]);
+  ws['!cols']=[{wch:18},{wch:22},{wch:16},{wch:12},{wch:12},{wch:12},{wch:50}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'SKUs');
   XLSX.writeFile(wb,'PriceDesk_SKU_Template.xlsx');toast('✓ Template downloaded','green');
 }
@@ -2759,7 +2759,7 @@ function openImport(){
         <div id="xi-filename" class="st" style="margin-top:8px"></div>
       </div>
       <input type="file" id="xi" accept=".xlsx,.xls,.csv" style="display:none" onchange="previewImport(this)">
-      <div class="info" style="margin-top:14px">Required columns: <span class="mono" style="color:var(--ac)">STYLE_ID, BRAND_NAME, CATEGORY, COST_PRICE, MARKUP_PCT</span> &nbsp;·&nbsp; Optional: IMAGE_URL</div>
+      <div class="info" style="margin-top:14px">Required columns: <span class="mono" style="color:var(--ac)">STYLE_ID, BRAND_NAME, CATEGORY, COST_PRICE, MARKUP_PCT</span> &nbsp;·&nbsp; Optional: DISCOUNT, IMAGE_URL</div>
       <div id="xi-preview" style="margin-top:14px"></div>
     </div>
     <div class="mfoot">
@@ -2799,6 +2799,7 @@ function previewImport(input){
         const cat=(r['CATEGORY']||'').trim();
         const cost=parseFloat(r['COST_PRICE']||r['COST']||0);
         const mkp=parseFloat(r['MARKUP_PCT']||r['MARKUP']||0);
+        const disc=parseFloat(r['DISCOUNT']||r['DISCOUNT_PCT']||0);
         const img=(r['IMAGE_URL']||'').trim();
         if(!sid){errors.push(`Row ${i+2}: Missing Style ID`);return;}
         if(!cost||cost<=0){errors.push(`Row ${i+2} (${sid}): Missing/invalid cost`);return;}
@@ -2806,17 +2807,17 @@ function previewImport(input){
         const validCat=CATS.includes(cat)?cat:CATS[0];
         const level=(brand?.model==='myntra'&&CAT_LEVEL[validCat])?CAT_LEVEL[validCat]:'Level 2';
         if(skuDB.find(x=>x.styleId===sid)){errors.push(`Row ${i+2}: "${sid}" already exists — will be skipped`);return;}
-        importRows.push({id:'s'+Date.now()+i,styleId:sid,brandId:brand?.id||brands[0]?.id,category:validCat,level,cost,markup:mkp||0,img,ignoreThreshold:false});
-        preview.push({sid,brand:brand?.name||bname,cat:validCat,cost,mkp});
+        importRows.push({id:'s'+Date.now()+i,styleId:sid,brandId:brand?.id||brands[0]?.id,category:validCat,level,cost,markup:mkp||0,discount:disc||0,img,ignoreThreshold:false});
+        preview.push({sid,brand:brand?.name||bname,cat:validCat,cost,mkp,disc});
       });
       // Show preview
       const prev=document.getElementById('xi-preview');
       let html='';
       if(preview.length){
         html+=`<div class="success" style="margin-bottom:10px">✓ ${preview.length} SKU${preview.length>1?'s':''} ready to import</div>`;
-        html+=`<div style="overflow-x:auto;max-height:200px;overflow-y:auto"><table class="dt" style="font-size:11px"><thead><tr><th>Style ID</th><th>Brand</th><th>Category</th><th>Cost</th><th>Markup%</th></tr></thead><tbody>`;
-        html+=preview.slice(0,20).map(p=>`<tr><td class="mono">${p.sid}</td><td>${p.brand}</td><td>${p.cat}</td><td class="mono">₹${p.cost}</td><td class="mono">${p.mkp}%</td></tr>`).join('');
-        if(preview.length>20)html+=`<tr><td colspan="5" class="st" style="text-align:center">…and ${preview.length-20} more</td></tr>`;
+        html+=`<div style="overflow-x:auto;max-height:200px;overflow-y:auto"><table class="dt" style="font-size:11px"><thead><tr><th>Style ID</th><th>Brand</th><th>Category</th><th>Cost</th><th>Markup%</th><th>Discount%</th></tr></thead><tbody>`;
+        html+=preview.slice(0,20).map(p=>`<tr><td class="mono">${p.sid}</td><td>${p.brand}</td><td>${p.cat}</td><td class="mono">₹${p.cost}</td><td class="mono">${p.mkp}%</td><td class="mono">${p.disc||0}%</td></tr>`).join('');
+        if(preview.length>20)html+=`<tr><td colspan="6" class="st" style="text-align:center">…and ${preview.length-20} more</td></tr>`;
         html+='</tbody></table></div>';
       }
       if(errors.length) html+=`<div class="warn" style="margin-top:10px;font-size:11px">${errors.map(e=>`<div>⚠ ${e}</div>`).join('')}</div>`;
