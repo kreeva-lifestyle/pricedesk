@@ -624,6 +624,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="nav-item" data-page="skus" onclick="nav('skus')"><span class="ni">⊟</span> SKUs</div>
     <div class="nav-sec">Admin</div>
     <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni">☰</span> Wireframe Builder</div>
+    <div class="nav-item" data-page="activity" onclick="nav('activity')"><span class="ni">▤</span> Activity Log</div>
     <div class="nav-item" data-page="users" onclick="nav('users')"><span class="ni">◉</span> User Access</div>
     <div class="nav-item" data-page="settings" onclick="nav('settings')"><span class="ni">⚙</span> App Settings</div>
   </nav>
@@ -1058,6 +1059,90 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   </div>
 </div>
 
+<!-- ═══ ACTIVITY LOG ═══ -->
+<div class="page" id="page-activity">
+  <div class="g2">
+    <div>
+      <div class="card mb16">
+        <div class="ch">
+          <div style="font-size:13px;font-weight:600">Audit Log</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select class="fi" id="audit-filter-type" style="width:130px;padding:4px 8px;font-size:11px" onchange="renderAuditLog()">
+              <option value="">All Actions</option>
+              <option value="sku_add">SKU Added</option>
+              <option value="sku_edit">SKU Edited</option>
+              <option value="sku_delete">SKU Deleted</option>
+              <option value="brand_add">Brand Added</option>
+              <option value="brand_edit">Brand Edited</option>
+              <option value="brand_delete">Brand Deleted</option>
+              <option value="bulk_import">Bulk Import</option>
+              <option value="user_add">User Added</option>
+              <option value="user_revoke">User Revoked</option>
+              <option value="commission">Commission</option>
+              <option value="threshold">Threshold</option>
+              <option value="login">Login</option>
+            </select>
+            <select class="fi" id="audit-filter-user" style="width:130px;padding:4px 8px;font-size:11px" onchange="renderAuditLog()">
+              <option value="">All Users</option>
+            </select>
+            <button class="btn bg bxs" style="font-size:10px" onclick="clearAuditLog()">Clear Log</button>
+          </div>
+        </div>
+        <div class="cb" style="padding:0;max-height:500px;overflow-y:auto">
+          <table class="dt" style="font-size:12px">
+            <thead><tr><th style="width:140px">When</th><th style="width:100px">Who</th><th>Action</th><th>Details</th></tr></thead>
+            <tbody id="audit-log-body"></tbody>
+          </table>
+        </div>
+        <div id="audit-pagination" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:8px;border-top:1px solid var(--bd)"></div>
+      </div>
+    </div>
+    <div>
+      <div class="card mb16">
+        <div class="ch"><div style="font-size:13px;font-weight:600">SKU Price History</div></div>
+        <div class="cb">
+          <div class="fg"><label class="fl">Search SKU</label>
+            <select class="fi" id="history-sku-sel" onchange="renderSkuHistory(this.value)" style="font-size:12px">
+              <option value="">Select a SKU to view history</option>
+            </select>
+          </div>
+          <div id="sku-history-body" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="card mb16">
+        <div class="ch"><div style="font-size:13px;font-weight:600">Bulk Import History</div></div>
+        <div class="cb" style="padding:0;max-height:300px;overflow-y:auto">
+          <table class="dt" style="font-size:12px">
+            <thead><tr><th>Date</th><th>By</th><th>File</th><th>Added</th><th>Updated</th><th>Errors</th></tr></thead>
+            <tbody id="import-log-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><div style="font-size:13px;font-weight:600">Your Preferences</div></div>
+        <div class="cb">
+          <div class="fg"><label class="fl">Default Page on Login</label>
+            <select class="fi" id="pref-default-page" onchange="saveUserPref('defaultPage',this.value)" style="font-size:12px">
+              <option value="dashboard">Dashboard</option>
+              <option value="skus">SKUs</option>
+              <option value="pricing">Pricing Tables</option>
+              <option value="brands">Brands</option>
+              <option value="thresholds">Thresholds</option>
+            </select>
+          </div>
+          <div class="fg"><label class="fl">Items per Page (SKU list)</label>
+            <select class="fi" id="pref-page-size" onchange="saveUserPref('pageSize',this.value);SKU_PAGE_SIZE_USER=parseInt(this.value);renderSKUs()" style="font-size:12px">
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ APP SETTINGS ═══ -->
 <div class="page" id="page-settings">
   <div class="g2">
@@ -1218,6 +1303,10 @@ const DB_KEYS = {
   alert:          'pd_alert_settings',
   sessions:       'pd_sessions',
   reset_tokens:   'pd_reset_tokens',
+  audit_log:      'pd_audit_log',
+  sku_history:    'pd_sku_history',
+  bulk_imports:   'pd_bulk_imports',
+  user_prefs:     'pd_user_preferences',
 };
 
 // ── Save a single key to DB ────────────────────────────
@@ -1845,7 +1934,7 @@ function buildCommAmazon(){
   CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AMAZON[cat]||17}" onchange="COMM_AMAZON['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
-async function saveComm(){triggerRecalc();renderSKUs();await Promise.all([save('cat_levels'),save('comm_myntra'),save('comm_ppmp'),save('comm_cc'),save('comm_amazon')]);toast('Commission saved','green');}
+async function saveComm(){triggerRecalc();renderSKUs();await Promise.all([save('cat_levels'),save('comm_myntra'),save('comm_ppmp'),save('comm_cc'),save('comm_amazon')]);audit('commission','Commission rates updated');toast('Commission saved','green');}
 
 // ═══════════════════════════════════════════════════════
 // THRESHOLD (in ₹)
@@ -1883,7 +1972,7 @@ function renderBreachList(){
 }
 
 async function saveThr(){
-  triggerRecalc();renderSKUs();updateAlerts();await save('thresholds');renderBreachList();
+  triggerRecalc();renderSKUs();updateAlerts();await save('thresholds');renderBreachList();audit('threshold','Thresholds updated');
   // Send alert email if configured
   const alertEmail = document.querySelector('#page-thresholds input[type=email]')?.value||'';
   const freq = document.querySelector('#page-thresholds select')?.value||'';
@@ -2029,11 +2118,11 @@ function saveBrand(eid){
   const name=el('bn-name')?.value.trim();const mp=el('bn-mp')?.value;const model=el('bn-model')?.value;
   const commVal=el('bn-comm')?.value;const comm=commVal===''?null:parseFloat(commVal);
   if(!name){toast('Brand name required','red');return;}
-  if(eid){const b=brands.find(x=>x.id===eid);if(b)Object.assign(b,{name,marketplace:mp,model,commOverride:comm});toast(`✓ ${name} updated`,'green');}
-  else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm});toast(`✓ ${name} added`,'green');}
+  if(eid){const b=brands.find(x=>x.id===eid);if(b)Object.assign(b,{name,marketplace:mp,model,commOverride:comm});audit('brand_edit',`${name} updated (${model})`);toast(`✓ ${name} updated`,'green');}
+  else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm});audit('brand_add',`${name} added (${model})`);toast(`✓ ${name} added`,'green');}
   closeModal();renderBrands();populateFilters();renderSKUs();save('brands');
 }
-async function deleteBrand(id){if(!confirm('Delete brand? SKUs assigned to this brand will still exist.'))return false;brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();await save('brands');toast('Brand deleted','red');return true;}
+async function deleteBrand(id){const b=brands.find(x=>x.id===id);if(!confirm('Delete brand? SKUs assigned to this brand will still exist.'))return false;brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();await save('brands');audit('brand_delete',`${b?.name||id} deleted`);toast('Brand deleted','red');return true;}
 
 // ═══════════════════════════════════════════════════════
 // SKU SHEET
@@ -2143,11 +2232,11 @@ function renderSKUs(){
   const list=filteredSKUs();
   renderActiveFilterChips();
   const totalFiltered=list.length;
-  const totalPages=Math.ceil(totalFiltered/SKU_PAGE_SIZE);
+  const totalPages=Math.ceil(totalFiltered/getPageSize());
   if(_skuPage>totalPages&&totalPages>0)_skuPage=totalPages;
-  const startIdx=(_skuPage-1)*SKU_PAGE_SIZE;
-  const pageList=list.slice(startIdx, startIdx+SKU_PAGE_SIZE);
-  el('sku-count').textContent=`Showing ${Math.min(startIdx+1,totalFiltered)}–${Math.min(startIdx+SKU_PAGE_SIZE,totalFiltered)} of ${totalFiltered} SKUs (${skuDB.length} total)`;
+  const startIdx=(_skuPage-1)*getPageSize();
+  const pageList=list.slice(startIdx, startIdx+getPageSize());
+  el('sku-count').textContent=`Showing ${Math.min(startIdx+1,totalFiltered)}–${Math.min(startIdx+getPageSize(),totalFiltered)} of ${totalFiltered} SKUs (${skuDB.length} total)`;
   el('dash-sku').textContent=skuDB.length;
   renderSKUPagination(totalFiltered);
   const t=el('sku-body');if(!t)return;
@@ -2314,6 +2403,7 @@ function saveNew(){
     count++;
   });
   newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');
+  audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
   toast(`✓ ${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`, 'green');
 }
 
@@ -2323,13 +2413,27 @@ function saveEdit(id){
   const sid=el('e-sid')?.value.trim(),cost=parseFloat(el('e-cost')?.value)||0,mkp=parseFloat(el('e-mkp')?.value)||0,disc=parseFloat(el('e-disc')?.value)||0;
   if(!cost){toast('Cost price is required','red');return;}
   const cat=el('e-cat')?.value;
+  // Track price history
+  if(s.cost!==cost) trackSkuChange(id,'cost',s.cost,cost);
+  if(s.markup!==mkp) trackSkuChange(id,'markup',s.markup,mkp);
+  if(s.discount!==disc) trackSkuChange(id,'discount',s.discount,disc);
+  if(s.category!==cat) trackSkuChange(id,'category',s.category,cat);
+  const changed=[];
+  if(s.cost!==cost)changed.push(`cost ₹${s.cost}→₹${cost}`);
+  if(s.markup!==mkp)changed.push(`markup ${s.markup}→${mkp}%`);
+  if(s.discount!==disc)changed.push(`disc ${s.discount}→${disc}%`);
   Object.assign(s,{sku:skuCode,styleId:sid||'',brandId:el('e-brand')?.value,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc});
-  editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');toast(`✓ ${skuCode||sid||'SKU'} updated`,'green');
+  editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');saveSkuHistory();
+  if(changed.length) audit('sku_edit',`${skuCode||sid||'SKU'}: ${changed.join(', ')}`);
+  toast(`✓ ${skuCode||sid||'SKU'} updated`,'green');
 }
 
 async function delSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s||!confirm(`Delete "${esc(s.styleId)}"?`))return;
-  skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();await save('skus');toast(`${esc(s.styleId)} deleted`,'red');
+  const label=s.styleId||s.sku||id;
+  skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();await save('skus');
+  audit('sku_delete',`${label} deleted`);
+  toast(`${esc(s.styleId)} deleted`,'red');
 }
 
 // ── Show Calculation Modal ─────────────────────────────
@@ -2456,6 +2560,8 @@ async function saveUser(eid){
     users.push({id:'u'+Date.now(),name,email,role,added:new Date().toISOString().slice(0,10)});toast(`✓ ${name} added`,'green');
   }
   closeModal();renderUsers();await save('users');
+  if(eid) audit('user_edit',`${name} (${email}) updated`);
+  else audit('user_add',`${name} (${email}) added as ${role}`);
   // Send onboarding email to new users
   if(!eid){ const newUser=users[users.length-1]; sendEmail(EMAIL_CONFIG.templateWelcome,{to_name:newUser.name,to_email:newUser.email,role:newUser.role,temp_password:'pricedesk123',login_url:window.location.href}); }
 }
@@ -2804,7 +2910,7 @@ function addWFPreset(preset){
 // ═══════════════════════════════════════════════════════
 // NAV & TABS
 // ═══════════════════════════════════════════════════════
-const TITLES={dashboard:'Dashboard',pricing:'Pricing Tables',thresholds:'Thresholds',brands:'Brands',commission:'Commission Settings',logistics:'Logistics Settings',skus:'SKUs',categories:'Categories',wireframe:'Wireframe Builder',users:'User Access',settings:'App Settings'};
+const TITLES={dashboard:'Dashboard',pricing:'Pricing Tables',thresholds:'Thresholds',brands:'Brands',commission:'Commission Settings',logistics:'Logistics Settings',skus:'SKUs',categories:'Categories',wireframe:'Wireframe Builder',activity:'Activity Log',users:'User Access',settings:'App Settings'};
 function nav(p){
   document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
@@ -2830,6 +2936,7 @@ function nav(p){
   if(p==='skus'){populateFilters();populateTagFilter();renderSKUs();}
   if(p==='thresholds')renderThresholds();
   if(p==='users')renderUsers();
+  if(p==='activity'){ renderAuditLog(); renderImportLog(); populateAuditFilters(); populateSkuHistorySelect(); loadUserPrefsUI(); }
   if(p==='settings'){ loadConfig(); populateSettingsPage(); loadBackupList(); }
   if(p==='logistics'){ renderGTTable(); renderRetTable(); populateLogisticsInputs(); }
 }
@@ -2900,8 +3007,10 @@ function openImport(){
 
 let importRows=[];
 let importUpdates=[];
+let _importFileName='';
 function previewImport(input){
   const file=input.files[0];if(!file)return;
+  _importFileName=file.name;
   document.getElementById('xi-filename').textContent=file.name;
   const reader=new FileReader();
   reader.onload=function(e){
@@ -3015,6 +3124,9 @@ function confirmImport(){
   importRows=[];importUpdates=[];
   closeModal();
   renderSKUs();renderBrands();updateAlerts();save('skus');
+  logBulkImport(_importFileName, newCount, updCount, 0);
+  audit('bulk_import',`${_importFileName}: ${newCount} added, ${updCount} updated`);
+  _importFileName='';
   const parts=[];
   if(newCount) parts.push(`${newCount} added`);
   if(updCount) parts.push(`${updCount} updated`);
@@ -3651,6 +3763,10 @@ async function doLogin(){
   startSessionTimer();
   startSessionCheck();
   if(isFirstLogin) sendWelcomeEmail(user);
+  audit('login',`${user.name} logged in`);
+  // Navigate to user's preferred default page
+  const defaultPage=getUserPref('defaultPage','dashboard');
+  if(defaultPage&&defaultPage!=='dashboard') nav(defaultPage);
   toast(`Welcome back, ${esc(user.name.split(' ')[0])}!`,'green');
 }
 
@@ -4922,11 +5038,12 @@ function runBugDetector(){
 // ═══════════════════════════════════════════════════════
 // SKU PAGINATION
 // ═══════════════════════════════════════════════════════
-const SKU_PAGE_SIZE = 25;
+let SKU_PAGE_SIZE_USER = 25;
+function getPageSize(){ return SKU_PAGE_SIZE_USER||25; }
 let _skuPage = 1;
 function renderSKUPagination(total){
   const pgEl=el('sku-pagination');if(!pgEl)return;
-  const pages=Math.ceil(total/SKU_PAGE_SIZE);
+  const pages=Math.ceil(total/getPageSize());
   if(pages<=1){pgEl.innerHTML='';return;}
   if(_skuPage>pages)_skuPage=pages;
   let h=`<button class="btn bg bxs" onclick="_skuPage=1;renderSKUs()" ${_skuPage===1?'disabled':''}>&laquo;</button>`;
@@ -5031,7 +5148,9 @@ function saveSkuTags(){
   const pending=document.getElementById('tag-new-input')?.value.replace(/,/g,'').trim();
   if(pending&&!_tagModalTags.includes(pending)) _tagModalTags.push(pending);
   s.tags=[..._tagModalTags];
-  closeModal();save('skus');populateTagFilter();renderSKUs();toast('Tags saved','green');
+  closeModal();save('skus');populateTagFilter();renderSKUs();
+  audit('tags_edit',`${s.styleId||s.sku}: tags=[${s.tags.join(',')}]`);
+  toast('Tags saved','green');
 }
 
 function removeTagFromSku(skuId,tag){
@@ -5139,12 +5258,14 @@ async function revokeUser(id){
   u.revoked=true;
   await clearSessionToken(u.id);
   renderUsers();await save('users');
+  audit('user_revoke',`${u.name} (${u.email}) access revoked`);
   toast(`${u.name} access revoked`,'red');
 }
 async function reinstateUser(id){
   const u=users.find(x=>x.id===id);if(!u)return;
   u.revoked=false;
   renderUsers();await save('users');
+  audit('user_reinstate',`${u.name} access restored`);
   toast(`${u.name} access restored`,'green');
 }
 
@@ -5165,6 +5286,216 @@ function showBtnProgress(btn, promise){
 }
 
 // ═══════════════════════════════════════════════════════
+// AUDIT LOG — track all user actions
+// ═══════════════════════════════════════════════════════
+let auditLogData=[];
+const AUDIT_MAX=500; // keep last 500 entries
+let _auditPage=1;
+const AUDIT_PAGE_SIZE=30;
+
+async function loadAuditLog(){
+  const data=await dbGet(DB_KEYS.audit_log);
+  if(data&&Array.isArray(data)) auditLogData=data;
+}
+async function saveAuditLog(){ await dbSet(DB_KEYS.audit_log, auditLogData); }
+
+function audit(action, details, extra){
+  const entry={
+    ts: new Date().toISOString(),
+    user: currentUser?.name||'System',
+    userId: currentUser?.id||'',
+    action,
+    details: typeof details==='string'?details:JSON.stringify(details),
+  };
+  if(extra) entry.extra=extra;
+  auditLogData.unshift(entry);
+  if(auditLogData.length>AUDIT_MAX) auditLogData=auditLogData.slice(0,AUDIT_MAX);
+  saveAuditLog(); // fire and forget
+}
+
+function populateAuditFilters(){
+  const sel=el('audit-filter-user');if(!sel)return;
+  const names=[...new Set(auditLogData.map(e=>e.user))].sort();
+  sel.innerHTML='<option value="">All Users</option>'+names.map(n=>`<option>${esc(n)}</option>`).join('');
+}
+
+function renderAuditLog(){
+  const body=el('audit-log-body');if(!body)return;
+  const filterType=el('audit-filter-type')?.value||'';
+  const filterUser=el('audit-filter-user')?.value||'';
+  let filtered=auditLogData;
+  if(filterType) filtered=filtered.filter(e=>e.action===filterType);
+  if(filterUser) filtered=filtered.filter(e=>e.user===filterUser);
+
+  const total=filtered.length;
+  const pages=Math.ceil(total/AUDIT_PAGE_SIZE);
+  if(_auditPage>pages&&pages>0)_auditPage=pages;
+  const start=(_auditPage-1)*AUDIT_PAGE_SIZE;
+  const page=filtered.slice(start,start+AUDIT_PAGE_SIZE);
+
+  if(!page.length){body.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--tx3);padding:20px">No activity recorded yet</td></tr>';
+    const pg=el('audit-pagination');if(pg)pg.innerHTML='';return;}
+
+  const actionLabels={sku_add:'SKU Added',sku_edit:'SKU Edited',sku_delete:'SKU Deleted',brand_add:'Brand Added',brand_edit:'Brand Edited',brand_delete:'Brand Deleted',bulk_import:'Bulk Import',user_add:'User Added',user_edit:'User Edited',user_revoke:'User Revoked',user_reinstate:'User Restored',commission:'Commission Saved',threshold:'Threshold Saved',login:'Login',tags_edit:'Tags Edited',image_set:'Image Set'};
+  const actionColors={sku_add:'var(--gr)',sku_delete:'var(--re)',brand_delete:'var(--re)',user_revoke:'var(--re)',bulk_import:'var(--ac)',login:'var(--bl)'};
+
+  body.innerHTML=page.map(e=>{
+    const d=new Date(e.ts);
+    const when=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+    const label=actionLabels[e.action]||e.action;
+    const color=actionColors[e.action]||'var(--tx2)';
+    return`<tr>
+      <td class="mono st" style="font-size:11px;white-space:nowrap">${when}</td>
+      <td style="font-weight:500">${esc(e.user)}</td>
+      <td><span style="color:${color};font-weight:600;font-size:11px">${esc(label)}</span></td>
+      <td class="st" style="font-size:11px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.details)}">${esc(e.details)}</td>
+    </tr>`;
+  }).join('');
+
+  // Pagination
+  const pgEl=el('audit-pagination');if(!pgEl)return;
+  if(pages<=1){pgEl.innerHTML=`<span class="st" style="font-size:11px">${total} entries</span>`;return;}
+  let h=`<button class="btn bg bxs" onclick="_auditPage=Math.max(1,_auditPage-1);renderAuditLog()" ${_auditPage===1?'disabled':''}>&lsaquo;</button>`;
+  h+=`<span class="st" style="font-size:11px">Page ${_auditPage} of ${pages} (${total} entries)</span>`;
+  h+=`<button class="btn bg bxs" onclick="_auditPage=Math.min(${pages},_auditPage+1);renderAuditLog()" ${_auditPage===pages?'disabled':''}>&rsaquo;</button>`;
+  pgEl.innerHTML=h;
+}
+
+function clearAuditLog(){
+  if(!confirm('Clear all audit log entries? This cannot be undone.'))return;
+  auditLogData=[];saveAuditLog();renderAuditLog();toast('Audit log cleared','green');
+}
+
+// ═══════════════════════════════════════════════════════
+// SKU PRICE HISTORY — track cost/markup/discount changes
+// ═══════════════════════════════════════════════════════
+let skuHistoryData={};// keyed by skuId -> array of {ts, field, oldVal, newVal, user}
+
+async function loadSkuHistory(){
+  const data=await dbGet(DB_KEYS.sku_history);
+  if(data&&typeof data==='object') skuHistoryData=data;
+}
+async function saveSkuHistory(){ await dbSet(DB_KEYS.sku_history, skuHistoryData); }
+
+function trackSkuChange(skuId, field, oldVal, newVal){
+  if(oldVal===newVal) return;
+  if(!skuHistoryData[skuId]) skuHistoryData[skuId]=[];
+  skuHistoryData[skuId].push({
+    ts: new Date().toISOString(),
+    field,
+    oldVal,
+    newVal,
+    user: currentUser?.name||'Unknown'
+  });
+  // Keep max 50 entries per SKU
+  if(skuHistoryData[skuId].length>50) skuHistoryData[skuId]=skuHistoryData[skuId].slice(-50);
+}
+
+function populateSkuHistorySelect(){
+  const sel=el('history-sku-sel');if(!sel)return;
+  sel.innerHTML='<option value="">Select a SKU to view history</option>'+
+    skuDB.map(s=>`<option value="${escAttr(s.id)}">${esc(s.styleId||s.sku||s.id)} — ${esc((brands.find(b=>b.id===s.brandId)||{}).name||'?')}</option>`).join('');
+}
+
+function renderSkuHistory(skuId){
+  const body=el('sku-history-body');if(!body)return;
+  if(!skuId){body.innerHTML='<div class="st" style="text-align:center;padding:10px">Select a SKU above</div>';return;}
+  const history=skuHistoryData[skuId];
+  if(!history||!history.length){body.innerHTML='<div class="st" style="text-align:center;padding:10px">No price changes recorded for this SKU yet</div>';return;}
+  const fieldLabels={cost:'Cost (₹)',markup:'Markup %',discount:'Discount %',category:'Category',brandId:'Brand',img:'Image'};
+  body.innerHTML=`<div style="max-height:250px;overflow-y:auto"><table class="dt" style="font-size:11px">
+    <thead><tr><th>Date</th><th>Field</th><th>Old Value</th><th>New Value</th><th>Changed By</th></tr></thead>
+    <tbody>${history.slice().reverse().map(h=>{
+      const d=new Date(h.ts);
+      const when=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+      const label=fieldLabels[h.field]||h.field;
+      return`<tr>
+        <td class="mono st" style="white-space:nowrap">${when}</td>
+        <td style="font-weight:500">${esc(label)}</td>
+        <td class="mono" style="color:var(--re)">${h.oldVal}</td>
+        <td class="mono" style="color:var(--gr)">${h.newVal}</td>
+        <td class="st">${esc(h.user)}</td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// BULK IMPORT LOG
+// ═══════════════════════════════════════════════════════
+let importLogData=[];
+
+async function loadImportLog(){
+  const data=await dbGet(DB_KEYS.bulk_imports);
+  if(data&&Array.isArray(data)) importLogData=data;
+}
+async function saveImportLog(){ await dbSet(DB_KEYS.bulk_imports, importLogData); }
+
+function logBulkImport(fileName, addedCount, updatedCount, errorCount){
+  importLogData.unshift({
+    ts: new Date().toISOString(),
+    user: currentUser?.name||'Unknown',
+    file: fileName,
+    added: addedCount,
+    updated: updatedCount,
+    errors: errorCount
+  });
+  if(importLogData.length>100) importLogData=importLogData.slice(0,100);
+  saveImportLog();
+}
+
+function renderImportLog(){
+  const body=el('import-log-body');if(!body)return;
+  if(!importLogData.length){body.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--tx3);padding:14px">No imports recorded yet</td></tr>';return;}
+  body.innerHTML=importLogData.map(e=>{
+    const d=new Date(e.ts);
+    const when=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+    return`<tr>
+      <td class="mono st" style="font-size:11px;white-space:nowrap">${when}</td>
+      <td style="font-weight:500">${esc(e.user)}</td>
+      <td class="mono" style="font-size:11px">${esc(e.file)}</td>
+      <td style="color:var(--gr);font-weight:600">${e.added}</td>
+      <td style="color:var(--ac);font-weight:600">${e.updated}</td>
+      <td style="color:${e.errors?'var(--re)':'var(--tx3)'}">${e.errors}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// USER PREFERENCES — per-user settings
+// ═══════════════════════════════════════════════════════
+let userPrefsData={};// keyed by userId
+
+async function loadUserPrefs(){
+  const data=await dbGet(DB_KEYS.user_prefs);
+  if(data&&typeof data==='object') userPrefsData=data;
+}
+async function saveUserPrefs(){ await dbSet(DB_KEYS.user_prefs, userPrefsData); }
+
+function getUserPref(key, fallback){
+  const uid=currentUser?.id;if(!uid)return fallback;
+  return userPrefsData[uid]?.[key]??fallback;
+}
+
+function saveUserPref(key, value){
+  const uid=currentUser?.id;if(!uid)return;
+  if(!userPrefsData[uid]) userPrefsData[uid]={};
+  userPrefsData[uid][key]=value;
+  saveUserPrefs();
+  toast('Preference saved','green');
+}
+
+function loadUserPrefsUI(){
+  const page=el('pref-default-page');
+  if(page) page.value=getUserPref('defaultPage','dashboard');
+  const ps=el('pref-page-size');
+  if(ps) ps.value=getUserPref('pageSize','25');
+}
+
+function applyUserPrefs(){
+  SKU_PAGE_SIZE_USER=parseInt(getUserPref('pageSize','25'))||25;
+}
+
+// ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',async ()=>{
@@ -5176,7 +5507,8 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   const tableOk = await ensureTable();
   if(!tableOk){ console.warn('app_data table missing — showing setup guide'); }
   await loadFromStorage();
-  await loadTasks();
+  await Promise.all([loadTasks(), loadAuditLog(), loadSkuHistory(), loadImportLog(), loadUserPrefs()]);
+  applyUserPrefs();
   populateFilters();
   populateTagFilter();
   renderBrandSummary();
