@@ -1382,18 +1382,17 @@ async function loadFromStorage(){
       if(loaded.logistics.settings) LOGISTICS_SETTINGS  = loaded.logistics.settings;
     }
     if(loaded.wireframe){
-      // Reset all wireframes when schema version changes (incentive removed, locked changes)
-      const WF_VERSION = 6; // Increment when wireframe structure changes — v6: new Ajio PPMP/CC formulas
+      const WF_VERSION = 6; // Increment when wireframe structure changes
+      const PPMP_CC_VERSION = 6; // v6: new Ajio PPMP/CC formulas
       if(loaded.wireframe._v === WF_VERSION){
+        // Same version — load all from saved data
         Object.assign(WF, loaded.wireframe);
         // Migrate: ensure packagingCost rows have proper defaults
         for(const mp of Object.keys(WF)){
           if(!Array.isArray(WF[mp])) continue;
           for(const row of WF[mp]){
             if(row.var==='packagingCost'){
-              // Always ensure defaultVal exists for packaging cost
               if(row.defaultVal===undefined) row.defaultVal = 60;
-              // If it was accidentally set to formula with expr '0', restore to input
               if(row.t==='formula' && (row.expr==='0' || !row.expr)){
                 row.t = 'input';
                 row.defaultVal = row.defaultVal || 60;
@@ -1402,9 +1401,12 @@ async function loadFromStorage(){
           }
         }
       } else {
-        // Use code defaults for all marketplaces — DB is stale
+        // Version mismatch — preserve Myntra & Amazon from saved data, reset PPMP & CC to new code defaults
+        if(loaded.wireframe.myntra && Array.isArray(loaded.wireframe.myntra)) WF.myntra = loaded.wireframe.myntra;
+        if(loaded.wireframe.amazon && Array.isArray(loaded.wireframe.amazon)) WF.amazon = loaded.wireframe.amazon;
+        // PPMP and CC stay as code defaults (new formula)
         WF._v = WF_VERSION;
-        save('wireframe'); // Save fresh defaults with new version
+        save('wireframe');
       }
     }
     if(loaded.email_cfg && loaded.email_cfg.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY'){
