@@ -118,9 +118,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 /* SKU SHEET */
 .ss-wrap{overflow-x:auto;border:1px solid var(--bd);border-radius:var(--r)}
 .ss{width:100%;border-collapse:collapse;font-size:12px}
-.ss th{background:var(--s2);color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:8px 9px;border-bottom:2px solid var(--bd);white-space:nowrap;font-weight:600}
+.ss th{background:var(--s2);color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding:8px 8px;border-bottom:2px solid var(--bd);white-space:nowrap;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis}
 .ss th.auto-h{color:var(--gr);background:rgba(45,212,160,.05)}
-.ss td{padding:6px 8px;border-bottom:1px solid var(--bd);vertical-align:middle}
+.ss td{padding:6px 8px;border-bottom:1px solid var(--bd);vertical-align:middle;overflow:hidden;text-overflow:ellipsis}
 .ss tr:last-child td{border-bottom:none}
 .ss .er td{background:rgba(245,166,35,.04);border-bottom:2px solid var(--ac)}
 .si{background:var(--s2);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:12px;padding:5px 7px;width:100%;transition:border .1s}
@@ -862,21 +862,32 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 <!-- ═══ SKUs ═══ -->
 <div class="page" id="page-skus">
   <!-- MARKETPLACE TABS -->
-  <div class="mp-tabs" style="display:flex;gap:0;margin-bottom:12px;border-bottom:2px solid var(--bd)">
-    <div class="sku-mp-tab active" data-mp="" onclick="switchSKUTab(this,'')">All</div>
-    <div class="sku-mp-tab" data-mp="myntra" onclick="switchSKUTab(this,'myntra')">Myntra</div>
-    <div class="sku-mp-tab" data-mp="ajio-ppmp" onclick="switchSKUTab(this,'ajio-ppmp')">Ajio PPMP</div>
-    <div class="sku-mp-tab" data-mp="ajio-cc" onclick="switchSKUTab(this,'ajio-cc')">Ajio CC</div>
-    <div class="sku-mp-tab" data-mp="amazon" onclick="switchSKUTab(this,'amazon')">Amazon</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div class="mp-tabs" style="display:flex;gap:0;border-bottom:2px solid var(--bd)">
+      <div class="sku-mp-tab active" data-mp="" onclick="switchSKUTab(this,'')">All SKUs</div>
+      <div class="sku-mp-tab" data-mp="myntra" onclick="switchSKUTab(this,'myntra')">Myntra</div>
+      <div class="sku-mp-tab" data-mp="ajio-ppmp" onclick="switchSKUTab(this,'ajio-ppmp')">Ajio PPMP</div>
+      <div class="sku-mp-tab" data-mp="ajio-cc" onclick="switchSKUTab(this,'ajio-cc')">Ajio CC</div>
+      <div class="sku-mp-tab" data-mp="amazon" onclick="switchSKUTab(this,'amazon')">Amazon</div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div class="btn bp bsm" onclick="addRow()">+ Add SKU</div>
+      <div style="position:relative;display:inline-block" id="import-dropdown">
+        <button class="btn bg bsm" onclick="toggleImportMenu()" style="min-width:80px">Import ▾</button>
+        <div id="import-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--s);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:100;min-width:180px;overflow:hidden">
+          <div style="padding:8px 14px;cursor:pointer;font-size:12px;color:var(--tx)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''" onclick="openImport();hideImportMenu()">Upload CSV / Excel</div>
+          <div style="padding:8px 14px;cursor:pointer;font-size:12px;color:var(--tx)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''" onclick="dlTemplate();hideImportMenu()">Download Template</div>
+          <div style="border-top:1px solid var(--bd);padding:8px 14px;cursor:pointer;font-size:12px;color:var(--gr)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''" onclick="exportSKUsToExcel();hideImportMenu()">Export All SKUs</div>
+        </div>
+      </div>
+    </div>
   </div>
   <!-- FILTER BAR -->
   <div class="filter-bar">
-    <span class="filter-label">Filters:</span>
     <div style="position:relative">
       <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:14px;pointer-events:none">⌕</span>
-      <input id="f-search" class="filter-select" style="padding-left:27px;min-width:160px" placeholder="Search Style ID…" oninput="renderSKUs()">
+      <input id="f-search" class="filter-select" style="padding-left:27px;min-width:180px" placeholder="Search by Style ID..." oninput="renderSKUs()">
     </div>
-    <span class="filter-sep"></span>
     <select id="f-brand" class="filter-select" onchange="renderSKUs()"><option value="">All Brands</option></select>
     <select id="f-cat" class="filter-select" onchange="renderSKUs()"><option value="">All Categories</option></select>
     <select id="f-status" class="filter-select" onchange="renderSKUs()">
@@ -885,31 +896,43 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <option value="ignored">Threshold Ignored</option>
       <option value="healthy">Healthy</option>
     </select>
-    <span class="filter-sep"></span>
-    <button class="filter-clear" onclick="clearFilters()">✕ Clear</button>
-    <div class="btn bp bsm" onclick="addRow()" style="margin-left:auto">+ Add Row</div>
-    <button class="btn bg bsm" onclick="openImport()">⬆ Import</button>
-    <button class="btn bg bsm" onclick="dlTemplate()">⬇ Template</button>
-    <button class="btn bp bsm" onclick="exportSKUsToExcel()" title="Download all SKUs with full details">⬇ Download SKUs</button>
+    <button class="filter-clear" onclick="clearFilters()" style="display:none" id="f-clear-btn">✕ Clear Filters</button>
   </div>
-  <div id="active-filter-chips" class="active-filters"></div>
-  <div class="st mb8" id="sku-count"></div>
+  <div id="active-filter-chips" class="active-filters" style="margin-bottom:8px"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+    <div class="st" id="sku-count"></div>
+  </div>
   <div class="ss-wrap">
-    <table class="ss">
+    <table class="ss" style="table-layout:fixed;width:100%">
+      <colgroup>
+        <col style="width:40px"><!-- Img -->
+        <col style="width:100px"><!-- Style ID -->
+        <col style="width:140px"><!-- Brand -->
+        <col style="width:100px"><!-- Category -->
+        <col style="width:75px"><!-- Cost -->
+        <col style="width:65px"><!-- Markup -->
+        <col style="width:65px"><!-- Discount -->
+        <col style="width:75px"><!-- MRP -->
+        <col style="width:80px"><!-- SP -->
+        <col style="width:70px"><!-- Comm -->
+        <col style="width:85px"><!-- Net Profit -->
+        <col style="width:85px"><!-- If Delivered -->
+        <col style="width:130px"><!-- Actions -->
+      </colgroup>
       <thead><tr>
-        <th style="width:36px">Img</th>
+        <th>Img</th>
         <th>Style ID</th>
-        <th>Brand / Model</th>
+        <th>Brand</th>
         <th>Category</th>
-        <th>Cost ₹</th>
-        <th>Markup %</th>
-        <th>Discount %</th>
-        <th class="auto-h">MRP ↗</th>
-        <th class="auto-h">SP ↗</th>
-        <th class="auto-h">Comm % ↗</th>
-        <th class="auto-h">Net Profit ₹ ↗</th>
-        <th class="auto-h">If Delivered ↗</th>
-        <th style="width:120px">Actions</th>
+        <th>Cost</th>
+        <th>Markup</th>
+        <th>Discount</th>
+        <th>MRP</th>
+        <th>Seller Price</th>
+        <th>Comm %</th>
+        <th>Net Profit</th>
+        <th>If Delivered</th>
+        <th>Actions</th>
       </tr></thead>
       <tbody id="sku-body"></tbody>
     </table>
@@ -1550,13 +1573,14 @@ function calcSKU(s){
   if(mp==='myntra'){
     // Use WF engine for full Myntra calculation
     const v2=calcMyntraFull(s.cost,s.markup,s.discount||0,level,s.category,0,0);
-    mrp=v2.mrpRnd||v2.mrp;
-    sp=v2.sellerPrice||v2.custPaid||mrp;
-    comm=brand.commOverride!=null ? brand.commOverride : (v2.rawComm||0);
-    payout=v2.payout;
-    profitRs=v2.profit||(payout-s.cost);
+    mrp=v2.mrpRnd||v2.mrp||0;
+    sp=v2.sellerPrice||v2.custPaid||mrp||0;
+    comm=brand.commOverride!=null ? brand.commOverride : (v2.rawComm!=null?v2.rawComm:0);
+    payout=v2.payout||0;
+    profitRs=v2.profit!=null?v2.profit:(payout-s.cost);
     // If Delivered = profit + reverse fees (saved when order completes)
-    ifDelivered=profitRs + (v2.retFee||v2.ret||0);
+    const retFee=v2.retFee||v2.ret||0;
+    ifDelivered=profitRs + retFee;
   } else {
     mrp=Math.round(s.cost*(1+s.markup/100));
     sp=Math.round(mrp*3/100)*100||mrp*3;
@@ -1970,6 +1994,14 @@ function filteredSKUs(){
 function renderActiveFilterChips(){
   const chips=[];
   const labels={'f-brand':'Brand','f-cat':'Category','f-status':'Status'};
+  // Search text chip
+  const q=el('f-search')?.value||'';
+  if(q) chips.push(`<span class="af-chip" onclick="el('f-search').value='';renderSKUs()">Search: "${esc(q)}" ✕</span>`);
+  // Marketplace tab chip
+  if(_skuMPTab){
+    const mpLabels={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
+    chips.push(`<span class="af-chip" onclick="document.querySelector('.sku-mp-tab[data-mp=\\'\\']').click()">Marketplace: ${mpLabels[_skuMPTab]||_skuMPTab} ✕</span>`);
+  }
   ['f-brand','f-cat','f-status'].forEach(fid=>{
     const e=el(fid);
     if(e&&e.value){
@@ -1978,13 +2010,36 @@ function renderActiveFilterChips(){
     }
   });
   const sc=el('active-filter-chips');
-  if(sc)sc.innerHTML=chips.join('');
+  if(sc) sc.innerHTML=chips.length ? chips.join('') : '';
+  // Show/hide clear button
+  const clearBtn=el('f-clear-btn');
+  if(clearBtn) clearBtn.style.display=chips.length?'':'none';
 }
 
 function clearFilters(){
   ['f-search','f-brand','f-cat','f-status'].forEach(fid=>{const e=el(fid);if(e)e.value='';});
+  // Reset marketplace tab to All
+  _skuMPTab='';
+  document.querySelectorAll('.sku-mp-tab').forEach(t=>t.classList.remove('active'));
+  const allTab=document.querySelector('.sku-mp-tab[data-mp=""]');
+  if(allTab)allTab.classList.add('active');
   renderSKUs();
 }
+
+// Import dropdown menu
+function toggleImportMenu(){
+  const m=el('import-menu');if(!m)return;
+  m.style.display=m.style.display==='none'?'block':'none';
+  if(m.style.display==='block'){
+    // Close on outside click
+    setTimeout(()=>document.addEventListener('click',hideImportOnOutside,{once:true}),10);
+  }
+}
+function hideImportOnOutside(e){
+  const dd=el('import-dropdown');
+  if(dd&&!dd.contains(e.target)) hideImportMenu();
+}
+function hideImportMenu(){const m=el('import-menu');if(m)m.style.display='none';}
 
 let _skuMPTab = ''; // Current marketplace tab filter
 function switchSKUTab(tab, mp){
