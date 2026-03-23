@@ -2373,11 +2373,11 @@ function switchSKUTab(tab, mp){
   _skuMPTab = mp;
   document.querySelectorAll('.sku-mp-tab').forEach(t=>t.classList.remove('active'));
   tab.classList.add('active');
-  // Reset brand filter if current selection doesn't belong to this marketplace
+  // Hide brand filter when a specific marketplace tab is active (redundant)
   const fBrand=el('f-brand');
-  if(fBrand&&fBrand.value&&mp){
-    const selBrand=brands.find(b=>b.id===fBrand.value);
-    if(selBrand&&selBrand.model!==mp) fBrand.value='';
+  if(fBrand){
+    fBrand.parentElement.style.display = mp ? 'none' : '';
+    if(mp) fBrand.value=''; // reset selection
   }
   populateFilters();
   renderSKUs();
