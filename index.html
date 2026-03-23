@@ -1119,7 +1119,6 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
             <select class="fi" id="audit-filter-user" style="width:130px;padding:4px 8px;font-size:11px" onchange="renderAuditLog()">
               <option value="">All Users</option>
             </select>
-            <button class="btn bg bxs" style="font-size:10px" onclick="clearAuditLog()">Clear Log</button>
           </div>
         </div>
         <div class="cb" style="padding:0;max-height:500px;overflow-y:auto">
@@ -1132,17 +1131,6 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       </div>
     </div>
     <div>
-      <div class="card mb16">
-        <div class="ch"><div style="font-size:13px;font-weight:600">SKU Price History</div></div>
-        <div class="cb">
-          <div class="fg"><label class="fl">Search SKU</label>
-            <select class="fi" id="history-sku-sel" onchange="renderSkuHistory(this.value)" style="font-size:12px">
-              <option value="">Select a SKU to view history</option>
-            </select>
-          </div>
-          <div id="sku-history-body" style="margin-top:10px"></div>
-        </div>
-      </div>
       <div class="card mb16">
         <div class="ch"><div style="font-size:13px;font-weight:600">Bulk Import History</div></div>
         <div class="cb" style="padding:0;max-height:300px;overflow-y:auto">
@@ -2421,6 +2409,7 @@ function renderSKUs(){
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:nowrap">
           ${statusIcon}
           <button class="btn bg bxs" onclick="showCalcModal('${escAttr(s.id)}')" title="View full calculation breakdown" style="font-size:10px;padding:3px 8px">Calc</button>
+          <button class="btn bg bxs" onclick="showSkuHistoryModal('${escAttr(s.id)}')" title="View price change history" style="font-size:10px;padding:3px 8px">History</button>
           <button class="btn bg bxs" onclick="openTagsModal('${escAttr(s.id)}')" title="Notes & Tags" style="font-size:10px;padding:3px 6px">🏷</button>
           <button class="btn bg bxs" onclick="startEdit('${escAttr(s.id)}')" title="Edit this SKU">✎</button>
           <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Delete this SKU">✕</button>
@@ -5523,7 +5512,9 @@ function renderAuditLog(){
 }
 
 function clearAuditLog(){
+  if(!currentUser||currentUser.role!=='admin'){toast('Only admins can clear audit logs','red');return;}
   if(!confirm('Clear all audit log entries? This cannot be undone.'))return;
+  if(!confirm('Are you absolutely sure? This is irreversible.'))return;
   auditLogData=[];saveAuditLog();renderAuditLog();toast('Audit log cleared','green');
 }
 
@@ -5578,6 +5569,44 @@ function renderSkuHistory(skuId){
         <td class="st">${esc(h.user)}</td>
       </tr>`;
     }).join('')}</tbody></table></div>`;
+}
+
+function showSkuHistoryModal(skuId){
+  const s=skuDB.find(x=>x.id===skuId);if(!s)return;
+  const brand=brands.find(b=>b.id===s.brandId);
+  const history=skuHistoryData[skuId];
+  const fieldLabels={cost:'Cost (₹)',markup:'Markup %',discount:'Discount %',category:'Category',brandId:'Brand',img:'Image'};
+  let tableHtml='';
+  if(!history||!history.length){
+    tableHtml='<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--tx3)">No price changes recorded for this SKU yet</td></tr>';
+  } else {
+    tableHtml=history.slice().reverse().map(h=>{
+      const d=new Date(h.ts);
+      const when=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+      const label=fieldLabels[h.field]||h.field;
+      return`<tr>
+        <td class="mono st" style="white-space:nowrap">${when}</td>
+        <td style="font-weight:500">${esc(label)}</td>
+        <td class="mono" style="color:var(--re)">${h.oldVal}</td>
+        <td class="mono" style="color:var(--gr)">${h.newVal}</td>
+        <td class="st">${esc(h.user)}</td>
+      </tr>`;
+    }).join('');
+  }
+  setModal(`<div class="mhdr"><div class="mtl">Price History — ${esc(s.styleId||s.sku||s.id)}</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody" style="padding:0">
+      <div style="padding:10px 16px;background:var(--s2);border-bottom:1px solid var(--bd);display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
+        <span><strong>Brand:</strong> ${esc(brand?brand.name:'Unknown')}</span>
+        <span><strong>Category:</strong> ${esc(s.category)}</span>
+        <span><strong>Style ID:</strong> ${esc(s.styleId)}</span>
+      </div>
+      <div style="max-height:400px;overflow-y:auto">
+        <table class="dt" style="font-size:11px">
+          <thead><tr><th>Date</th><th>Field</th><th>Old Value</th><th>New Value</th><th>Changed By</th></tr></thead>
+          <tbody>${tableHtml}</tbody>
+        </table>
+      </div>
+    </div>`);
 }
 
 // ═══════════════════════════════════════════════════════
