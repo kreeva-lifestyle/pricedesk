@@ -667,6 +667,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         <select class="fi" id="cat-sel-myntra" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('myntra')">
           <option value="">Select Category</option>
         </select>
+        <select class="fi" id="lvl-sel-myntra" style="width:110px;padding:5px 9px;font-size:12px" onchange="onLevelChange('myntra')">
+          <option>Level 1</option><option>Level 2</option><option>Level 3</option><option selected>Level 4</option>
+        </select>
       </div>
       <div class="card"><div style="padding:0"><table class="ct" id="ct-myntra"></table></div></div>
     </div>
@@ -1569,132 +1572,102 @@ function calcSKU(s){
 // ═══════════════════════════════════════════════════════
 // CALC STATE
 // ═══════════════════════════════════════════════════════
+// CD keys match WF var names so dynamic renderer can read/write them directly
 const CD={
-  myntra:  {cost:950, markup:78,cat:'Kurta Sets',retPct:8,inc:3},
-  ajioppmp:{cost:950, markup:78,cat:'Kurta Sets',retRate:10,inc:0},
-  ajiocc:  {cost:950, markup:78,cat:'Kurta Sets',inc:0},
-  amazon:  {cost:1650,markup:81,cat:'Lehenga Choli',ads:80,retRate:5,inc:0},
+  myntra:      {cost:1300, margin:79, discount:54, incentive:0, packagingCost:60, cat:'Kurta Sets', level:'Level 4'},
+  'ajio-ppmp': {cost:950,  markup:78, incentive:0, retRate:10, cat:'Kurta Sets', level:'Level 2'},
+  'ajio-cc':   {cost:950,  markup:78, incentive:0, cat:'Kurta Sets', level:'Level 2'},
+  amazon:      {cost:1650, markup:81, incentive:0, adSpend:80, retRate:5, cat:'Lehenga Choli', level:'Level 2'},
 };
 
-function renderMyntra(){
-  const d=CD.myntra;
-  const disc=d.disc||0;
-  const v=calcMyntraFull(d.cost,d.markup,disc,'Level 2',d.cat,d.inc,d.retPct);
-  const br=(v.profit)<(THRESHOLDS[d.cat]||0);
-  const t=el('ct-myntra');if(!t)return;
-  t.innerHTML=`
-    <tr class="sh"><td colspan="2">Pricing — Category: ${esc(d.cat)}</td></tr>
-    <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.myntra.cost=+this.value;renderMyntra()"></td></tr>
-    <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.myntra.markup=+this.value;renderMyntra()"></td></tr>
-    <tr class="cform"><td>MRP = Cost × (1+Markup%) → round to ₹50</td><td class="mono" style="color:var(--bl)">₹${v.mrp.toLocaleString('en-IN')}</td></tr>
-    <tr class="ir"><td>Discount % <span class="st">(0 = no discount)</span></td><td><input type="number" value="${disc}" min="0" max="99" onchange="CD.myntra.disc=+this.value;renderMyntra()"></td></tr>
-    <tr class="cform"><td>Customer Paid = MRP × (1−Discount%)</td><td class="mono" style="color:var(--bl)">₹${Math.round(v.custPaid).toLocaleString('en-IN')}</td></tr>
-    <tr class="cform"><td>GT Charge (Level 2 × Customer Paid band)</td><td class="mono" style="color:var(--re)">−₹${v.gtCharge}</td></tr>
-    <tr class="cform"><td><strong>Seller Price</strong> = Customer Paid − GT Charge</td><td class="mono" style="color:var(--bl);font-weight:600">₹${Math.round(v.sellerPrice).toLocaleString('en-IN')}</td></tr>
-    <tr class="sh cauto"><td colspan="2">GST, TCS & TDS</td></tr>
-    <tr class="cauto"><td>GST Rate (auto) ${gstBadge(v.custPaid)}</td><td class="mono" style="color:var(--ac)">${(v.gst*100).toFixed(0)}%</td></tr>
-    <tr class="cauto"><td>Taxable Amount = Seller Price ÷ (1+GST) <span class="st">basis for TCS/TDS</span></td><td class="mono" style="color:var(--tx2)">₹${v.taxableAmt.toFixed(0)}</td></tr>
-    <tr class="cauto"><td>TCS = Taxable Amt × 0.1%</td><td class="mono" style="color:var(--re)">−₹${v.tcs.toFixed(2)}</td></tr>
-    <tr class="cauto"><td>TDS = Taxable Amt × 0.5%</td><td class="mono" style="color:var(--re)">−₹${v.tds.toFixed(2)}</td></tr>
-    <tr class="sh cauto"><td colspan="2">Commission on Seller Price ${d.inc>0?`<span style="color:var(--gr);font-size:10px;margin-left:6px">✓ −${d.inc}% incentive</span>`:''}</td></tr>
-    <tr class="cauto"><td>Commission % (slab: ${v.rawComm}%, eff: ${v.effComm}%)</td><td class="mono" style="color:var(--ac)">${v.effComm}%</td></tr>
-    <tr class="ir"><td>Incentive %</td><td><input type="number" value="${d.inc}" onchange="CD.myntra.inc=+this.value;renderMyntra()"></td></tr>
-    <tr><td>Commission Amount</td><td class="mono" style="color:var(--re)">−₹${v.commAmt.toFixed(0)}</td></tr>
-    <tr><td>GST on Commission</td><td class="mono" style="color:var(--re)">−₹${v.gstAmt.toFixed(0)}</td></tr>
-    <tr class="sh"><td colspan="2">Logistics (Level 2)</td></tr>
-    <tr><td>Return Reverse Fee</td><td class="mono" style="color:var(--re)">−₹${v.ret}</td></tr>
-    <tr><td>Collection Fee</td><td class="mono" style="color:var(--re)">−₹${v.coll}</td></tr>
-    <tr><td>Payment Gateway</td><td class="mono" style="color:var(--re)">−₹${v.pg}</td></tr>
-    <tr class="ir"><td>Return % (provision)</td><td><input type="number" value="${d.retPct}" onchange="CD.myntra.retPct=+this.value;renderMyntra()"></td></tr>
-    <tr><td>Return Provision</td><td class="mono" style="color:var(--re)">−₹${v.retProv.toFixed(0)}</td></tr>
-    <tr class="sh"><td colspan="2">Result</td></tr>
-    <tr><td>Net Payout</td><td class="mono">₹${v.payout.toFixed(0)}</td></tr>
-    <tr><td>Net Profit (₹) <span class="st">Threshold: ₹${THRESHOLDS[d.cat]||0}</span></td><td class="mono" style="color:${v.profit>=0?'var(--gr)':'var(--re)'}">₹${v.profit.toFixed(0)}</td></tr>
-    <tr class="${br?'cbreach':'ctotal'}"><td>Net Profit % ${br?'⚠ Below Threshold':''}</td><td>${v.profitPct}%</td></tr>`;
+// ═══════════════════════════════════════════════════════
+// DYNAMIC PRICING TABLE RENDERER — driven by WF definitions
+// ═══════════════════════════════════════════════════════
+function fmtWFVal(val, row){
+  if(val===null||val===undefined) return '—';
+  if(row.fmt==='%x') return (val*100).toFixed(0)+'%';
+  if(row.fmt==='%') return typeof val==='number'?val.toFixed(2)+'%':val+'%';
+  const n = typeof val==='number'?val:parseFloat(val)||0;
+  const abs = Math.abs(n);
+  const str = abs>=1000 ? '₹'+abs.toLocaleString('en-IN',{maximumFractionDigits:2})
+            : abs%1===0 ? '₹'+abs : '₹'+abs.toFixed(2);
+  return row.sign===-1 ? '−'+str : str;
 }
 
-function renderAjioPPMP(){
-  const d=CD.ajioppmp;const mrp=Math.round(d.cost*(1+d.markup/100));const sp=Math.round(mrp*3/100)*100||mrp*3;
-  const gst=autoGST(sp);const rawComm=COMM_AJIO_PPMP[d.cat]||18.88;const eff=Math.max(0,rawComm-d.inc);
-  const commAmt=sp*eff/100;const gstAmt=commAmt*gst;const fwd=+el('ajfwd-fix')?.value||70;const ret=+el('ajret-fix')?.value||70;
-  const platFee=+el('ajio-platform-fee')?.value||0;const retProv=d.retRate/100*ret;
-  const payout=sp-commAmt-gstAmt-fwd-ret-platFee-retProv;const profRs=(payout-d.cost).toFixed(0);
-  const pp=((payout-d.cost)/sp*100).toFixed(1);const br=(payout-d.cost)<(THRESHOLDS[d.cat]||0);
-  const t=el('ct-ajio-ppmp');if(!t)return;
-  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${esc(d.cat)}</td></tr>
-    <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.ajioppmp.cost=+this.value;renderAjioPPMP()"></td></tr>
-    <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.ajioppmp.markup=+this.value;renderAjioPPMP()"></td></tr>
-    <tr class="cform"><td>MRP</td><td class="mono" style="color:var(--bl)">₹${mrp.toLocaleString('en-IN')}</td></tr>
-    <tr class="cform"><td>SP = MRP × 3</td><td class="mono" style="color:var(--bl)">₹${sp.toLocaleString('en-IN')}</td></tr>
-    <tr class="sh cauto"><td colspan="2">Ajio PPMP Commission</td></tr>
-    <tr class="cauto"><td>GST ${gstBadge(sp)}</td><td class="mono" style="color:var(--ac)">${(gst*100).toFixed(0)}%</td></tr>
-    <tr class="cauto"><td>Commission % (${rawComm}%, eff: ${eff}%)</td><td class="mono" style="color:var(--ac)">${eff}%</td></tr>
-    <tr class="ir"><td>Incentive %</td><td><input type="number" value="${d.inc}" onchange="CD.ajioppmp.inc=+this.value;renderAjioPPMP()"></td></tr>
-    <tr><td>Commission + GST</td><td class="mono" style="color:var(--re)">−₹${(commAmt+gstAmt).toFixed(0)}</td></tr>
-    <tr class="sh"><td colspan="2">Logistics</td></tr>
-    <tr><td>Forward + Return</td><td class="mono" style="color:var(--re)">−₹${(fwd+ret).toFixed(0)}</td></tr>
-    <tr class="ir"><td>Return Rate %</td><td><input type="number" value="${d.retRate}" onchange="CD.ajioppmp.retRate=+this.value;renderAjioPPMP()"></td></tr>
-    <tr><td>Return Provision</td><td class="mono" style="color:var(--re)">−₹${retProv.toFixed(0)}</td></tr>
-    <tr class="sh"><td colspan="2">Result</td></tr>
-    <tr><td>Net Profit (₹) <span class="st">Threshold: ₹${THRESHOLDS[d.cat]||0}</span></td><td class="mono" style="color:${profRs>0?'var(--gr)':'var(--re)'}">₹${profRs}</td></tr>
-    <tr class="${br?'cbreach':'ctotal'}"><td>Net Profit % ${br?'⚠':''}</td><td>${pp}%</td></tr>`;
+function renderDynamicCalc(mp){
+  const d = CD[mp];
+  if(!d) return;
+  const rows = WF[mp];
+  if(!rows||!rows.length) return;
+  const tableEl = el('ct-'+mp);
+  if(!tableEl) return;
+
+  // Run WF engine with CD values as inputs
+  const inputs = {...d, _mp:mp};
+  const result = runWFEngine(mp, inputs);
+
+  // Find output var for threshold check
+  const outputRow = rows.find(r=>r.t==='output');
+  const profitVal = outputRow&&outputRow.var ? result[outputRow.var]||0 : 0;
+  const threshold = THRESHOLDS[d.cat]||0;
+  const isBreach = profitVal < threshold;
+  const profitPct = result.sp||result.custPaid||result.mrp
+    ? ((profitVal)/(result.sp||result.custPaid||result.mrp)*100).toFixed(1) : '0.0';
+
+  let html = '';
+  for(const row of rows){
+    if(row.t==='section'){
+      // Section header — include hint if present
+      const hintHtml = row.hint==='✓' ? ` style="background:rgba(45,212,160,.05)"><td colspan="2" style="color:var(--gr)">✓ ${esc(row.l)}` : `><td colspan="2">${esc(row.l)}`;
+      html+=`<tr class="sh"${hintHtml}</td></tr>`;
+    }
+    else if(row.t==='input'){
+      const val = d[row.var]!==undefined ? d[row.var] : (result[row.var]||0);
+      const mpSafe = escAttr(mp);
+      const varSafe = escAttr(row.var);
+      html+=`<tr class="ir"><td>${esc(row.l)}</td><td><input type="number" value="${val}" onchange="CD['${mpSafe}']['${varSafe}']=+this.value;renderDynamicCalc('${mpSafe}')"></td></tr>`;
+    }
+    else if(row.t==='formula'||row.t==='lookup'){
+      const val = row.var ? result[row.var] : null;
+      const display = fmtWFVal(val, row);
+      const color = row.sign===-1 ? 'var(--re)' : row.fmt==='%'||row.fmt==='%x' ? 'var(--ac)' : 'var(--bl)';
+      html+=`<tr class="cform"><td>${esc(row.l)}</td><td class="mono" style="color:${color}">${display}</td></tr>`;
+    }
+    else if(row.t==='output'){
+      const val = row.var ? result[row.var]||0 : 0;
+      const color = val>=0 ? 'var(--gr)' : 'var(--re)';
+      const isMainProfit = row.var==='profit';
+      const threshHint = isMainProfit ? ` <span class="st">Threshold: ₹${threshold}</span>` : '';
+      const breachClass = isMainProfit&&isBreach ? 'cbreach' : 'ctotal';
+      const breachIcon = isMainProfit&&isBreach ? ' ⚠ Below Threshold' : '';
+      html+=`<tr class="${breachClass}"><td>${esc(row.l)}${threshHint}${breachIcon}</td><td class="mono" style="color:${color}">₹${val.toFixed(0)}</td></tr>`;
+    }
+  }
+  // Profit % row at the bottom
+  if(outputRow){
+    html+=`<tr class="${isBreach?'cbreach':'ctotal'}"><td>Net Profit %</td><td class="mono" style="color:${profitVal>=0?'var(--gr)':'var(--re)'}">${profitPct}%</td></tr>`;
+  }
+  tableEl.innerHTML = html;
 }
-function renderAjioCC(){
-  const d=CD.ajiocc;const mrp=Math.round(d.cost*(1+d.markup/100));const sp=Math.round(mrp*3/100)*100||mrp*3;
-  const gst=autoGST(sp);const rawComm=COMM_AJIO_CC[d.cat]||18.88;const eff=Math.max(0,rawComm-d.inc);
-  const commAmt=sp*eff/100;const gstAmt=commAmt*gst;const payout=sp-commAmt-gstAmt;
-  const profRs=(payout-d.cost).toFixed(0);const pp=((payout-d.cost)/sp*100).toFixed(1);const br=(payout-d.cost)<(THRESHOLDS[d.cat]||0);
-  const t=el('ct-ajio-cc');if(!t)return;
-  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${esc(d.cat)}</td></tr>
-    <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.ajiocc.cost=+this.value;renderAjioCC()"></td></tr>
-    <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.ajiocc.markup=+this.value;renderAjioCC()"></td></tr>
-    <tr class="cform"><td>MRP</td><td class="mono" style="color:var(--bl)">₹${mrp.toLocaleString('en-IN')}</td></tr>
-    <tr class="cform"><td>SP = MRP × 3</td><td class="mono" style="color:var(--bl)">₹${sp.toLocaleString('en-IN')}</td></tr>
-    <tr class="sh cauto"><td colspan="2">Ajio CC — Commission ONLY</td></tr>
-    <tr class="cauto"><td>GST ${gstBadge(sp)}</td><td class="mono" style="color:var(--ac)">${(gst*100).toFixed(0)}%</td></tr>
-    <tr class="cauto"><td>Commission % (${rawComm}%, eff: ${eff}%)</td><td class="mono" style="color:var(--ac)">${eff}%</td></tr>
-    <tr class="ir"><td>Incentive %</td><td><input type="number" value="${d.inc}" onchange="CD.ajiocc.inc=+this.value;renderAjioCC()"></td></tr>
-    <tr><td>Commission + GST</td><td class="mono" style="color:var(--re)">−₹${(commAmt+gstAmt).toFixed(0)}</td></tr>
-    <tr class="sh" style="background:rgba(45,212,160,.05)"><td colspan="2" style="color:var(--gr)">✓ No logistics — Ajio handles all</td></tr>
-    <tr class="sh"><td colspan="2">Result</td></tr>
-    <tr><td>Net Profit (₹) <span class="st">Threshold: ₹${THRESHOLDS[d.cat]||0}</span></td><td class="mono" style="color:${profRs>0?'var(--gr)':'var(--re)'}">₹${profRs}</td></tr>
-    <tr class="${br?'cbreach':'ctotal'}"><td>Net Profit % ${br?'⚠':''}</td><td>${pp}%</td></tr>`;
-}
-function renderAmazon(){
-  const d=CD.amazon;const mrp=Math.round(d.cost*(1+d.markup/100));const sp=Math.round(mrp*3/100)*100||mrp*3;
-  const gst=autoGST(sp);const rawComm=COMM_AMAZON[d.cat]||17;const eff=Math.max(0,rawComm-d.inc);
-  const rf=sp*eff/100;const fba=+el('amz-fba')?.value||55;const close=+el('amz-close')?.value||15;const retFee=+el('amz-ret')?.value||55;
-  const allFees=rf+close+fba;const gstAmt=allFees*gst;const retProv=d.retRate/100*retFee;
-  const payout=sp-allFees-gstAmt-d.ads-retProv;const profRs=(payout-d.cost).toFixed(0);
-  const pp=((payout-d.cost)/sp*100).toFixed(1);const br=(payout-d.cost)<(THRESHOLDS[d.cat]||0);
-  const t=el('ct-amazon');if(!t)return;
-  t.innerHTML=`<tr class="sh"><td colspan="2">Pricing — ${esc(d.cat)}</td></tr>
-    <tr class="ir"><td>Cost (₹)</td><td><input type="number" value="${d.cost}" onchange="CD.amazon.cost=+this.value;renderAmazon()"></td></tr>
-    <tr class="ir"><td>Markup %</td><td><input type="number" value="${d.markup}" onchange="CD.amazon.markup=+this.value;renderAmazon()"></td></tr>
-    <tr class="cform"><td>MRP</td><td class="mono" style="color:var(--bl)">₹${mrp.toLocaleString('en-IN')}</td></tr>
-    <tr class="cform"><td>SP = MRP × 3</td><td class="mono" style="color:var(--bl)">₹${sp.toLocaleString('en-IN')}</td></tr>
-    <tr class="sh cauto"><td colspan="2">Amazon Fees — ${d.cat} ${d.inc>0?`<span style="color:var(--gr);font-size:10px;margin-left:5px">✓ −${d.inc}% incentive</span>`:''}</td></tr>
-    <tr class="cauto"><td>GST ${gstBadge(sp)}</td><td class="mono" style="color:var(--ac)">${(gst*100).toFixed(0)}%</td></tr>
-    <tr class="cauto"><td>Referral % (${rawComm}%, eff: ${eff}%)</td><td class="mono" style="color:var(--ac)">${eff}%</td></tr>
-    <tr class="ir"><td>Incentive %</td><td><input type="number" value="${d.inc}" onchange="CD.amazon.inc=+this.value;renderAmazon()"></td></tr>
-    <tr><td>Ref + Closing + FBA + GST</td><td class="mono" style="color:var(--re)">−₹${(allFees+gstAmt).toFixed(0)}</td></tr>
-    <tr class="ir"><td>Ad Spend (₹)</td><td><input type="number" value="${d.ads}" onchange="CD.amazon.ads=+this.value;renderAmazon()"></td></tr>
-    <tr class="ir"><td>Return Rate %</td><td><input type="number" value="${d.retRate}" onchange="CD.amazon.retRate=+this.value;renderAmazon()"></td></tr>
-    <tr><td>Return Provision</td><td class="mono" style="color:var(--re)">−₹${retProv.toFixed(0)}</td></tr>
-    <tr class="sh"><td colspan="2">Result</td></tr>
-    <tr><td>Net Profit (₹) <span class="st">Threshold: ₹${THRESHOLDS[d.cat]||0}</span></td><td class="mono" style="color:${profRs>0?'var(--gr)':'var(--re)'}">₹${profRs}</td></tr>
-    <tr class="${br?'cbreach':'ctotal'}"><td>Net Profit % ${br?'⚠':''}</td><td>${pp}%</td></tr>`;
-}
+
+// Legacy aliases for compatibility
+function renderMyntra(){ renderDynamicCalc('myntra'); }
+function renderAjioPPMP(){ renderDynamicCalc('ajio-ppmp'); }
+function renderAjioCC(){ renderDynamicCalc('ajio-cc'); }
+function renderAmazon(){ renderDynamicCalc('amazon'); }
 
 function onCatChange(mp){
   const sel=el('cat-sel-'+mp);if(!sel)return;
   const cat=sel.value||'Kurta Sets';
-  if(mp==='myntra'){CD.myntra.cat=cat;renderMyntra();}
-  else if(mp==='ajio-ppmp'){CD.ajioppmp.cat=cat;renderAjioPPMP();}
-  else if(mp==='ajio-cc'){CD.ajiocc.cat=cat;renderAjioCC();}
-  else if(mp==='amazon'){CD.amazon.cat=cat;renderAmazon();}
+  if(CD[mp]) CD[mp].cat=cat;
+  renderDynamicCalc(mp);
 }
-function triggerRecalc(){invalidateCalcCache();renderMyntra();renderAjioPPMP();renderAjioCC();renderAmazon();}
+function onLevelChange(mp){
+  const sel=el('lvl-sel-'+mp);if(!sel)return;
+  if(CD[mp]) CD[mp].level=sel.value;
+  renderDynamicCalc(mp);
+}
+function triggerRecalc(){invalidateCalcCache();['myntra','ajio-ppmp','ajio-cc','amazon'].forEach(mp=>renderDynamicCalc(mp));}
 
 // ═══════════════════════════════════════════════════════
 // COMMISSION TABLES
@@ -2230,38 +2203,101 @@ async function deleteUser(id){
 // WIREFRAME
 // ═══════════════════════════════════════════════════════
 const WF={myntra:[
-  {id:1,  t:'section', l:'Pricing'},
-  {id:2,  t:'input',   l:'Cost Price (₹)',               var:'cost'},
-  {id:3,  t:'input',   l:'Profit Margin %',              var:'margin'},
-  {id:3.1,t:'formula', l:'Reality = Cost + Cost × Margin%', expr:'cost + cost * margin/100', var:'reality'},
-  {id:4,  t:'formula', l:'MRP = Reality × 3',            expr:'reality * 3', var:'mrpRaw'},
-  {id:4.1,t:'formula', l:'MRP Round Off (↑ nearest ₹50)',expr:'Math.ceil(mrpRaw/50)*50', var:'mrp', locked:true},
-  {id:4.5,t:'input',   l:'Discount %',                   var:'discount', hint:'e.g. 55 means 55%'},
-  {id:5,  t:'formula', l:'Customer Paid = MRP − MRP × Discount%', expr:'mrp - mrp * discount/100', var:'custPaid'},
-  {id:5.5,t:'lookup',  l:'GT Charges — auto from Customer Paid band', fn:'gtCharge', var:'gtCharge', locked:true, desc:'VLOOKUP on Customer Paid price band from GT Charges table'},
-  {id:5.6,t:'formula', l:'Seller Price = Customer Paid − GT Charges', expr:'custPaid - gtCharge', var:'sellerPrice', locked:true},
-  {id:6,  t:'section', l:'Tax (on Seller Price)'},
-  {id:6.1,t:'formula', l:'GST Rate = 18% if SP>₹2499, else 5%',   expr:'sellerPrice > 2499 ? 0.18 : 0.05', var:'gstRate', locked:true},
-  {id:6.2,t:'formula', l:'GST Amount = SP − SP÷(1+GST)',          expr:'sellerPrice - sellerPrice/(1+gstRate)', var:'gstAmt', locked:true},
-  {id:6.3,t:'formula', l:'Taxable Amount = SP − GST Amount',      expr:'sellerPrice - gstAmt', var:'taxableAmt', locked:true, hint:'= SP÷(1+GST)'},
-  {id:6.4,t:'formula', l:'TCS = Taxable Amount × 0.1%',           expr:'taxableAmt * 0.001', var:'tcs'},
-  {id:6.5,t:'formula', l:'TDS = Taxable Amount × 0.5%',           expr:'taxableAmt * 0.005', var:'tds'},
-  {id:7,  t:'section', l:'Commission (on Seller Price)'},
-  {id:7.1,t:'lookup',  l:'Commission % — auto from category slab', fn:'commPct', var:'commPct', locked:true},
-  {id:7.2,t:'input',   l:'Incentive % (if any)',                   var:'incentive'},
-  {id:7.3,t:'formula', l:'Eff. Commission % = Comm% − Incentive%', expr:'Math.max(0, commPct-(incentive||0))', var:'effCommPct', locked:true},
-  {id:7.4,t:'formula', l:'Commission Amount = SP × Eff.Comm%',    expr:'sellerPrice * effCommPct/100', var:'commAmt', locked:true},
-  {id:8,  t:'section', l:'Logistics'},
-  {id:8.1,t:'lookup',  l:'Reverse Shipping — auto from level table', fn:'retFee', var:'retFee', locked:true},
-  {id:8.2,t:'lookup',  l:'Fix Fees (Collection Fee) — ₹61',        fn:'collFee', var:'collFee', locked:true},
-  {id:8.3,t:'formula', l:'Tax on Logistics = (RevShip + FixFees) × 18%', expr:'(retFee + collFee) * 0.18', var:'taxOnLogistic', locked:true},
-  {id:8.4,t:'formula', l:'Total Logistics = RevShip + FixFees + Tax', expr:'retFee + collFee + taxOnLogistic', var:'totalLogistic', locked:true},
-  {id:8.5,t:'input',   l:'Packaging Cost (₹)',                     var:'packagingCost'},
-  {id:9,  t:'section', l:'Result'},
-  {id:9.1,t:'formula', l:'Expected Payment = SP − TCS − TDS − Comm − Logistics', expr:'sellerPrice - tcs - tds - commAmt - totalLogistic', var:'expectedPayment', locked:true},
-  {id:9.2,t:'formula', l:'Gross Settlement = SP − Comm − ₹71.98', expr:'sellerPrice - commAmt - 71.98', var:'grossSettlement'},
-  {id:10, t:'output',  l:'Profit = Exp.Payment − Cost − Packaging', expr:'expectedPayment - cost - (packagingCost||0)', var:'profit'}
-],'ajio-ppmp':[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'PPMP Commission'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Comm% (from PPMP settings)'},{id:9,t:'formula',l:'Commission + GST + Logistics'},{id:10,t:'section',l:'Result'},{id:11,t:'output',l:'Net Profit ₹ & %'}],'ajio-cc':[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'CC Model — Commission Only'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Comm% (from CC settings)'},{id:9,t:'formula',l:'Payout = SP − Commission − GST'},{id:10,t:'section',l:'No logistics / No other charges'},{id:11,t:'output',l:'Net Profit ₹ & %'}],amazon:[{id:1,t:'section',l:'Pricing'},{id:2,t:'input',l:'Cost Price (₹)'},{id:3,t:'input',l:'Markup %'},{id:4,t:'formula',l:'MRP = Cost × (1+Markup%)'},{id:5,t:'formula',l:'SP = MRP × 3'},{id:6,t:'section',l:'Amazon Fees'},{id:7,t:'formula',l:'GST Rate (auto)'},{id:8,t:'formula',l:'Referral % (fixed per category)'},{id:9,t:'formula',l:'Referral + FBA + Closing + GST on Fees'},{id:10,t:'input',l:'Ad Spend (₹)'},{id:11,t:'formula',l:'Return Provision'},{id:12,t:'output',l:'Net Profit ₹ & %'}]};
+  {id:1,   t:'section', l:'Pricing'},
+  {id:2,   t:'input',   l:'Cost Price (₹)',                          var:'cost'},
+  {id:3,   t:'input',   l:'Profit Margin %',                         var:'margin', fmt:'%'},
+  {id:3.1, t:'formula', l:'Profit Including Cost',                   expr:'cost + cost * margin/100', var:'reality'},
+  {id:4,   t:'formula', l:'MRP (3× of Profit Including Cost)',       expr:'reality * 3', var:'mrpRaw'},
+  {id:4.1, t:'formula', l:'MRP Round Off (↑ nearest ₹50)',           expr:'Math.ceil(mrpRaw/50)*50', var:'mrp', locked:true},
+  {id:4.5, t:'input',   l:'Discount %',                              var:'discount', fmt:'%'},
+  {id:5,   t:'formula', l:'Customer Paid = MRP − Discount%',         expr:'mrp - mrp * discount/100', var:'custPaid'},
+  {id:5.5, t:'lookup',  l:'Forward (GT Charges) — auto from level & price slab', fn:'gtCharge', var:'gtCharge', locked:true, sign:-1, desc:'VLOOKUP from GT Charges table'},
+  {id:5.6, t:'formula', l:'Seller Price = Customer Paid − GT Charges',expr:'custPaid - gtCharge', var:'sellerPrice', locked:true},
+  {id:6,   t:'section', l:'Tax (on Seller Price)'},
+  {id:6.1, t:'formula', l:'GST Rate (18% if SP > ₹2500, else 5%)',   expr:'sellerPrice > 2499 ? 0.18 : 0.05', var:'gstRate', locked:true, fmt:'%x'},
+  {id:6.2, t:'formula', l:'GST Amount (inclusive of SP)',             expr:'sellerPrice - sellerPrice/(1+gstRate)', var:'gstAmt', locked:true, sign:-1},
+  {id:6.3, t:'formula', l:'Taxable Amount = SP − GST',               expr:'sellerPrice - gstAmt', var:'taxableAmt', locked:true},
+  {id:6.4, t:'formula', l:'TCS (0.1% of Taxable Amt)',               expr:'taxableAmt * 0.001', var:'tcs', sign:-1, fmt:'₹'},
+  {id:6.5, t:'formula', l:'TDS (0.5% of Taxable Amt)',               expr:'taxableAmt * 0.005', var:'tds', sign:-1, fmt:'₹'},
+  {id:7,   t:'section', l:'Commission (on Seller Price)'},
+  {id:7.1, t:'lookup',  l:'Commission % — auto from category & slab', fn:'commPct', var:'commPct', locked:true, fmt:'%'},
+  {id:7.2, t:'input',   l:'Incentive %',                              var:'incentive', fmt:'%'},
+  {id:7.3, t:'formula', l:'Eff. Commission % = Comm% − Incentive%',   expr:'Math.max(0, commPct-(incentive||0))', var:'effCommPct', locked:true, fmt:'%'},
+  {id:7.4, t:'formula', l:'Commission Amount = SP × Eff.Comm%',       expr:'sellerPrice * effCommPct/100', var:'commAmt', locked:true, sign:-1},
+  {id:8,   t:'section', l:'Logistics'},
+  {id:8.1, t:'lookup',  l:'Reverse Fees — auto from level',           fn:'retFee', var:'retFee', locked:true, sign:-1},
+  {id:8.2, t:'lookup',  l:'Fix Fees (Collection Fee)',                 fn:'collFee', var:'collFee', locked:true, sign:-1},
+  {id:8.3, t:'formula', l:'Tax on Logistics = (Reverse + Fix) × 18%', expr:'(retFee + collFee) * 0.18', var:'taxOnLogistic', locked:true, sign:-1},
+  {id:8.4, t:'formula', l:'Total Logistics = Reverse + Fix + Tax',    expr:'retFee + collFee + taxOnLogistic', var:'totalLogistic', locked:true, sign:-1},
+  {id:8.5, t:'input',   l:'Packaging Cost (₹)',                       var:'packagingCost'},
+  {id:9,   t:'section', l:'Result'},
+  {id:9.1, t:'formula', l:'Expected Payment = SP − TCS − TDS − Comm − Logistics', expr:'sellerPrice - tcs - tds - commAmt - totalLogistic', var:'expectedPayment', locked:true},
+  {id:10,  t:'output',  l:'Profit = Expected Payment − Cost − Packaging', expr:'expectedPayment - cost - (packagingCost||0)', var:'profit'},
+  {id:10.1,t:'output',  l:'If Delivered (Profit + Reverse Fees)',      expr:'(expectedPayment - cost - (packagingCost||0)) + retFee', var:'ifDelivered'}
+],'ajio-ppmp':[
+  {id:1,   t:'section', l:'Pricing'},
+  {id:2,   t:'input',   l:'Cost Price (₹)',                           var:'cost'},
+  {id:3,   t:'input',   l:'Markup %',                                 var:'markup', fmt:'%'},
+  {id:4,   t:'formula', l:'MRP = Cost × (1 + Markup%)',               expr:'Math.round(cost * (1 + markup/100))', var:'mrp'},
+  {id:5,   t:'formula', l:'SP = MRP × 3 (rounded to ₹100)',          expr:'Math.round(mrp*3/100)*100 || mrp*3', var:'sp'},
+  {id:6,   t:'section', l:'PPMP Commission'},
+  {id:6.1, t:'formula', l:'GST Rate (auto)',                          expr:'sp > 2499 ? 0.18 : 0.05', var:'gstRate', locked:true, fmt:'%x'},
+  {id:6.2, t:'lookup',  l:'Commission % — auto from PPMP settings',   fn:'commPct', var:'commPct', locked:true, fmt:'%'},
+  {id:6.3, t:'input',   l:'Incentive %',                              var:'incentive', fmt:'%'},
+  {id:6.4, t:'formula', l:'Eff. Commission %',                        expr:'Math.max(0, commPct-(incentive||0))', var:'effCommPct', locked:true, fmt:'%'},
+  {id:6.5, t:'formula', l:'Commission Amount = SP × Eff.Comm%',       expr:'sp * effCommPct/100', var:'commAmt', locked:true, sign:-1},
+  {id:6.6, t:'formula', l:'GST on Commission',                        expr:'commAmt * gstRate', var:'gstOnComm', locked:true, sign:-1},
+  {id:7,   t:'section', l:'Logistics'},
+  {id:7.1, t:'lookup',  l:'Forward Fee',                              fn:'fwdFeeAjio', var:'fwdFee', locked:true, sign:-1},
+  {id:7.2, t:'lookup',  l:'Return Fee',                               fn:'retFeeAjio', var:'retFee', locked:true, sign:-1},
+  {id:7.3, t:'lookup',  l:'Platform Fee',                             fn:'platFeeAjio', var:'platFee', locked:true, sign:-1},
+  {id:7.4, t:'input',   l:'Return Rate %',                            var:'retRate', fmt:'%'},
+  {id:7.5, t:'formula', l:'Return Provision = RetRate% × Return Fee', expr:'(retRate||0)/100 * retFee', var:'retProv', sign:-1},
+  {id:8,   t:'section', l:'Result'},
+  {id:8.1, t:'formula', l:'Payout = SP − Comm − GST − Logistics',    expr:'sp - commAmt - gstOnComm - fwdFee - retFee - platFee - retProv', var:'payout', locked:true},
+  {id:9,   t:'output',  l:'Net Profit = Payout − Cost',               expr:'payout - cost', var:'profit'}
+],'ajio-cc':[
+  {id:1,   t:'section', l:'Pricing'},
+  {id:2,   t:'input',   l:'Cost Price (₹)',                           var:'cost'},
+  {id:3,   t:'input',   l:'Markup %',                                 var:'markup', fmt:'%'},
+  {id:4,   t:'formula', l:'MRP = Cost × (1 + Markup%)',               expr:'Math.round(cost * (1 + markup/100))', var:'mrp'},
+  {id:5,   t:'formula', l:'SP = MRP × 3 (rounded to ₹100)',          expr:'Math.round(mrp*3/100)*100 || mrp*3', var:'sp'},
+  {id:6,   t:'section', l:'CC Model — Commission Only'},
+  {id:6.1, t:'formula', l:'GST Rate (auto)',                          expr:'sp > 2499 ? 0.18 : 0.05', var:'gstRate', locked:true, fmt:'%x'},
+  {id:6.2, t:'lookup',  l:'Commission % — auto from CC settings',     fn:'commPct', var:'commPct', locked:true, fmt:'%'},
+  {id:6.3, t:'input',   l:'Incentive %',                              var:'incentive', fmt:'%'},
+  {id:6.4, t:'formula', l:'Eff. Commission %',                        expr:'Math.max(0, commPct-(incentive||0))', var:'effCommPct', locked:true, fmt:'%'},
+  {id:6.5, t:'formula', l:'Commission Amount = SP × Eff.Comm%',       expr:'sp * effCommPct/100', var:'commAmt', locked:true, sign:-1},
+  {id:6.6, t:'formula', l:'GST on Commission',                        expr:'commAmt * gstRate', var:'gstOnComm', locked:true, sign:-1},
+  {id:7,   t:'section', l:'No Logistics — Ajio Handles All', hint:'✓'},
+  {id:8,   t:'section', l:'Result'},
+  {id:8.1, t:'formula', l:'Payout = SP − Commission − GST',          expr:'sp - commAmt - gstOnComm', var:'payout', locked:true},
+  {id:9,   t:'output',  l:'Net Profit = Payout − Cost',               expr:'payout - cost', var:'profit'}
+],amazon:[
+  {id:1,   t:'section', l:'Pricing'},
+  {id:2,   t:'input',   l:'Cost Price (₹)',                           var:'cost'},
+  {id:3,   t:'input',   l:'Markup %',                                 var:'markup', fmt:'%'},
+  {id:4,   t:'formula', l:'MRP = Cost × (1 + Markup%)',               expr:'Math.round(cost * (1 + markup/100))', var:'mrp'},
+  {id:5,   t:'formula', l:'SP = MRP × 3 (rounded to ₹100)',          expr:'Math.round(mrp*3/100)*100 || mrp*3', var:'sp'},
+  {id:6,   t:'section', l:'Amazon Fees'},
+  {id:6.1, t:'formula', l:'GST Rate (auto)',                          expr:'sp > 2499 ? 0.18 : 0.05', var:'gstRate', locked:true, fmt:'%x'},
+  {id:6.2, t:'lookup',  l:'Referral % — auto from category',          fn:'commPct', var:'commPct', locked:true, fmt:'%'},
+  {id:6.3, t:'input',   l:'Incentive %',                              var:'incentive', fmt:'%'},
+  {id:6.4, t:'formula', l:'Eff. Referral %',                          expr:'Math.max(0, commPct-(incentive||0))', var:'effCommPct', locked:true, fmt:'%'},
+  {id:6.5, t:'formula', l:'Referral Fee = SP × Eff.Referral%',        expr:'sp * effCommPct/100', var:'refFee', locked:true, sign:-1},
+  {id:6.6, t:'lookup',  l:'FBA Fee',                                  fn:'fbaFee', var:'fbaFee', locked:true, sign:-1},
+  {id:6.7, t:'lookup',  l:'Closing Fee',                              fn:'closeFee', var:'closeFee', locked:true, sign:-1},
+  {id:6.8, t:'formula', l:'Total Fees = Referral + FBA + Closing',    expr:'refFee + fbaFee + closeFee', var:'totalFees', locked:true, sign:-1},
+  {id:6.9, t:'formula', l:'GST on Fees',                              expr:'totalFees * gstRate', var:'gstOnFees', locked:true, sign:-1},
+  {id:7,   t:'section', l:'Other Costs'},
+  {id:7.1, t:'input',   l:'Ad Spend (₹)',                             var:'adSpend'},
+  {id:7.2, t:'lookup',  l:'Return Fee',                               fn:'retFee', var:'retFee', locked:true, sign:-1},
+  {id:7.3, t:'input',   l:'Return Rate %',                            var:'retRate', fmt:'%'},
+  {id:7.4, t:'formula', l:'Return Provision = RetRate% × Return Fee', expr:'(retRate||0)/100 * retFee', var:'retProv', sign:-1},
+  {id:8,   t:'section', l:'Result'},
+  {id:8.1, t:'formula', l:'Payout = SP − Fees − GST − Ads − RetProv', expr:'sp - totalFees - gstOnFees - (adSpend||0) - retProv', var:'payout', locked:true},
+  {id:9,   t:'output',  l:'Net Profit = Payout − Cost',               expr:'payout - cost', var:'profit'}
+]};
 let wfN=200;
 
 // ═══════════════════════════════════════════════════════
@@ -2434,9 +2470,12 @@ function nav(p){
   if(p==='pricing'){
     populateFilters();
     // Sync dropdowns to match calculator defaults
-    const catSels={'myntra':CD.myntra.cat,'ajio-ppmp':CD.ajioppmp.cat,'ajio-cc':CD.ajiocc.cat,'amazon':CD.amazon.cat};
-    Object.entries(catSels).forEach(([mp,cat])=>{const s=el('cat-sel-'+mp);if(s)s.value=cat;});
-    renderMyntra();renderAjioPPMP();renderAjioCC();renderAmazon();renderWFPreviews();
+    ['myntra','ajio-ppmp','ajio-cc','amazon'].forEach(mp=>{
+      const s=el('cat-sel-'+mp);if(s&&CD[mp])s.value=CD[mp].cat;
+      const l=el('lvl-sel-'+mp);if(l&&CD[mp])l.value=CD[mp].level||'Level 2';
+      renderDynamicCalc(mp);
+    });
+    renderWFPreviews();
   }
   if(p==='commission'){buildCommMyntra();buildCommAjioPPMP();buildCommAjioCC();buildCommAmazon();}
   if(p==='wireframe')renderWFBuilder();
@@ -3523,12 +3562,31 @@ const WF_FUNCTIONS = {
 
 // Built-in lookup functions — these can never be edited or broken
 const WF_LOOKUPS = {
-  gtCharge:  ctx => getMynFwd(ctx.level||'Level 2', ctx.custPaid||0),
-  gstRate:   ctx => ctx.sellerPrice > 2499 ? 0.18 : 0.05,  // matches Excel: IF(M2>2499,18%,5%)
-  commPct:   ctx => getMyntraComm(ctx.cat||'Kurta Sets', ctx.sellerPrice||0),
-  retFee:    ctx => getMynRet(ctx.level||'Level 2'),
+  gtCharge: ctx => {
+    if(ctx._mp==='myntra') return getMynFwd(ctx.level||'Level 2', ctx.custPaid||0);
+    return 0;
+  },
+  gstRate: ctx => (ctx.sellerPrice||ctx.sp||0) > 2499 ? 0.18 : 0.05,
+  commPct: ctx => {
+    const sp = ctx.sellerPrice||ctx.sp||0;
+    if(ctx._mp==='myntra') return getMyntraComm(ctx.cat||'Kurta Sets', sp);
+    if(ctx._mp==='ajio-ppmp') return COMM_AJIO_PPMP[ctx.cat]||18.88;
+    if(ctx._mp==='ajio-cc') return COMM_AJIO_CC[ctx.cat]||18.88;
+    if(ctx._mp==='amazon') return COMM_AMAZON[ctx.cat]||17;
+    return 0;
+  },
+  retFee: ctx => {
+    if(ctx._mp==='myntra') return getMynRet(ctx.level||'Level 2');
+    if(ctx._mp==='amazon') return LOGISTICS_SETTINGS.amz_ret||55;
+    return 0;
+  },
   collFee:   () => LOGISTICS_SETTINGS.myn_collection_fee||61,
   pgFee:     () => LOGISTICS_SETTINGS.myn_pg_fee||50.22,
+  fwdFeeAjio: () => LOGISTICS_SETTINGS.ajio_fwd||70,
+  retFeeAjio: () => LOGISTICS_SETTINGS.ajio_ret||70,
+  platFeeAjio: () => LOGISTICS_SETTINGS.ajio_platform_fee||0,
+  fbaFee:    () => LOGISTICS_SETTINGS.amz_fba||55,
+  closeFee:  () => LOGISTICS_SETTINGS.amz_close||15,
 };
 
 function runWFEngine(marketplace, inputs){
@@ -3536,6 +3594,7 @@ function runWFEngine(marketplace, inputs){
   // Start context with all inputs + helper functions
   const ctx = {
     ...inputs,
+    _mp: marketplace,
     getMynFwd: (lvl, sp) => getMynFwd(lvl||inputs.level||'Level 2', sp),
     getMynRet: (lvl) => getMynRet(lvl||inputs.level||'Level 2'),
     getMyntraComm: (cat, sp) => getMyntraComm(cat||inputs.cat||'Kurta Sets', sp),
@@ -3586,7 +3645,7 @@ function runWFEngine(marketplace, inputs){
 // ── Update calcMyntraFull to use WF engine (TCS/TDS auto-included) ──
 function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){
   const result = runWFEngine('myntra', {
-    cost, markup, discount: discPct||0,
+    cost, margin: markup, markup, discount: discPct||0,
     level: level||'Level 2', cat: cat||'Kurta Sets',
     incentive: incPct||0, retPct: retPct||0
   });
@@ -3608,8 +3667,8 @@ function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){
   const coll     = result.collFee  || LOGISTICS_SETTINGS.myn_collection_fee||61;
   const pg       = result.pgFee    || LOGISTICS_SETTINGS.myn_pg_fee||50.22;
   const retProv  = result.retProv  || 0;
-  const payout   = result.payout   || (sellerPrice-commAmt-gstAmt-ret-coll-pg-retProv-tcs-tds);
-  const profit   = result.profit   || (payout-cost);
+  const payout   = result.expectedPayment || result.payout || (sellerPrice-commAmt-gstAmt-ret-coll-pg-retProv-tcs-tds);
+  const profit   = result.profit  || (payout-cost);
   const profitPct= custPaid>0 ? (profit/custPaid*100).toFixed(1) : '0';
   return {mrp,mrpRnd,custPaid,gtCharge,sellerPrice,gst,gstRate:gst,rawComm,effComm,effCommPct:effComm,
           commAmt,gstAmt,gstOnComm:gstAmt,taxableAmt,tcs,tds,ret,retFee:ret,coll,collFee:coll,
