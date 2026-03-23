@@ -1363,6 +1363,15 @@ async function loadFromStorage(){
       const WF_VERSION = 5; // Increment when wireframe structure changes
       if(loaded.wireframe._v === WF_VERSION){
         Object.assign(WF, loaded.wireframe);
+        // Migrate: ensure packagingCost input rows have defaultVal
+        for(const mp of Object.keys(WF)){
+          if(!Array.isArray(WF[mp])) continue;
+          for(const row of WF[mp]){
+            if(row.var==='packagingCost' && row.t==='input' && row.defaultVal===undefined){
+              row.defaultVal = 60;
+            }
+          }
+        }
       } else {
         // Use code defaults for all marketplaces — DB is stale
         WF._v = WF_VERSION;
@@ -1574,18 +1583,18 @@ function calcSKU(s){
 
   if(mp==='myntra'){
     // Use WF engine for full Myntra calculation
-    const v2=calcMyntraFull(s.cost,s.markup,s.discount||0,level,s.category,0,0);
-    mrp=v2.mrpRnd||v2.mrp||0;
-    sp=v2.sellerPrice||v2.custPaid||mrp||0;
-    comm=brand.commOverride!=null ? brand.commOverride : (v2.rawComm!=null?v2.rawComm:0);
-    payout=v2.payout||0;
-    profitRs=v2.profit!=null?v2.profit:(payout-s.cost);
+    const v2=calcMyntraFull(s.cost,s.markup,s.discount??0,level,s.category,0,0);
+    mrp=v2.mrpRnd??v2.mrp??0;
+    sp=v2.sellerPrice??v2.custPaid??mrp??0;
+    comm=brand.commOverride!=null ? brand.commOverride : (v2.rawComm??0);
+    payout=v2.payout??0;
+    profitRs=v2.profit??(payout-s.cost);
     // If Delivered = profit + reverse fees (saved when order completes)
-    const retFee=v2.retFee||v2.ret||0;
-    ifDelivered=profitRs + retFee;
+    const retFee=v2.retFee??v2.ret??0;
+    ifDelivered=v2.ifDelivered??(profitRs + retFee);
   } else {
     mrp=Math.round(s.cost*(1+s.markup/100));
-    sp=Math.round(mrp*3/100)*100||mrp*3;
+    sp=Math.round(mrp*3/100)*100||mrp*3; // intentional || here — fallback if round gives 0
     const gst=autoGST(sp);
     if(brand.commOverride!=null) comm=brand.commOverride;
     else if(mp==='ajio-ppmp') comm=COMM_AJIO_PPMP[s.category]||18.88;
@@ -1653,7 +1662,7 @@ function renderDynamicCalc(mp){
 
   // Find output var for threshold check
   const outputRow = rows.find(r=>r.t==='output');
-  const profitVal = outputRow&&outputRow.var ? result[outputRow.var]||0 : 0;
+  const profitVal = outputRow&&outputRow.var ? (result[outputRow.var]??0) : 0;
   const threshold = THRESHOLDS[d.cat]||0;
   const isBreach = profitVal < threshold;
 
@@ -1677,7 +1686,7 @@ function renderDynamicCalc(mp){
       }
     }
     else if(row.t==='input'){
-      const val = d[row.var]!==undefined ? d[row.var] : (result[row.var]||0);
+      const val = d[row.var]!==undefined ? d[row.var] : (result[row.var]??0);
       const mpSafe = escAttr(mp);
       const varSafe = escAttr(row.var);
       if(isMyntra){
@@ -1697,7 +1706,7 @@ function renderDynamicCalc(mp){
       }
     }
     else if(row.t==='output'){
-      const val = row.var ? result[row.var]||0 : 0;
+      const val = row.var ? (result[row.var]??0) : 0;
       const isMainProfit = row.var==='profit';
       const breachClass = isMainProfit&&isBreach ? 'cbreach' : 'ctotal';
       if(isMyntra){
@@ -2220,7 +2229,7 @@ function showCalcModal(skuId){
     }
     const isOutput=row.t==='output';
     const color=isOutput?(val>=0?'var(--gr)':'var(--re)'):row.sign===-1?'var(--re)':'var(--tx)';
-    const bg=isOutput?'background:rgba(45,212,160,.08);':'';
+    const bg=isOutput?(val>=0?'background:rgba(45,212,160,.08);':'background:rgba(255,59,48,.08);'):'';
     const fw=isOutput?'font-weight:700;':'';
     tableHtml+=`<tr style="${bg}">
       <td style="padding:5px 11px;font-size:12px;${fw}">${esc(row.l)}</td>
@@ -2344,7 +2353,7 @@ const WF={myntra:[
   {id:8.3, t:'formula', l:'TAX ON LOGISTIC',                           expr:'(retFee + collFee) * 0.18', var:'taxOnLogistic', sign:-1, desc:'18% tax on Reverse + Fix Fees', pct:true},
   {id:8.4, t:'formula', l:'REVERSE, FF, REVERSE TAX',                  expr:'retFee + collFee + taxOnLogistic', var:'totalLogistic', sign:-1, desc:'Reverse Fees + Fix Fees + Tax on Logistic'},
   {id:9.1, t:'formula', l:'EXPECTED PAYMENT',                          expr:'sellerPrice - tcs - tds - commAmt - totalLogistic', var:'expectedPayment', desc:'SP - TCS - TDS - Commission - Total Logistic'},
-  {id:8.5, t:'input',   l:'PACKGING COST',                             var:'packagingCost', desc:'Packaging cost per unit (configurable in Settings)'},
+  {id:8.5, t:'input',   l:'PACKAGING COST',                             var:'packagingCost', defaultVal:60, desc:'Packaging cost per unit'},
   {id:10,  t:'output',  l:'PROFIT',                                    expr:'expectedPayment - cost - (packagingCost||0)', var:'profit', desc:'Expected Payment - Cost - Packaging'},
   {id:10.1,t:'output',  l:'IF DELIVERED',                               expr:'(expectedPayment - cost - (packagingCost||0)) + retFee', var:'ifDelivered', desc:'Profit + Reverse Fees (saved if delivered)'}
 ],'ajio-ppmp':[
@@ -3851,25 +3860,25 @@ function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){
     level: level||'Level 2', cat: cat||'Kurta Sets',
     retPct: retPct||0
   });
-  // Map engine output to expected return shape
-  const mrp      = result.mrp      || Math.round(cost*(1+markup/100));
+  // Map engine output to expected return shape — use ?? to preserve 0 and negative values
+  const mrp      = result.mrp      ?? Math.round(cost*(1+markup/100));
   const mrpRnd   = mrp;
-  const custPaid = result.custPaid || mrp;
-  const gtCharge = result.gtCharge || 0;
-  const sellerPrice = result.sellerPrice || custPaid;
-  const gst      = result.gstRate  || autoGST(custPaid);
-  const rawComm  = result.commPct  || 0;
-  const commAmt  = result.commAmt  || 0;
-  const gstAmt   = result.gstOnComm || 0;
-  const taxableAmt = result.taxableAmt || sellerPrice/(1+gst);
-  const tcs      = result.tcs      || taxableAmt*0.001;
-  const tds      = result.tds      || taxableAmt*0.005;
-  const ret      = result.retFee   || REVERSE_FEES[level]||218;
-  const coll     = result.collFee  || LOGISTICS_SETTINGS.myn_collection_fee||61;
-  const pg       = result.pgFee    || LOGISTICS_SETTINGS.myn_pg_fee||50.22;
-  const retProv  = result.retProv  || 0;
-  const payout   = result.expectedPayment || result.payout || (sellerPrice-commAmt-gstAmt-ret-coll-pg-retProv-tcs-tds);
-  const profit   = result.profit  || (payout-cost);
+  const custPaid = result.custPaid ?? mrp;
+  const gtCharge = result.gtCharge ?? 0;
+  const sellerPrice = result.sellerPrice ?? custPaid;
+  const gst      = result.gstRate  ?? autoGST(custPaid);
+  const rawComm  = result.commPct  ?? 0;
+  const commAmt  = result.commAmt  ?? 0;
+  const gstAmt   = result.gstOnComm ?? 0;
+  const taxableAmt = result.taxableAmt ?? sellerPrice/(1+gst);
+  const tcs      = result.tcs      ?? taxableAmt*0.001;
+  const tds      = result.tds      ?? taxableAmt*0.005;
+  const ret      = result.retFee   ?? REVERSE_FEES[level] ?? 218;
+  const coll     = result.collFee  ?? LOGISTICS_SETTINGS.myn_collection_fee ?? 61;
+  const pg       = result.pgFee    ?? LOGISTICS_SETTINGS.myn_pg_fee ?? 50.22;
+  const retProv  = result.retProv  ?? 0;
+  const payout   = result.expectedPayment ?? result.payout ?? (sellerPrice-commAmt-gstAmt-ret-coll-pg-retProv-tcs-tds);
+  const profit   = result.profit   ?? (payout-cost);
   const profitPct= custPaid>0 ? (profit/custPaid*100).toFixed(1) : '0';
   return {mrp,mrpRnd,custPaid,gtCharge,sellerPrice,gst,gstRate:gst,rawComm,
           commAmt,gstAmt,gstOnComm:gstAmt,taxableAmt,tcs,tds,ret,retFee:ret,coll,collFee:coll,
