@@ -2169,22 +2169,21 @@ function saveNew(){
   const sid=el('n-sid')?.value.trim(),brandId=el('n-brand')?.value,cat=el('n-cat')?.value;
   const cost=parseFloat(el('n-cost')?.value)||0,mkp=parseFloat(el('n-mkp')?.value)||0,disc=parseFloat(el('n-disc')?.value)||0;
   const lvl=CAT_LEVEL[cat]||'Level 2';
-  if(!sid){toast('Style ID is required','red');return;}
   if(!cost||cost<=0){toast('Enter a valid cost price','red');return;}
   if(!mkp||mkp<=0){toast('Enter markup % (must be greater than 0)','red');return;}
-  if(skuDB.find(x=>x.styleId===sid)){toast('This Style ID already exists','red');return;}
-  skuDB.push({id:'s'+Date.now(),sku:skuCode,styleId:sid,brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,img:newImg||'',ignoreThreshold:false});
-  newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');toast(`✓ ${sid} added`,'green');
+  if(sid && skuDB.find(x=>x.styleId===sid)){toast('This Style ID already exists','red');return;}
+  skuDB.push({id:'s'+Date.now(),sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,img:newImg||'',ignoreThreshold:false});
+  newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');toast(`✓ ${skuCode||sid||'SKU'} added`,'green');
 }
 
 function saveEdit(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   const skuCode=el('e-sku')?.value.trim()||'';
   const sid=el('e-sid')?.value.trim(),cost=parseFloat(el('e-cost')?.value)||0,mkp=parseFloat(el('e-mkp')?.value)||0,disc=parseFloat(el('e-disc')?.value)||0;
-  if(!sid||!cost){toast('Style ID and Cost are required','red');return;}
+  if(!cost){toast('Cost price is required','red');return;}
   const cat=el('e-cat')?.value;
-  Object.assign(s,{sku:skuCode,styleId:sid,brandId:el('e-brand')?.value,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc});
-  editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');toast(`✓ ${sid} updated`,'green');
+  Object.assign(s,{sku:skuCode,styleId:sid||'',brandId:el('e-brand')?.value,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc});
+  editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');toast(`✓ ${skuCode||sid||'SKU'} updated`,'green');
 }
 
 async function delSKU(id){
@@ -2866,6 +2865,13 @@ function removeImgFromModal(){
 async function saveImgFromModal(){
   const url = document.getElementById('img-url-input')?.value.trim() || '';
   if(_imgTargetId === 'new'){
+    // Preserve new row input values before re-render
+    _newRowDraft = {
+      sku: el('n-sku')?.value||'', sid: el('n-sid')?.value||'',
+      brand: el('n-brand')?.value||'', cat: el('n-cat')?.value||'',
+      cost: el('n-cost')?.value||'', mkp: el('n-mkp')?.value||'',
+      disc: el('n-disc')?.value||'0'
+    };
     newImg = url;
   } else {
     const s = skuDB.find(x=>x.id===_imgTargetId);
@@ -2873,8 +2879,24 @@ async function saveImgFromModal(){
   }
   closeModal();
   renderSKUs();
+  // Restore new row draft values after re-render
+  if(_imgTargetId === 'new' && _newRowDraft){
+    const d = _newRowDraft;
+    if(el('n-sku')) el('n-sku').value = d.sku;
+    if(el('n-sid')) el('n-sid').value = d.sid;
+    if(el('n-brand')) el('n-brand').value = d.brand;
+    if(el('n-cat')) el('n-cat').value = d.cat;
+    if(el('n-cost')) el('n-cost').value = d.cost;
+    if(el('n-mkp')) el('n-mkp').value = d.mkp;
+    if(el('n-disc')) el('n-disc').value = d.disc;
+    _newRowDraft = null;
+    // Trigger live calc to show computed values
+    const row = el('er-new');
+    if(row) liveCalcRow(row);
+  }
   toast(url ? '✓ Image saved' : '✓ Image removed','green');
 }
+let _newRowDraft = null;
 
 // ── Image zoom ────────────────────────────────────────
 function zoomImg(url){
