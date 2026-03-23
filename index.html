@@ -684,8 +684,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div><div class="st mb8" style="text-transform:uppercase;letter-spacing:1px">PPMP Structure</div><div id="wfp-ajio-ppmp"></div></div>
     <div>
       <div class="flexb mb12">
-        <div><div style="font-size:13px;font-weight:600">Ajio — PPMP</div><div class="st">Commission + Logistics + Platform Fees</div></div>
-        <select class="fi" id="cat-sel-ajio-ppmp" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('ajio-ppmp')"><option value="">Select Category</option></select>
+        <div><div style="font-size:13px;font-weight:600">Ajio — PPMP</div><div class="st">Commission (per brand) + Logistics + Marketing</div></div>
       </div>
       <div class="card"><div style="padding:0"><table class="ct" id="ct-ajio-ppmp"></table></div></div>
     </div>
@@ -694,11 +693,10 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div><div class="st mb8" style="text-transform:uppercase;letter-spacing:1px">CC Structure</div><div id="wfp-ajio-cc"></div></div>
     <div>
       <div class="flexb mb12">
-        <div><div style="font-size:13px;font-weight:600">Ajio — CC</div><div class="st">Commission Only — Ajio handles all logistics</div></div>
-        <select class="fi" id="cat-sel-ajio-cc" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('ajio-cc')"><option value="">Select Category</option></select>
+        <div><div style="font-size:13px;font-weight:600">Ajio — CC</div><div class="st">Commission (per brand) + Marketing — No logistics</div></div>
       </div>
       <div class="card"><div style="padding:0"><table class="ct" id="ct-ajio-cc"></table></div></div>
-      <div class="success" style="margin-top:10px">✓ CC Model: Only commission is deducted. No other charges.</div>
+      <div class="success" style="margin-top:10px">✓ CC Model: No logistics charged. Only commission + marketing deducted.</div>
     </div>
   </div></div>
   <div id="mp-amazon" style="display:none"><div class="playout">
@@ -779,17 +777,20 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div style="padding:0;overflow-x:auto"><table class="comm-table" id="comm-myntra-table"></table></div></div>
   </div>
   <div id="comm-ajio" style="display:none">
+    <div class="info mb12">Ajio PPMP &amp; CC: Commission is <strong>per brand</strong>, not per category. Set each brand's commission via <strong>Commission Override %</strong> in the brand settings (edit brand → Commission Override). The category-based table below is only used as a fallback if no override is set.</div>
     <div class="g2">
-      <div class="card"><div class="ch"><div><span class="bdg bppmp" style="margin-right:6px">PPMP</span>Fixed Commission + Logistics</div><button class="btn bp bsm" onclick="saveComm()">✓ Save</button></div>
+      <div class="card"><div class="ch"><div><span class="bdg bppmp" style="margin-right:6px">PPMP</span>Fallback Commission (if no brand override)</div><button class="btn bp bsm" onclick="saveComm()">✓ Save</button></div>
         <div class="cb"><table class="comm-table" id="comm-ajio-ppmp-table"></table>
-          <div class="fg" style="margin-top:14px"><label class="fl">Additional Platform Fee (₹/order)</label><input class="fi" type="number" id="ajio-platform-fee" value="0" placeholder="0"></div>
         </div>
       </div>
-      <div class="card"><div class="ch"><div><span class="bdg bcc" style="margin-right:6px">CC</span>Commission Only</div><button class="btn bp bsm" onclick="saveComm()">✓ Save</button></div>
-        <div class="cb"><div class="info mb12">CC: Only commission deducted. No logistics, no other charges.</div>
+      <div class="card"><div class="ch"><div><span class="bdg bcc" style="margin-right:6px">CC</span>Fallback Commission (if no brand override)</div><button class="btn bp bsm" onclick="saveComm()">✓ Save</button></div>
+        <div class="cb">
           <table class="comm-table" id="comm-ajio-cc-table"></table>
         </div>
       </div>
+    </div>
+    <div class="card" style="margin-top:14px"><div class="ch"><div style="font-size:13px;font-weight:600">Brand Commission Overview</div></div>
+      <div class="cb"><table class="comm-table" id="comm-ajio-brand-table"></table></div>
     </div>
   </div>
   <div id="comm-amazon" style="display:none">
@@ -847,9 +848,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       </div></div>
       <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">PPMP — Return (₹)</div></div><div class="cb">
         <div class="fg"><label class="fl">Return Rate (₹)</label><input class="fi" type="number" id="ajret-fix" value="70"></div>
-        <button class="btn bp bsm" onclick="saveLogisticsAll();toast('Ajio logistics saved','green')">✓ Save</button>
       </div></div>
     </div>
+    <button class="btn bp bsm" style="margin-top:14px" onclick="saveLogisticsAll()">✓ Save</button>
   </div>
   <div id="log-amazon" style="display:none">
     <div class="g2">
@@ -1620,21 +1621,47 @@ function calcSKU(s){
     // If Delivered = profit + reverse fees (saved when order completes)
     const retFee=v2.retFee??v2.ret??0;
     ifDelivered=v2.ifDelivered??(profitRs + retFee);
-  } else {
-    mrp=Math.round(s.cost*(1+s.markup/100));
-    sp=Math.round(mrp*3/100)*100||mrp*3; // intentional || here — fallback if round gives 0
-    const gst=autoGST(sp);
+  } else if(mp==='ajio-ppmp'||mp==='ajio-cc'){
+    // Ajio PPMP / CC formula from actual model
+    const profitInclCost=Math.round(s.cost + s.cost * s.markup / 100);
+    mrp=profitInclCost*3;
+    const mrpRnd=Math.round(mrp/100)*100;
+    sp=mrpRnd; // SP = MRP Round Off for display
+    const disc=s.discount||0;
+    const discAmt=mrpRnd*disc/100;
+    const grossSale=mrpRnd-discAmt;
+    const gstRate=grossSale>2500?0.18:0.05;
+    const gstValue=grossSale*gstRate/(1+gstRate);
+    // Commission: per-brand override, else fallback to old category table
     if(brand.commOverride!=null) comm=brand.commOverride;
     else if(mp==='ajio-ppmp') comm=COMM_AJIO_PPMP[s.category]||18.88;
-    else if(mp==='ajio-cc') comm=COMM_AJIO_CC[s.category]||18.88;
+    else comm=COMM_AJIO_CC[s.category]||18.88;
+    const commAmt=grossSale*comm/100;
+    const purchasePrice=mrpRnd-discAmt-gstValue-commAmt;
+    const gstB2B=purchasePrice>2500?0.18:0.05;
+    const gstValueB2B=purchasePrice*gstB2B;
+    const invoiceValue=purchasePrice+gstValueB2B;
+    const marketingContr=invoiceValue*0.03;
+    if(mp==='ajio-ppmp'){
+      const logistic=(LOGISTICS_SETTINGS.ajio_fwd||70)+(LOGISTICS_SETTINGS.ajio_ret||70);
+      payout=invoiceValue-logistic-marketingContr;
+    } else {
+      payout=invoiceValue-marketingContr;
+    }
+    profitRs=payout-s.cost;
+    ifDelivered=profitRs;
+  } else {
+    // Amazon
+    mrp=Math.round(s.cost*(1+s.markup/100));
+    sp=Math.round(mrp*3/100)*100||mrp*3;
+    const gst=autoGST(sp);
+    if(brand.commOverride!=null) comm=brand.commOverride;
     else comm=COMM_AMAZON[s.category]||17;
     const commAmt=sp*comm/100;
-    const gstAmt=commAmt*gst;
-    if(mp==='ajio-cc'){payout=sp-commAmt-gstAmt;}
-    else if(mp==='ajio-ppmp'){const fwd=LOGISTICS_SETTINGS.ajio_fwd,ret=LOGISTICS_SETTINGS.ajio_ret,platFee=LOGISTICS_SETTINGS.ajio_platform_fee;payout=sp-commAmt-gstAmt-fwd-ret-platFee;}
-    else{const fba=LOGISTICS_SETTINGS.amz_fba,close=LOGISTICS_SETTINGS.amz_close,allFees=commAmt+close+fba,gstAmt2=allFees*gst;payout=sp-allFees-gstAmt2;}
+    const fba=LOGISTICS_SETTINGS.amz_fba,close=LOGISTICS_SETTINGS.amz_close,allFees=commAmt+close+fba,gstAmt2=allFees*gst;
+    payout=sp-allFees-gstAmt2;
     profitRs=payout-s.cost;
-    ifDelivered=profitRs; // Non-Myntra: same as profit (no reverse fee recovery)
+    ifDelivered=profitRs;
   }
   const profitPct=sp>0?(profitRs/sp*100).toFixed(1):'0';
   const threshold=THRESHOLDS[s.category]||0;
@@ -1650,8 +1677,8 @@ function calcSKU(s){
 // CD keys match WF var names so dynamic renderer can read/write them directly
 const CD={
   myntra:      {cost:1300, margin:79, discount:54, cat:'Kurta Sets', level:'Level 4'},
-  'ajio-ppmp': {cost:950,  markup:78, retRate:10, cat:'Kurta Sets', level:'Level 2'},
-  'ajio-cc':   {cost:950,  markup:78, cat:'Kurta Sets', level:'Level 2'},
+  'ajio-ppmp': {cost:2100, markup:52, discount:50, commPct:20, cat:'Kurta Sets', level:'Level 2'},
+  'ajio-cc':   {cost:2100, markup:52, discount:50, commPct:32, cat:'Kurta Sets', level:'Level 2'},
   amazon:      {cost:1650, markup:81, adSpend:80, retRate:5, cat:'Lehenga Choli', level:'Level 2'},
 };
 
@@ -1807,6 +1834,19 @@ function buildCommAjioCC(){
   const t=el('comm-ajio-cc-table');if(!t)return;
   let h='<thead><tr><th>Category</th><th>Commission %</th></tr></thead><tbody>';
   CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AJIO_CC[cat]||18.88}" onchange="COMM_AJIO_CC['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
+  t.innerHTML=h+'</tbody>';
+}
+function buildCommAjioBrands(){
+  const t=el('comm-ajio-brand-table');if(!t)return;
+  const ajioBrands=brands.filter(b=>b.model==='ajio-ppmp'||b.model==='ajio-cc');
+  if(!ajioBrands.length){t.innerHTML='<tr><td style="padding:12px;color:var(--tx3)">No Ajio brands configured. Add brands with Ajio PPMP or CC model.</td></tr>';return;}
+  let h='<thead><tr><th>Brand</th><th>Model</th><th>Commission %</th></tr></thead><tbody>';
+  ajioBrands.forEach(b=>{
+    const modelLabel=b.model==='ajio-ppmp'?'PPMP':'CC';
+    const comm=b.commOverride!=null?b.commOverride:'—';
+    const cls=b.commOverride==null?'style="color:var(--re);font-style:italic"':'';
+    h+=`<tr><td>${esc(b.name)}</td><td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':'bcc'}">${modelLabel}</span></td><td ${cls}>${b.commOverride!=null?comm+'%':'Not set (using fallback)'}</td></tr>`;
+  });
   t.innerHTML=h+'</tbody>';
 }
 function buildCommAmazon(){
@@ -1984,7 +2024,7 @@ function openBrandModal(id){
 function updateBrandModelNote(){
   const model=el('bn-model')?.value;
   const note=el('bn-model-note');if(!note)return;
-  const notes={'myntra':'Myntra: Commission varies by category + price slab. Logistics apply.','ajio-ppmp':'Ajio PPMP: Fixed commission + logistics + platform fees.','ajio-cc':'Ajio CC: Only commission deducted. No logistics, no other charges.','amazon':'Amazon: Fixed referral % + FBA + closing fee per order.'};
+  const notes={'myntra':'Myntra: Commission varies by category + price slab. Logistics apply.','ajio-ppmp':'Ajio PPMP: Commission is per-brand (set via Commission Override). Logistics + marketing apply.','ajio-cc':'Ajio CC: Commission is per-brand (set via Commission Override). No logistics, only marketing deducted.','amazon':'Amazon: Fixed referral % + FBA + closing fee per order.'};
   note.textContent=notes[model]||'';
 }
 
@@ -2247,6 +2287,12 @@ function showCalcModal(skuId){
   const level=CAT_LEVEL[s.category]||s.level||'Level 2';
   // Run wireframe engine
   const inputs={cost:s.cost,margin:s.markup,markup:s.markup,discount:s.discount||0,level,cat:s.category,retPct:0,_mp:mp};
+  // For Ajio PPMP/CC, pass brand commission
+  if(mp==='ajio-ppmp'||mp==='ajio-cc'){
+    if(brand.commOverride!=null) inputs.commPct=brand.commOverride;
+    else if(mp==='ajio-ppmp') inputs.commPct=COMM_AJIO_PPMP[s.category]||18.88;
+    else inputs.commPct=COMM_AJIO_CC[s.category]||18.88;
+  }
   const result=runWFEngine(mp,inputs);
   const rows=WF[mp]||[];
   // Build table rows
@@ -2394,40 +2440,58 @@ const WF={myntra:[
   {id:10,  t:'output',  l:'PROFIT',                                    expr:'expectedPayment - cost - (packagingCost||0)', var:'profit', desc:'Expected Payment - Cost - Packaging'},
   {id:10.1,t:'output',  l:'IF DELIVERED',                               expr:'(expectedPayment - cost - (packagingCost||0)) + retFee', var:'ifDelivered', desc:'Profit + Reverse Fees (saved if delivered)'}
 ],'ajio-ppmp':[
-  {id:1,   t:'section', l:'Pricing'},
-  {id:2,   t:'input',   l:'Cost Price (₹)',                           var:'cost'},
-  {id:3,   t:'input',   l:'Markup %',                                 var:'markup', fmt:'%'},
-  {id:4,   t:'formula', l:'MRP = Cost × (1 + Markup%)',               expr:'Math.round(cost * (1 + markup/100))', var:'mrp'},
-  {id:5,   t:'formula', l:'SP = MRP × 3 (rounded to ₹100)',          expr:'Math.round(mrp*3/100)*100 || mrp*3', var:'sp'},
-  {id:6,   t:'section', l:'PPMP Commission'},
-  {id:6.1, t:'formula', l:'GST Rate (auto)',                          expr:'sp > 2499 ? 0.18 : 0.05', var:'gstRate', locked:true, fmt:'%x'},
-  {id:6.2, t:'lookup',  l:'Commission % — auto from PPMP settings',   fn:'commPct', var:'commPct', locked:true, fmt:'%'},
-  {id:6.5, t:'formula', l:'Commission Amount = SP × Comm%',           expr:'sp * commPct/100', var:'commAmt', locked:true, sign:-1},
-  {id:6.6, t:'formula', l:'GST on Commission',                        expr:'commAmt * gstRate', var:'gstOnComm', locked:true, sign:-1},
-  {id:7,   t:'section', l:'Logistics'},
-  {id:7.1, t:'lookup',  l:'Forward Fee',                              fn:'fwdFeeAjio', var:'fwdFee', locked:true, sign:-1},
-  {id:7.2, t:'lookup',  l:'Return Fee',                               fn:'retFeeAjio', var:'retFee', locked:true, sign:-1},
-  {id:7.3, t:'lookup',  l:'Platform Fee',                             fn:'platFeeAjio', var:'platFee', locked:true, sign:-1},
-  {id:7.4, t:'input',   l:'Return Rate %',                            var:'retRate', fmt:'%'},
-  {id:7.5, t:'formula', l:'Return Provision = RetRate% × Return Fee', expr:'(retRate||0)/100 * retFee', var:'retProv', sign:-1},
-  {id:8,   t:'section', l:'Result'},
-  {id:8.1, t:'formula', l:'Payout = SP − Comm − GST − Logistics',    expr:'sp - commAmt - gstOnComm - fwdFee - retFee - platFee - retProv', var:'payout', locked:true},
-  {id:9,   t:'output',  l:'Net Profit = Payout − Cost',               expr:'payout - cost', var:'profit'}
+  {id:1,    t:'section', l:'Pricing'},
+  {id:2,    t:'input',   l:'Cost',                                      var:'cost', desc:'Input By User'},
+  {id:3,    t:'input',   l:'Profit Margin %',                           var:'markup', fmt:'%', desc:'Input By User'},
+  {id:4,    t:'formula', l:'Profit Including Cost',                     expr:'Math.round(cost + cost * markup / 100)', var:'profitInclCost', desc:'Cost + Cost × Profit Margin%'},
+  {id:5,    t:'formula', l:'MRP',                                       expr:'profitInclCost * 3', var:'mrp', desc:'3× of Profit Including Cost'},
+  {id:5.1,  t:'formula', l:'MRP Round Off',                             expr:'Math.round(mrp / 100) * 100', var:'mrpRnd', desc:'Round off of MRP to nearest 100'},
+  {id:5.2,  t:'input',   l:'Discount',                                  var:'discount', desc:'Input By User'},
+  {id:5.3,  t:'formula', l:'Discount (AMT)',                            expr:'mrpRnd * discount / 100', var:'discAmt', desc:'MRP Round Off × Discount%', sign:-1},
+  {id:5.4,  t:'formula', l:'Gross Sale',                                expr:'mrpRnd - discAmt', var:'grossSale', desc:'MRP Round Off − Discount(AMT)'},
+  {id:6,    t:'section', l:'GST & Commission'},
+  {id:6.1,  t:'formula', l:'GST',                                       expr:'grossSale > 2500 ? 0.18 : 0.05', var:'gstRate', locked:true, fmt:'%x', desc:'18% if Gross Sale > 2500, else 5%'},
+  {id:6.2,  t:'formula', l:'GST Value',                                 expr:'grossSale * gstRate / (1 + gstRate)', var:'gstValue', locked:true, sign:-1, desc:'Inclusive GST of Gross Sale'},
+  {id:6.3,  t:'formula', l:'Net Sale Value',                            expr:'grossSale - gstValue', var:'netSaleValue', locked:true, desc:'Gross Sale − GST Value'},
+  {id:6.4,  t:'input',   l:'Ajio Commission',                           var:'commPct', fmt:'%', desc:'Input By User (per brand)'},
+  {id:6.5,  t:'formula', l:'Commission Value (AMT)',                    expr:'grossSale * commPct / 100', var:'commAmt', locked:true, sign:-1, desc:'Gross Sale × Ajio Commission%'},
+  {id:7,    t:'section', l:'Purchase & Invoice'},
+  {id:7.1,  t:'formula', l:'Purchase Price',                            expr:'mrpRnd - discAmt - gstValue - commAmt', var:'purchasePrice', locked:true, desc:'MRP Round Off − Discount − GST Value − Commission'},
+  {id:7.2,  t:'formula', l:'GST (B2B)',                                 expr:'purchasePrice > 2500 ? 0.18 : 0.05', var:'gstB2B', locked:true, fmt:'%x', desc:'18% if Purchase Price > 2500, else 5%'},
+  {id:7.3,  t:'formula', l:'GST Value (B2B)',                           expr:'purchasePrice * gstB2B', var:'gstValueB2B', locked:true, desc:'Purchase Price × GST(B2B)'},
+  {id:7.4,  t:'formula', l:'Invoice Value',                             expr:'purchasePrice + gstValueB2B', var:'invoiceValue', locked:true, desc:'Purchase Price + GST Value(B2B)'},
+  {id:8,    t:'section', l:'Logistics & Marketing'},
+  {id:8.1,  t:'lookup',  l:'Logistic Tax Inclusive',                     fn:'logisticPPMP', var:'logistic', locked:true, sign:-1, desc:'Forward + Return from Logistics settings'},
+  {id:8.2,  t:'formula', l:'Marketing Contr (3% of NSV)',               expr:'invoiceValue * 0.03', var:'marketingContr', locked:true, sign:-1, desc:'3% of Invoice Value'},
+  {id:9,    t:'section', l:'Result'},
+  {id:9.1,  t:'formula', l:'Payout to Vendor',                          expr:'invoiceValue - logistic - marketingContr', var:'payout', locked:true, desc:'Invoice Value − Logistic − Marketing Contr'},
+  {id:10,   t:'output',  l:'PROFIT',                                    expr:'payout - cost', var:'profit', desc:'Payout to Vendor − Cost'}
 ],'ajio-cc':[
-  {id:1,   t:'section', l:'Pricing'},
-  {id:2,   t:'input',   l:'Cost Price (₹)',                           var:'cost'},
-  {id:3,   t:'input',   l:'Markup %',                                 var:'markup', fmt:'%'},
-  {id:4,   t:'formula', l:'MRP = Cost × (1 + Markup%)',               expr:'Math.round(cost * (1 + markup/100))', var:'mrp'},
-  {id:5,   t:'formula', l:'SP = MRP × 3 (rounded to ₹100)',          expr:'Math.round(mrp*3/100)*100 || mrp*3', var:'sp'},
-  {id:6,   t:'section', l:'CC Model — Commission Only'},
-  {id:6.1, t:'formula', l:'GST Rate (auto)',                          expr:'sp > 2499 ? 0.18 : 0.05', var:'gstRate', locked:true, fmt:'%x'},
-  {id:6.2, t:'lookup',  l:'Commission % — auto from CC settings',     fn:'commPct', var:'commPct', locked:true, fmt:'%'},
-  {id:6.5, t:'formula', l:'Commission Amount = SP × Comm%',           expr:'sp * commPct/100', var:'commAmt', locked:true, sign:-1},
-  {id:6.6, t:'formula', l:'GST on Commission',                        expr:'commAmt * gstRate', var:'gstOnComm', locked:true, sign:-1},
-  {id:7,   t:'section', l:'No Logistics — Ajio Handles All', hint:'✓'},
-  {id:8,   t:'section', l:'Result'},
-  {id:8.1, t:'formula', l:'Payout = SP − Commission − GST',          expr:'sp - commAmt - gstOnComm', var:'payout', locked:true},
-  {id:9,   t:'output',  l:'Net Profit = Payout − Cost',               expr:'payout - cost', var:'profit'}
+  {id:1,    t:'section', l:'Pricing'},
+  {id:2,    t:'input',   l:'Cost',                                      var:'cost', desc:'Input By User'},
+  {id:3,    t:'input',   l:'Profit Margin %',                           var:'markup', fmt:'%', desc:'Input By User'},
+  {id:4,    t:'formula', l:'Profit Including Cost',                     expr:'Math.round(cost + cost * markup / 100)', var:'profitInclCost', desc:'Cost + Cost × Profit Margin%'},
+  {id:5,    t:'formula', l:'MRP',                                       expr:'profitInclCost * 3', var:'mrp', desc:'3× of Profit Including Cost'},
+  {id:5.1,  t:'formula', l:'MRP Round Off',                             expr:'Math.round(mrp / 100) * 100', var:'mrpRnd', desc:'Round off of MRP to nearest 100'},
+  {id:5.2,  t:'input',   l:'Discount',                                  var:'discount', desc:'Input By User'},
+  {id:5.3,  t:'formula', l:'Discount (AMT)',                            expr:'mrpRnd * discount / 100', var:'discAmt', desc:'MRP Round Off × Discount%', sign:-1},
+  {id:5.4,  t:'formula', l:'Gross Sale',                                expr:'mrpRnd - discAmt', var:'grossSale', desc:'MRP Round Off − Discount(AMT)'},
+  {id:6,    t:'section', l:'GST & Commission'},
+  {id:6.1,  t:'formula', l:'GST',                                       expr:'grossSale > 2500 ? 0.18 : 0.05', var:'gstRate', locked:true, fmt:'%x', desc:'18% if Gross Sale > 2500, else 5%'},
+  {id:6.2,  t:'formula', l:'GST Value',                                 expr:'grossSale * gstRate / (1 + gstRate)', var:'gstValue', locked:true, sign:-1, desc:'Inclusive GST of Gross Sale'},
+  {id:6.3,  t:'formula', l:'Net Sale Value',                            expr:'grossSale - gstValue', var:'netSaleValue', locked:true, desc:'Gross Sale − GST Value'},
+  {id:6.4,  t:'input',   l:'Ajio Commission',                           var:'commPct', fmt:'%', desc:'Input By User (per brand)'},
+  {id:6.5,  t:'formula', l:'Commission Value (AMT)',                    expr:'grossSale * commPct / 100', var:'commAmt', locked:true, sign:-1, desc:'Gross Sale × Ajio Commission%'},
+  {id:7,    t:'section', l:'Purchase & Invoice'},
+  {id:7.1,  t:'formula', l:'Purchase Price',                            expr:'mrpRnd - discAmt - gstValue - commAmt', var:'purchasePrice', locked:true, desc:'MRP Round Off − Discount − GST Value − Commission'},
+  {id:7.2,  t:'formula', l:'GST (B2B)',                                 expr:'purchasePrice > 2500 ? 0.18 : 0.05', var:'gstB2B', locked:true, fmt:'%x', desc:'18% if Purchase Price > 2500, else 5%'},
+  {id:7.3,  t:'formula', l:'GST Value (B2B)',                           expr:'purchasePrice * gstB2B', var:'gstValueB2B', locked:true, desc:'Purchase Price × GST(B2B)'},
+  {id:7.4,  t:'formula', l:'Invoice Value',                             expr:'purchasePrice + gstValueB2B', var:'invoiceValue', locked:true, desc:'Purchase Price + GST Value(B2B)'},
+  {id:8,    t:'section', l:'No Logistics — Ajio Handles All', hint:'✓'},
+  {id:8.2,  t:'formula', l:'Marketing Contr (3% of NSV)',               expr:'invoiceValue * 0.03', var:'marketingContr', locked:true, sign:-1, desc:'3% of Invoice Value'},
+  {id:9,    t:'section', l:'Result'},
+  {id:9.1,  t:'formula', l:'Payout to Vendor',                          expr:'invoiceValue - marketingContr', var:'payout', locked:true, desc:'Invoice Value − Marketing Contr'},
+  {id:10,   t:'output',  l:'PROFIT',                                    expr:'payout - cost', var:'profit', desc:'Payout to Vendor − Cost'}
 ],amazon:[
   {id:1,   t:'section', l:'Pricing'},
   {id:2,   t:'input',   l:'Cost Price (₹)',                           var:'cost'},
@@ -2478,7 +2542,7 @@ function renderWFBuilder(){
   const list = el('wf-builder-list');
   if(!list) return;
   const preview = runWFEngine(m, {
-    cost:1000, markup:78, margin:30, discount:55, level:'Level 2',
+    cost:1000, markup:78, margin:30, discount:55, commPct:20, level:'Level 2',
     cat:'Kurta Sets', retPct:8
   });
   list.innerHTML = WF[m].map((r,idx) => {
@@ -2701,7 +2765,7 @@ function nav(p){
     });
     renderWFPreviews();
   }
-  if(p==='commission'){buildCommMyntra();buildCommAjioPPMP();buildCommAjioCC();buildCommAmazon();}
+  if(p==='commission'){buildCommMyntra();buildCommAjioPPMP();buildCommAjioCC();buildCommAjioBrands();buildCommAmazon();}
   if(p==='wireframe')renderWFBuilder();
   if(p==='brands')renderBrands();
   if(p==='skus'){populateFilters();renderSKUs();}
@@ -3965,6 +4029,7 @@ const WF_LOOKUPS = {
   fwdFeeAjio: () => LOGISTICS_SETTINGS.ajio_fwd||70,
   retFeeAjio: () => LOGISTICS_SETTINGS.ajio_ret||70,
   platFeeAjio: () => LOGISTICS_SETTINGS.ajio_platform_fee||0,
+  logisticPPMP: () => (LOGISTICS_SETTINGS.ajio_fwd||70) + (LOGISTICS_SETTINGS.ajio_ret||70),
   fbaFee:    () => LOGISTICS_SETTINGS.amz_fba||55,
   closeFee:  () => LOGISTICS_SETTINGS.amz_close||15,
 };
@@ -4155,7 +4220,7 @@ function renderFBParts(){
 
   const sampleCtx = {
     cost: sCost, markup: sMarkup, discount: sDisc,
-    level: 'Level 2', cat: 'Kurta Sets',
+    commPct: 20, level: 'Level 2', cat: 'Kurta Sets',
     retPct: 8
   };
 
@@ -4279,7 +4344,7 @@ function fbPreviewRaw(val){
       cost:+(el('fb-s-cost')?.value||1000),
       markup:+(el('fb-s-markup')?.value||78),
       discount:+(el('fb-s-disc')?.value||55),
-      level:'Level 2', cat:'Kurta Sets', retPct:8
+      commPct:20, level:'Level 2', cat:'Kurta Sets', retPct:8
     };
     const preview = runWFEngine(_fb.marketplace, sampleCtx);
     const keys = Object.keys(preview);
@@ -4302,7 +4367,7 @@ function fbSetRawExpr(){
   if(!val){ toast('Type a formula first','red'); return; }
   // Validate by trying to run it
   try{
-    const sampleCtx = {cost:1000,markup:78,discount:55,level:'Level 2',cat:'Kurta Sets',retPct:8};
+    const sampleCtx = {cost:1000,markup:78,discount:55,commPct:20,level:'Level 2',cat:'Kurta Sets',retPct:8};
     const preview = runWFEngine(_fb.marketplace, sampleCtx);
     const keys = Object.keys(preview);
     const vals = Object.values(preview);
