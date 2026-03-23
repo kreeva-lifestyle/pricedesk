@@ -1383,7 +1383,7 @@ async function loadFromStorage(){
     }
     if(loaded.wireframe){
       // Reset all wireframes when schema version changes (incentive removed, locked changes)
-      const WF_VERSION = 5; // Increment when wireframe structure changes
+      const WF_VERSION = 6; // Increment when wireframe structure changes — v6: new Ajio PPMP/CC formulas
       if(loaded.wireframe._v === WF_VERSION){
         Object.assign(WF, loaded.wireframe);
         // Migrate: ensure packagingCost rows have proper defaults
