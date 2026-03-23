@@ -222,6 +222,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .fb-paren-btn:hover{background:rgba(155,109,255,.2)}
 .fb-preview-val{font-family:var(--mono);color:var(--gr);font-size:14px;font-weight:600}
 .wfl{opacity:.92}
+.bdg.bi{background:rgba(186,146,255,.15);color:var(--pu);border:1px solid rgba(186,146,255,.3)}
+.bdg.bf{background:rgba(78,142,247,.15);color:var(--bl);border:1px solid rgba(78,142,247,.3)}
+.bdg.bo{background:rgba(45,212,160,.15);color:var(--gr);border:1px solid rgba(45,212,160,.3)}
 .bdg.bl{background:rgba(78,142,247,.15);color:var(--bl);border-color:rgba(78,142,247,.3)}
 .fb-preview-err{font-family:var(--mono);color:var(--re);font-size:12px}
 /* ── IMAGE MODAL (zoom) ─────────────────────────────── */
@@ -1534,8 +1537,7 @@ let REVERSE_FEES = {
 let LOGISTICS_SETTINGS = {
   myn_collection_fee: 61, myn_pg_fee: 50.22,
   ajio_fwd: 70, ajio_ret: 70, ajio_platform_fee: 0,
-  amz_fba: 55, amz_close: 15, amz_ret: 55,
-  packaging_cost: 60
+  amz_fba: 55, amz_close: 15, amz_ret: 55
 };
 
 function getMynFwd(level, sp){
@@ -1610,7 +1612,7 @@ function calcSKU(s){
 // ═══════════════════════════════════════════════════════
 // CD keys match WF var names so dynamic renderer can read/write them directly
 const CD={
-  myntra:      {cost:1300, margin:79, discount:54, packagingCost:60, cat:'Kurta Sets', level:'Level 4'},
+  myntra:      {cost:1300, margin:79, discount:54, cat:'Kurta Sets', level:'Level 4'},
   'ajio-ppmp': {cost:950,  markup:78, retRate:10, cat:'Kurta Sets', level:'Level 2'},
   'ajio-cc':   {cost:950,  markup:78, cat:'Kurta Sets', level:'Level 2'},
   amazon:      {cost:1650, markup:81, adSpend:80, retRate:5, cat:'Lehenga Choli', level:'Level 2'},
@@ -2198,7 +2200,7 @@ function showCalcModal(skuId){
   const mp=brand.model||'myntra';
   const level=CAT_LEVEL[s.category]||s.level||'Level 2';
   // Run wireframe engine
-  const inputs={cost:s.cost,margin:s.markup,markup:s.markup,discount:s.discount||0,level,cat:s.category,packagingCost:LOGISTICS_SETTINGS.packaging_cost||60,retPct:0,_mp:mp};
+  const inputs={cost:s.cost,margin:s.markup,markup:s.markup,discount:s.discount||0,level,cat:s.category,retPct:0,_mp:mp};
   const result=runWFEngine(mp,inputs);
   const rows=WF[mp]||[];
   // Build table rows
@@ -2468,6 +2470,20 @@ function renderWFBuilder(){
         <span style="font-size:10px;color:var(--tx3);opacity:.6">(formula inactive — type is Input)</span>
       </div>`;
     }
+    // Default value editor for INPUT rows
+    if(r.t==='input'){
+      const defVal = r.defaultVal !== undefined ? r.defaultVal : 0;
+      actionRow += `<div style="margin-top:4px;margin-left:22px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;color:var(--tx3);flex-shrink:0">Default Value:</span>
+        <input type="number" style="width:90px;background:rgba(255,255,255,.06);border:1px solid var(--bd);border-radius:4px;color:var(--ac);font-size:11px;padding:3px 8px;font-family:var(--mono);outline:none"
+          value="${defVal}"
+          onfocus="this.style.borderColor='var(--ac)'"
+          onblur="this.style.borderColor='var(--bd)'"
+          onchange="updateWFDefault('${escAttr(m)}',${idx},+this.value)"
+          onclick="event.stopPropagation()">
+        <span style="font-size:9px;color:var(--tx3);opacity:.6">Used in SKU calculations</span>
+      </div>`;
+    }
     // Editable note/description row
     const noteRow = `<div style="margin-top:4px;margin-left:22px;display:flex;align-items:center;gap:6px">
       <span style="font-size:10px;color:var(--tx3);flex-shrink:0">Note:</span>
@@ -2507,17 +2523,39 @@ function renderWFBuilder(){
 
 // Cycle row type: input → formula → output → input
 function cycleWFType(mp, idx){
-  const row = WF[mp][idx];
-  if(!row || row.t==='lookup' || row.t==='section') return;
-  const types = ['input','formula','output'];
-  const cur = types.indexOf(row.t);
-  const next = types[(cur+1)%types.length];
-  row.t = next;
-  // When switching to formula/output, ensure expr exists
-  if((next==='formula'||next==='output') && !row.expr) row.expr = '0';
+  try{
+    const row = WF[mp]?.[idx];
+    if(!row || row.t==='lookup' || row.t==='section') return;
+    const types = ['input','formula','output'];
+    const cur = types.indexOf(row.t);
+    const next = types[(cur+1)%types.length];
+    row.t = next;
+    // When switching to formula/output, ensure expr exists
+    if((next==='formula'||next==='output') && !row.expr) row.expr = '0';
+    save('wireframe');
+    renderWFBuilder();
+    renderDynamicCalc(mp);
+    toast(`Row changed to ${next.toUpperCase()}`,'green');
+  }catch(e){
+    console.error('cycleWFType error:', e);
+    toast('Error changing type: '+e.message,'red');
+  }
+}
+
+// Update default value for wireframe INPUT rows — affects SKU table calculations
+function updateWFDefault(mp, idx, val){
+  const row = WF[mp]?.[idx];
+  if(!row) return;
+  row.defaultVal = val;
+  // Also sync to CD so calculator preview reflects the change
+  if(CD[mp]) CD[mp][row.var] = val;
   save('wireframe');
+  invalidateCalcCache();
   renderWFBuilder();
-  toast(`Changed to ${next.toUpperCase()}`,'green');
+  renderDynamicCalc(mp);
+  renderSKUs();
+  updateAlerts();
+  toast(`Default value set to ₹${val}`,'green');
 }
 
 function wfDragStart(e,idx){
@@ -3811,7 +3849,6 @@ function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){
   const result = runWFEngine('myntra', {
     cost, margin: markup, markup, discount: discPct||0,
     level: level||'Level 2', cat: cat||'Kurta Sets',
-    packagingCost: LOGISTICS_SETTINGS.packaging_cost||60,
     retPct: retPct||0
   });
   // Map engine output to expected return shape
