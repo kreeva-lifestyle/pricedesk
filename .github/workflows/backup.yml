@@ -1,0 +1,101 @@
+name: Daily Database Backup
+
+on:
+  schedule:
+    # Run at midnight IST (18:30 UTC previous day)
+    - cron: '30 18 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create daily backup
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -e
+          echo "=== PriceDesk Daily Backup ==="
+          echo "Date: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          BACKUP_DATE=$(date -u '+%Y-%m-%d')
+
+          # 1. Read all data from app_data table
+          echo "Fetching all data from app_data..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/app_data?select=*" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "ERROR: Failed to fetch data (HTTP $HTTP_CODE)"
+            echo "$BODY"
+            exit 1
+          fi
+
+          ROW_COUNT=$(echo "$BODY" | jq 'length')
+          echo "Fetched $ROW_COUNT rows from app_data"
+
+          # 2. Insert backup into pd_backups table
+          echo "Creating backup for $BACKUP_DATE..."
+          BACKUP_PAYLOAD=$(jq -n \
+            --arg date "$BACKUP_DATE" \
+            --argjson data "$BODY" \
+            '{backup_date: $date, data: $data, created_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))}')
+
+          UPSERT_RESPONSE=$(curl -s -w "\n%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/pd_backups" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: resolution=merge-duplicates" \
+            -d "$BACKUP_PAYLOAD")
+
+          UPSERT_CODE=$(echo "$UPSERT_RESPONSE" | tail -1)
+          UPSERT_BODY=$(echo "$UPSERT_RESPONSE" | sed '$d')
+
+          if [ "$UPSERT_CODE" != "201" ] && [ "$UPSERT_CODE" != "200" ]; then
+            echo "ERROR: Failed to save backup (HTTP $UPSERT_CODE)"
+            echo "$UPSERT_BODY"
+            exit 1
+          fi
+
+          echo "✓ Backup saved for $BACKUP_DATE ($ROW_COUNT data rows)"
+
+          # 3. Delete backups older than 7 days
+          CUTOFF_DATE=$(date -u -d '7 days ago' '+%Y-%m-%d')
+          echo "Cleaning up backups older than $CUTOFF_DATE..."
+
+          DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/pd_backups?backup_date=lt.${CUTOFF_DATE}" \
+            -X DELETE \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Prefer: return=representation")
+
+          DELETE_CODE=$(echo "$DELETE_RESPONSE" | tail -1)
+          DELETE_BODY=$(echo "$DELETE_RESPONSE" | sed '$d')
+
+          if [ "$DELETE_CODE" = "200" ]; then
+            DELETED_COUNT=$(echo "$DELETE_BODY" | jq 'length')
+            echo "✓ Deleted $DELETED_COUNT old backup(s)"
+          else
+            echo "Warning: Cleanup returned HTTP $DELETE_CODE (non-critical)"
+          fi
+
+          # 4. Show current backup inventory
+          echo ""
+          echo "=== Current Backups ==="
+          INVENTORY=$(curl -s \
+            "${SUPABASE_URL}/rest/v1/pd_backups?select=backup_date,created_at&order=backup_date.desc" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}")
+
+          echo "$INVENTORY" | jq -r '.[] | "  \(.backup_date)  (created: \(.created_at))"'
+          TOTAL=$(echo "$INVENTORY" | jq 'length')
+          echo "Total backups: $TOTAL"
+          echo ""
+          echo "=== Backup Complete ==="

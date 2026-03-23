@@ -1114,6 +1114,19 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
           <div id="sb-cfg-status" style="margin-top:14px;display:none"></div>
         </div>
       </div>
+      <div class="card mb16">
+        <div class="ch">
+          <div>
+            <div style="font-size:13px;font-weight:600">🔄 Daily Backups (7-day rolling)</div>
+            <div class="st" style="margin-top:2px">Automated nightly backup at 12:00 AM IST</div>
+          </div>
+          <button class="btn bp bsm" onclick="createManualBackup()">+ Backup Now</button>
+        </div>
+        <div class="cb">
+          <div id="backup-list" style="font-size:12px;color:var(--tx3)">Loading backups...</div>
+          <div id="backup-status" style="margin-top:8px;display:none"></div>
+        </div>
+      </div>
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600">ℹ App Info & Data</div></div>
         <div class="cb" style="font-size:12px">
@@ -1283,7 +1296,16 @@ DROP POLICY IF EXISTS "allow_read"   ON app_data;
 DROP POLICY IF EXISTS "allow_insert" ON app_data;
 DROP POLICY IF EXISTS "allow_update" ON app_data;
 DROP POLICY IF EXISTS "allow_upsert" ON app_data;
-CREATE POLICY "allow_all" ON app_data FOR ALL USING (true) WITH CHECK (true);`;
+CREATE POLICY "allow_all" ON app_data FOR ALL USING (true) WITH CHECK (true);
+
+-- Backup table for daily automated backups (7-day rolling)
+CREATE TABLE IF NOT EXISTS pd_backups (
+  backup_date TEXT PRIMARY KEY,
+  data        JSONB NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE pd_backups ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK (true);`;
   setModal(`<div class="mhdr"><div class="mtl">🗄 Database Setup — Run this SQL</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div class="info mb12">Run this in your Supabase SQL Editor:</div>
@@ -2685,7 +2707,7 @@ function nav(p){
   if(p==='skus'){populateFilters();renderSKUs();}
   if(p==='thresholds')renderThresholds();
   if(p==='users')renderUsers();
-  if(p==='settings'){ loadConfig(); populateSettingsPage(); }
+  if(p==='settings'){ loadConfig(); populateSettingsPage(); loadBackupList(); }
   if(p==='logistics'){ renderGTTable(); renderRetTable(); populateLogisticsInputs(); }
 }
 
@@ -2984,6 +3006,137 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeFB(); close
 // ═══════════════════════════════════════════════════════
 // DATA EXPORT / IMPORT (JSON backup)
 // ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// DAILY BACKUP MANAGEMENT (7-day rolling)
+// ═══════════════════════════════════════════════════════
+async function loadBackupList(){
+  const listEl = el('backup-list');
+  if(!listEl) return;
+  const db = getDB();
+  if(!db){ listEl.innerHTML = '<span style="color:var(--tx3)">No database connection</span>'; return; }
+  try{
+    const {data, error} = await db.from('pd_backups')
+      .select('backup_date,created_at')
+      .order('backup_date', {ascending:false});
+    if(error){
+      // Table might not exist yet
+      listEl.innerHTML = `<div style="color:var(--ac)">Backup table not set up yet. Run the SQL setup to create it.<br><button class="btn bg bsm" style="margin-top:8px" onclick="showBackupSetupSQL()">Show Setup SQL</button></div>`;
+      return;
+    }
+    if(!data||!data.length){
+      listEl.innerHTML = '<span style="color:var(--tx3)">No backups yet. Click "Backup Now" or wait for the nightly cron.</span>';
+      return;
+    }
+    let html = '<div style="display:flex;flex-direction:column;gap:6px">';
+    for(const b of data){
+      const date = b.backup_date;
+      const created = new Date(b.created_at).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'});
+      const isToday = date === new Date().toISOString().slice(0,10);
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--s2);border:1px solid var(--bd);border-radius:5px">
+        <div>
+          <span class="mono" style="font-weight:600;color:${isToday?'var(--gr)':'var(--tx)'}">${date}</span>
+          <span style="font-size:10px;color:var(--tx3);margin-left:8px">${created}</span>
+          ${isToday?'<span style="font-size:9px;background:rgba(45,212,160,.15);color:var(--gr);padding:1px 6px;border-radius:3px;margin-left:6px">TODAY</span>':''}
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn bg bxs" style="font-size:10px;padding:3px 10px" onclick="restoreBackup('${date}')">Restore</button>
+          <button class="btn br bxs" style="font-size:10px;padding:3px 8px" onclick="deleteBackup('${date}')">✕</button>
+        </div>
+      </div>`;
+    }
+    html += `</div><div style="margin-top:8px;font-size:10px;color:var(--tx3)">${data.length} backup(s) stored — auto-cron runs daily at midnight IST, keeps last 7 days</div>`;
+    listEl.innerHTML = html;
+  }catch(e){
+    listEl.innerHTML = `<span style="color:var(--re)">Error: ${esc(e.message)}</span>`;
+  }
+}
+
+async function createManualBackup(){
+  const db = getDB();
+  if(!db){ toast('No database connection','red'); return; }
+  const statusEl = el('backup-status');
+  if(statusEl){ statusEl.style.display='block'; statusEl.innerHTML='<span style="color:var(--ac)">Creating backup...</span>'; }
+  try{
+    // Read all current data
+    const {data:allData, error:readErr} = await db.from('app_data').select('*');
+    if(readErr) throw new Error('Failed to read data: '+readErr.message);
+    const backupDate = new Date().toISOString().slice(0,10);
+    // Upsert into pd_backups
+    const {error:writeErr} = await db.from('pd_backups').upsert(
+      {backup_date:backupDate, data:allData, created_at:new Date().toISOString()},
+      {onConflict:'backup_date'}
+    );
+    if(writeErr) throw new Error('Failed to save backup: '+writeErr.message);
+    // Auto-delete backups older than 7 days
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate()-7);
+    const cutoffDate = cutoff.toISOString().slice(0,10);
+    await db.from('pd_backups').delete().lt('backup_date', cutoffDate);
+    toast('✓ Backup created for '+backupDate,'green');
+    if(statusEl) statusEl.style.display='none';
+    loadBackupList();
+  }catch(e){
+    toast('Backup failed: '+e.message,'red');
+    if(statusEl){ statusEl.innerHTML=`<span style="color:var(--re)">${esc(e.message)}</span>`; }
+  }
+}
+
+async function restoreBackup(date){
+  if(!confirm(`Restore backup from ${date}?\n\nThis will OVERWRITE all current data with the backup. Are you sure?`)) return;
+  const db = getDB();
+  if(!db){ toast('No database connection','red'); return; }
+  try{
+    // Fetch the backup
+    const {data:backup, error:readErr} = await db.from('pd_backups')
+      .select('data').eq('backup_date',date).single();
+    if(readErr||!backup) throw new Error('Backup not found: '+(readErr?.message||''));
+    // Restore each row to app_data
+    const rows = backup.data;
+    if(!Array.isArray(rows)||!rows.length) throw new Error('Backup is empty');
+    for(const row of rows){
+      await db.from('app_data').upsert(
+        {key:row.key, value:row.value, updated_at:new Date().toISOString()},
+        {onConflict:'key'}
+      );
+    }
+    toast(`✓ Restored ${rows.length} items from ${date} — reloading...`,'green');
+    setTimeout(()=>location.reload(), 1500);
+  }catch(e){
+    toast('Restore failed: '+e.message,'red');
+  }
+}
+
+async function deleteBackup(date){
+  if(!confirm(`Delete backup from ${date}?`)) return;
+  const db = getDB();
+  if(!db) return;
+  try{
+    await db.from('pd_backups').delete().eq('backup_date',date);
+    toast('Backup deleted','red');
+    loadBackupList();
+  }catch(e){ toast('Delete failed: '+e.message,'red'); }
+}
+
+function showBackupSetupSQL(){
+  const sql = `-- Run this in Supabase SQL Editor to enable backups
+CREATE TABLE IF NOT EXISTS pd_backups (
+  backup_date TEXT PRIMARY KEY,
+  data        JSONB NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE pd_backups ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK (true);`;
+  setModal(`<div class="mhdr"><div class="mtl">🔄 Backup Table Setup</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="info mb12">Run this SQL in your Supabase SQL Editor to create the backup table:</div>
+      <div style="background:#0a0c12;border:1px solid var(--bd);border-radius:6px;padding:14px;font-family:monospace;font-size:12px;color:var(--gr);line-height:1.7;white-space:pre;overflow-x:auto">${sql}</div>
+      <button onclick="navigator.clipboard.writeText(\`${sql}\`).then(()=>toast('SQL copied!','green'))" class="btn bg bsm" style="margin-top:12px">📋 Copy SQL</button>
+    </div>
+    <div class="mfoot"><button class="btn bg" onclick="closeModal()">Close</button>
+      <button class="btn bp" onclick="closeModal();window.open('https://supabase.com/dashboard/project/fcmesdnagvrdmjzzuwue/sql/new','_blank')">Open Supabase SQL Editor →</button>
+    </div>`);
+}
+
 function exportData(){
   const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,exportedAt:new Date().toISOString()},null,2);
   const a=document.createElement('a');
