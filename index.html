@@ -1363,12 +1363,18 @@ async function loadFromStorage(){
       const WF_VERSION = 5; // Increment when wireframe structure changes
       if(loaded.wireframe._v === WF_VERSION){
         Object.assign(WF, loaded.wireframe);
-        // Migrate: ensure packagingCost input rows have defaultVal
+        // Migrate: ensure packagingCost rows have proper defaults
         for(const mp of Object.keys(WF)){
           if(!Array.isArray(WF[mp])) continue;
           for(const row of WF[mp]){
-            if(row.var==='packagingCost' && row.t==='input' && row.defaultVal===undefined){
-              row.defaultVal = 60;
+            if(row.var==='packagingCost'){
+              // Always ensure defaultVal exists for packaging cost
+              if(row.defaultVal===undefined) row.defaultVal = 60;
+              // If it was accidentally set to formula with expr '0', restore to input
+              if(row.t==='formula' && (row.expr==='0' || !row.expr)){
+                row.t = 'input';
+                row.defaultVal = row.defaultVal || 60;
+              }
             }
           }
         }
@@ -1649,6 +1655,7 @@ function fmtWFVal(val, row){
 }
 
 function renderDynamicCalc(mp){
+  try{
   const d = CD[mp];
   if(!d) return;
   const rows = WF[mp];
@@ -1662,7 +1669,7 @@ function renderDynamicCalc(mp){
 
   // Find output var for threshold check
   const outputRow = rows.find(r=>r.t==='output');
-  const profitVal = outputRow&&outputRow.var ? (result[outputRow.var]??0) : 0;
+  const profitVal = outputRow&&outputRow.var ? (typeof result[outputRow.var]==='number'?result[outputRow.var]:0) : 0;
   const threshold = THRESHOLDS[d.cat]||0;
   const isBreach = profitVal < threshold;
 
@@ -1686,7 +1693,8 @@ function renderDynamicCalc(mp){
       }
     }
     else if(row.t==='input'){
-      const val = d[row.var]!==undefined ? d[row.var] : (result[row.var]??0);
+      const rawVal = d[row.var]!==undefined ? d[row.var] : (row.defaultVal!==undefined ? row.defaultVal : (typeof result[row.var]==='number'?result[row.var]:0));
+      const val = typeof rawVal==='number'?rawVal:parseFloat(rawVal)||0;
       const mpSafe = escAttr(mp);
       const varSafe = escAttr(row.var);
       if(isMyntra){
@@ -1701,12 +1709,14 @@ function renderDynamicCalc(mp){
         const plainVal = fmtMynVal(val, row);
         html+=`<tr class="cform myn-row"><td>${esc(row.l)}</td><td class="mono myn-val" style="font-weight:600">${plainVal}</td><td class="myn-math">${esc(row.desc||'')}</td></tr>`;
       } else {
+        const fmtVal = fmtWFVal(val, row);
         const color = row.sign===-1 ? 'var(--re)' : row.fmt==='%'||row.fmt==='%x' ? 'var(--ac)' : 'var(--bl)';
-        html+=`<tr class="cform"><td>${esc(row.l)}</td><td class="mono" style="color:${color}">${display}</td></tr>`;
+        html+=`<tr class="cform"><td>${esc(row.l)}</td><td class="mono" style="color:${color}">${fmtVal}</td></tr>`;
       }
     }
     else if(row.t==='output'){
-      const val = row.var ? (result[row.var]??0) : 0;
+      const rawVal = row.var ? result[row.var] : null;
+      const val = typeof rawVal==='number' ? rawVal : 0;
       const isMainProfit = row.var==='profit';
       const breachClass = isMainProfit&&isBreach ? 'cbreach' : 'ctotal';
       if(isMyntra){
@@ -1727,6 +1737,11 @@ function renderDynamicCalc(mp){
     html+=`<tr><td colspan="3" style="padding:10px 11px;font-size:11px;color:var(--re);font-style:italic;border-top:2px solid var(--bd)">Note: The above calculation is for ${esc(d.cat||'')} category. Selling price is ${(result.sellerPrice||0)>2500?'above':'below'} ₹2500 so GST applied is ${(result.sellerPrice||0)>2500?'18%':'5%'}. Falls under ${esc(d.level||'')}, commission applied accordingly.</td></tr>`;
   }
   tableEl.innerHTML = html;
+  }catch(err){
+    console.error('renderDynamicCalc error for '+mp+':', err);
+    const tableEl = el('ct-'+mp);
+    if(tableEl) tableEl.innerHTML = `<tr><td colspan="3" style="color:var(--re);padding:16px">⚠ Calculator Error: ${esc(err.message)}</td></tr>`;
+  }
 }
 
 // Legacy aliases for compatibility
@@ -3840,11 +3855,15 @@ function runWFEngine(marketplace, inputs){
 
     if(!row.expr) continue;
     try{
-      const keys = Object.keys(ctx);
-      const vals = Object.values(ctx);
+      // Filter to only valid JS identifiers to prevent Function constructor errors
+      const validIdRe = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
+      const entries = Object.entries(ctx).filter(([k])=>validIdRe.test(k));
+      const keys = entries.map(([k])=>k);
+      const vals = entries.map(([,v])=>v);
       const fn = new Function(...keys, `"use strict"; return (${sanitizeExpr(row.expr)});`);
-      const result = fn(...vals);
-      ctx[row.var] = typeof result === 'number' ? result : result;
+      const r = fn(...vals);
+      // Guard against NaN — treat as null so downstream formulas use fallbacks
+      ctx[row.var] = (typeof r === 'number' && !isNaN(r)) ? r : (r == null ? null : r);
     } catch(e){
       ctx[row.var] = null;
       console.warn(`WF expr error [${row.var}]: ${row.expr}`, e.message);
@@ -3879,10 +3898,11 @@ function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){
   const retProv  = result.retProv  ?? 0;
   const payout   = result.expectedPayment ?? result.payout ?? (sellerPrice-commAmt-gstAmt-ret-coll-pg-retProv-tcs-tds);
   const profit   = result.profit   ?? (payout-cost);
+  const ifDelivered = result.ifDelivered ?? (profit + ret);
   const profitPct= custPaid>0 ? (profit/custPaid*100).toFixed(1) : '0';
   return {mrp,mrpRnd,custPaid,gtCharge,sellerPrice,gst,gstRate:gst,rawComm,
           commAmt,gstAmt,gstOnComm:gstAmt,taxableAmt,tcs,tds,ret,retFee:ret,coll,collFee:coll,
-          pg,pgFee:pg,retProv,payout,profit,profitPct};
+          pg,pgFee:pg,retProv,payout,profit,ifDelivered,profitPct};
 }
 
 
