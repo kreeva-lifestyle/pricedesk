@@ -141,6 +141,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .thr-input{width:90px;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-family:var(--mono);padding:6px 10px;text-align:right;font-size:13px}
 .thr-input:focus{outline:none;border-color:var(--ac)}
 /* FILTER BAR */
+.sku-mp-tab{padding:8px 18px;font-size:12px;font-weight:600;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.sku-mp-tab:hover{color:var(--tx)}
+.sku-mp-tab.active{color:var(--ac);border-bottom-color:var(--ac)}
 .filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:var(--s);border:1px solid var(--bd);border-radius:var(--r)}
 .filter-select{background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:12px;padding:5px 9px;cursor:pointer;min-width:120px}
 .filter-select:focus{outline:none;border-color:var(--ac)}
@@ -858,6 +861,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
 <!-- ═══ SKUs ═══ -->
 <div class="page" id="page-skus">
+  <!-- MARKETPLACE TABS -->
+  <div class="mp-tabs" style="display:flex;gap:0;margin-bottom:12px;border-bottom:2px solid var(--bd)">
+    <div class="sku-mp-tab active" data-mp="" onclick="switchSKUTab(this,'')">All</div>
+    <div class="sku-mp-tab" data-mp="myntra" onclick="switchSKUTab(this,'myntra')">Myntra</div>
+    <div class="sku-mp-tab" data-mp="ajio-ppmp" onclick="switchSKUTab(this,'ajio-ppmp')">Ajio PPMP</div>
+    <div class="sku-mp-tab" data-mp="ajio-cc" onclick="switchSKUTab(this,'ajio-cc')">Ajio CC</div>
+    <div class="sku-mp-tab" data-mp="amazon" onclick="switchSKUTab(this,'amazon')">Amazon</div>
+  </div>
   <!-- FILTER BAR -->
   <div class="filter-bar">
     <span class="filter-label">Filters:</span>
@@ -868,22 +879,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <span class="filter-sep"></span>
     <select id="f-brand" class="filter-select" onchange="renderSKUs()"><option value="">All Brands</option></select>
     <select id="f-cat" class="filter-select" onchange="renderSKUs()"><option value="">All Categories</option></select>
-    <select id="f-model" class="filter-select" onchange="renderSKUs()">
-      <option value="">All Models</option>
-      <option value="myntra">Myntra</option>
-      <option value="ajio-ppmp">Ajio PPMP</option>
-      <option value="ajio-cc">Ajio CC</option>
-      <option value="amazon">Amazon</option>
-    </select>
-    <select id="f-level" class="filter-select" onchange="renderSKUs()">
-      <option value="">All Levels</option>
-      <option>Level 1</option><option>Level 2</option><option>Level 3</option><option>Level 4</option>
-    </select>
     <select id="f-status" class="filter-select" onchange="renderSKUs()">
       <option value="">All Statuses</option>
-      <option value="breached">Threshold Breached ⚠️</option>
-      <option value="ignored">Threshold Ignored 🔕</option>
-      <option value="healthy">Healthy ✓</option>
+      <option value="breached">Threshold Breached</option>
+      <option value="ignored">Threshold Ignored</option>
+      <option value="healthy">Healthy</option>
     </select>
     <span class="filter-sep"></span>
     <button class="filter-clear" onclick="clearFilters()">✕ Clear</button>
@@ -893,10 +893,6 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <button class="btn bp bsm" onclick="exportSKUsToExcel()" title="Download all SKUs with full details">⬇ Download SKUs</button>
   </div>
   <div id="active-filter-chips" class="active-filters"></div>
-  <div class="info mb8">
-    <strong style="color:var(--tx)">Auto-fill:</strong> Select Brand → Category (Myntra auto-sets Level) → fill Cost & Markup → <span style="color:var(--gr)">MRP / SP / GST / Commission % / Net Profit ₹ all compute live.</span>
-    Icons: <span title="Threshold breached">⚠️</span> Breach &nbsp; <span title="Threshold ignored">🔕</span> Ignored &nbsp; <span title="Threshold OK">✅</span> Healthy
-  </div>
   <div class="st mb8" id="sku-count"></div>
   <div class="ss-wrap">
     <table class="ss">
@@ -905,15 +901,15 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         <th>Style ID</th>
         <th>Brand / Model</th>
         <th>Category</th>
-        <th>Level <span class="st">(Myntra)</span></th>
         <th>Cost ₹</th>
         <th>Markup %</th>
+        <th>Discount %</th>
         <th class="auto-h">MRP ↗</th>
         <th class="auto-h">SP ↗</th>
-        <th class="auto-h">GST ↗</th>
         <th class="auto-h">Comm % ↗</th>
         <th class="auto-h">Net Profit ₹ ↗</th>
-        <th style="width:90px">Status / Act</th>
+        <th class="auto-h">If Delivered ↗</th>
+        <th style="width:120px">Actions</th>
       </tr></thead>
       <tbody id="sku-body"></tbody>
     </table>
@@ -1339,7 +1335,7 @@ async function loadFromStorage(){
     }
     if(loaded.wireframe){
       // Reset all wireframes when schema version changes (incentive removed, locked changes)
-      const WF_VERSION = 4; // Increment when wireframe structure changes
+      const WF_VERSION = 5; // Increment when wireframe structure changes
       if(loaded.wireframe._v === WF_VERSION){
         Object.assign(WF, loaded.wireframe);
       } else {
@@ -1544,34 +1540,43 @@ function calcSKU(s){
   const cached = _calcCache.get(cacheKey);
   if(cached) return cached;
 
-  const mrp=Math.round(s.cost*(1+s.markup/100));
-  const sp=Math.round(mrp*3/100)*100||mrp*3;
-  const gst=autoGST(sp);
   const brand=brands.find(b=>b.id===s.brandId)||{model:'myntra',commOverride:null};
-  let comm=0;
-  if(brand.commOverride!=null) comm=brand.commOverride;
-  else if(brand.model==='myntra') comm=getMyntraComm(s.category,sp);
-  else if(brand.model==='ajio-ppmp') comm=COMM_AJIO_PPMP[s.category]||18.88;
-  else if(brand.model==='ajio-cc') comm=COMM_AJIO_CC[s.category]||18.88;
-  else comm=COMM_AMAZON[s.category]||17;
-  const commAmt=sp*comm/100;
-  const gstAmt=commAmt*gst;
-  let payout;
-  if(brand.model==='ajio-cc'){payout=sp-commAmt-gstAmt;}
-  else if(brand.model==='myntra'){
-    // Use WF engine so any formula change in wireframe reflects here too
-    const v2=calcMyntraFull(s.cost,s.markup,s.discount||0,s.level,s.category,0,0);
+  const mp = brand.model || 'myntra';
+  // Auto-derive level from category
+  const level = CAT_LEVEL[s.category] || s.level || 'Level 2';
+
+  let mrp, sp, comm, payout, profitRs, ifDelivered=0;
+
+  if(mp==='myntra'){
+    // Use WF engine for full Myntra calculation
+    const v2=calcMyntraFull(s.cost,s.markup,s.discount||0,level,s.category,0,0);
+    mrp=v2.mrpRnd||v2.mrp;
+    sp=v2.sellerPrice||v2.custPaid||mrp;
+    comm=brand.commOverride!=null ? brand.commOverride : (v2.rawComm||0);
     payout=v2.payout;
-    // Override comm for display
-    comm=v2.effComm;
+    profitRs=v2.profit||(payout-s.cost);
+    // If Delivered = profit + reverse fees (saved when order completes)
+    ifDelivered=profitRs + (v2.retFee||v2.ret||0);
+  } else {
+    mrp=Math.round(s.cost*(1+s.markup/100));
+    sp=Math.round(mrp*3/100)*100||mrp*3;
+    const gst=autoGST(sp);
+    if(brand.commOverride!=null) comm=brand.commOverride;
+    else if(mp==='ajio-ppmp') comm=COMM_AJIO_PPMP[s.category]||18.88;
+    else if(mp==='ajio-cc') comm=COMM_AJIO_CC[s.category]||18.88;
+    else comm=COMM_AMAZON[s.category]||17;
+    const commAmt=sp*comm/100;
+    const gstAmt=commAmt*gst;
+    if(mp==='ajio-cc'){payout=sp-commAmt-gstAmt;}
+    else if(mp==='ajio-ppmp'){const fwd=LOGISTICS_SETTINGS.ajio_fwd,ret=LOGISTICS_SETTINGS.ajio_ret,platFee=LOGISTICS_SETTINGS.ajio_platform_fee;payout=sp-commAmt-gstAmt-fwd-ret-platFee;}
+    else{const fba=LOGISTICS_SETTINGS.amz_fba,close=LOGISTICS_SETTINGS.amz_close,allFees=commAmt+close+fba,gstAmt2=allFees*gst;payout=sp-allFees-gstAmt2;}
+    profitRs=payout-s.cost;
+    ifDelivered=profitRs; // Non-Myntra: same as profit (no reverse fee recovery)
   }
-  else if(brand.model==='ajio-ppmp'){const fwd=LOGISTICS_SETTINGS.ajio_fwd,ret=LOGISTICS_SETTINGS.ajio_ret,platFee=LOGISTICS_SETTINGS.ajio_platform_fee;payout=sp-commAmt-gstAmt-fwd-ret-platFee;}
-  else{const fba=LOGISTICS_SETTINGS.amz_fba,close=LOGISTICS_SETTINGS.amz_close,allFees=commAmt+close+fba,gstAmt2=allFees*gst;payout=sp-allFees-gstAmt2;}
-  const profitRs=payout-s.cost;
-  const profitPct=(profitRs/sp*100).toFixed(1);
+  const profitPct=sp>0?(profitRs/sp*100).toFixed(1):'0';
   const threshold=THRESHOLDS[s.category]||0;
   const isBreach=!s.ignoreThreshold&&profitRs<threshold;
-  const result={mrp,sp,gst,comm,payout,profitRs,profitPct,isBreach,threshold};
+  const result={mrp,sp,comm,payout,profitRs,profitPct,isBreach,threshold,ifDelivered};
   _calcCache.set(cacheKey, result);
   return result;
 }
@@ -1942,16 +1947,16 @@ function filteredSKUs(){
   const q=(el('f-search')?.value||'').toLowerCase();
   const fBrand=el('f-brand')?.value||'';
   const fCat=el('f-cat')?.value||'';
-  const fModel=el('f-model')?.value||'';
-  const fLevel=el('f-level')?.value||'';
   const fStatus=el('f-status')?.value||'';
   return skuDB.filter(s=>{
     if(q&&!s.styleId.toLowerCase().includes(q))return false;
     if(fBrand&&s.brandId!==fBrand)return false;
     if(fCat&&s.category!==fCat)return false;
-    if(fLevel&&s.level!==fLevel)return false;
-    const brand=brands.find(b=>b.id===s.brandId);
-    if(fModel&&brand?.model!==fModel)return false;
+    // Marketplace tab filter
+    if(_skuMPTab){
+      const brand=brands.find(b=>b.id===s.brandId);
+      if(brand?.model!==_skuMPTab)return false;
+    }
     if(fStatus){
       const c=calcSKU(s);
       if(fStatus==='breached'&&(!c.isBreach||s.ignoreThreshold))return false;
@@ -1964,8 +1969,8 @@ function filteredSKUs(){
 
 function renderActiveFilterChips(){
   const chips=[];
-  const labels={'f-brand':'Brand','f-cat':'Category','f-model':'Model','f-level':'Level','f-status':'Status'};
-  ['f-brand','f-cat','f-model','f-level','f-status'].forEach(fid=>{
+  const labels={'f-brand':'Brand','f-cat':'Category','f-status':'Status'};
+  ['f-brand','f-cat','f-status'].forEach(fid=>{
     const e=el(fid);
     if(e&&e.value){
       const text=e.options[e.selectedIndex]?.text||e.value;
@@ -1977,7 +1982,15 @@ function renderActiveFilterChips(){
 }
 
 function clearFilters(){
-  ['f-search','f-brand','f-cat','f-model','f-level','f-status'].forEach(fid=>{const e=el(fid);if(e)e.value='';});
+  ['f-search','f-brand','f-cat','f-status'].forEach(fid=>{const e=el(fid);if(e)e.value='';});
+  renderSKUs();
+}
+
+let _skuMPTab = ''; // Current marketplace tab filter
+function switchSKUTab(tab, mp){
+  _skuMPTab = mp;
+  document.querySelectorAll('.sku-mp-tab').forEach(t=>t.classList.remove('active'));
+  tab.classList.add('active');
   renderSKUs();
 }
 
@@ -1995,33 +2008,31 @@ function renderSKUs(){
     const brand=brands.find(b=>b.id===s.brandId);
     const pp=c.profitRs;
     const profColor=pp<0?'var(--re)':c.isBreach?'var(--ac)':'var(--gr)';
+    const ifDelColor=c.ifDelivered>=0?'var(--gr)':'var(--re)';
     // Status icon
     let statusIcon='';
-    if(s.ignoreThreshold) statusIcon=`<span class="ico-ignore" title="Threshold ignored — click to re-enable" onclick="toggleIgnore('${escAttr(s.id)}')">🔕</span>`;
-    else if(c.isBreach) statusIcon=`<span class="ico-breach" title="Threshold breached! Net profit ₹${c.profitRs.toFixed(0)} &lt; ₹${c.threshold}">⚠️</span>`;
-    else statusIcon=`<span class="ico-healthy" title="Healthy ✓">✅</span>`;
+    if(s.ignoreThreshold) statusIcon=`<span class="ico-ignore" title="Threshold ignored" onclick="toggleIgnore('${escAttr(s.id)}')">🔕</span>`;
+    else if(c.isBreach) statusIcon=`<span class="ico-breach" title="Threshold breached! ₹${c.profitRs.toFixed(0)} &lt; ₹${c.threshold}">⚠️</span>`;
+    else statusIcon=`<span class="ico-healthy" title="Healthy">✅</span>`;
     return`<tr>
       <td><div onclick="openImgModal('${escAttr(s.id)}')" style="cursor:pointer" title="Click to set image">${s.img?`<img src="${esc(fixImg(s.img))}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">🖼</div>`}</div></td>
       <td class="mono" style="font-size:11px;font-weight:600">${esc(s.styleId)}</td>
       <td>${brand?`<div style="font-size:12px;font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(brand.name)}">${esc(brand.name)}</div><span class="bdg ${brand.model==='ajio-ppmp'?'bppmp':brand.model==='ajio-cc'?'bcc':'bi'}" style="font-size:10px">${esc(modelLabels[brand.model]||'?')}</span>`:'<span class="st">—</span>'}</td>
       <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
-      <td>${brand?.model==='myntra'?`<span class="bdg bi" style="font-size:10px">${esc(s.level)}</span>`:
-              `<span class="st" style="font-size:10px">N/A</span>`}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
+      <td class="mono">${s.discount||0}%</td>
       <td class="av">₹${c.mrp.toLocaleString('en-IN')}</td>
-      <td class="av">₹${c.sp.toLocaleString('en-IN')}</td>
-      <td>${gstBadge(c.sp)}</td>
-      <td class="av" style="color:var(--ac)">${c.comm}%${brand?.commOverride!=null?' 🔒':''}</td>
+      <td class="av">₹${Math.round(c.sp).toLocaleString('en-IN')}</td>
+      <td class="av" style="color:var(--ac)">${typeof c.comm==='number'?c.comm.toFixed(2):c.comm}%${brand?.commOverride!=null?' 🔒':''}</td>
       <td class="av" style="color:${profColor}">₹${c.profitRs.toFixed(0)}</td>
+      <td class="av" style="color:${ifDelColor}">₹${c.ifDelivered.toFixed(0)}</td>
       <td>
-        <div class="flex gap8" style="flex-wrap:wrap">
-          <button class="ignore-toggle ${s.ignoreThreshold?'active':''}" onclick="toggleIgnore('${escAttr(s.id)}')" title="${s.ignoreThreshold?'Click to re-enable threshold':'Click to ignore threshold for this SKU'}">
-            ${s.ignoreThreshold?'🔕':'🔔'}
-          </button>
+        <div class="flex gap8" style="flex-wrap:nowrap;align-items:center">
           ${statusIcon}
-          <button class="btn bg bxs" onclick="startEdit('${escAttr(s.id)}')" title="Edit" aria-label="Edit SKU">✎</button>
-          <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Delete" aria-label="Delete SKU">✕</button>
+          <button class="btn bg bxs" onclick="showCalcModal('${escAttr(s.id)}')" title="Show Calculation" style="font-size:10px;padding:3px 8px">Calc</button>
+          <button class="btn bg bxs" onclick="startEdit('${escAttr(s.id)}')" title="Edit">✎</button>
+          <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Delete">✕</button>
         </div>
       </td>
     </tr>`;
@@ -2031,42 +2042,30 @@ function renderSKUs(){
   t.querySelectorAll('[data-lc]').forEach(e=>e.addEventListener('input',()=>liveCalcRow(e.closest('tr'))));
 }
 
-// ── Category → Level auto-fill (Myntra only) ──────────
+// ── Category change triggers recalc (level auto-derived from CAT_LEVEL) ──
 function onCatSelectChange(prefix){
-  const catEl=el(prefix+'-cat');const brandEl=el(prefix+'-brand');const lvlEl=el(prefix+'-lvl');
-  if(!catEl||!brandEl||!lvlEl)return;
-  const cat=catEl.value;
-  const brand=brands.find(b=>b.id===brandEl.value);
-  // Only auto-fill level for Myntra model
-  if(brand&&brand.model==='myntra'&&CAT_LEVEL[cat]){
-    lvlEl.value=CAT_LEVEL[cat];
-    // Show visual feedback
-    lvlEl.style.borderColor='var(--gr)';
-    setTimeout(()=>{if(lvlEl)lvlEl.style.borderColor='';},2000);
-  }
+  const catEl=el(prefix+'-cat');
+  if(!catEl)return;
   liveCalcRow(catEl.closest('tr'));
 }
 
 function renderEditRow(s){
   const brandOpts=brands.map(b=>`<option value="${b.id}" ${b.id===s.brandId?'selected':''}>${b.name}</option>`).join('');
   const catOpts=CATS.map(c=>`<option ${c===s.category?'selected':''}>${c}</option>`).join('');
-  const brand=brands.find(b=>b.id===s.brandId);
-  const isMyntra=brand?.model==='myntra';
-  const lvlOpts=LEVELS.map(l=>`<option ${l===s.level?'selected':''}>${l}</option>`).join('');
   const c=calcSKU(s);
   return`<tr class="er" id="er-${s.id}">
     <td><div onclick="openImgModal('${s.id}')" style="cursor:pointer">${s.img?`<img src="${fixImg(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div>`}</div></td>
     <td><input class="si" id="e-sid" value="${s.styleId}" style="width:115px"></td>
     <td><select class="sse" id="e-brand" onchange="onCatSelectChange('e')">${brandOpts}</select></td>
     <td><select class="sse" id="e-cat" onchange="onCatSelectChange('e')">${catOpts}</select></td>
-    <td>${isMyntra?`<select class="sse" id="e-lvl">${lvlOpts}</select>`:`<select class="sse" id="e-lvl" disabled style="opacity:.4">${lvlOpts}</select>`}</td>
     <td><input class="si" data-lc id="e-cost" type="number" value="${s.cost}" style="width:70px"></td>
     <td><input class="si" data-lc id="e-mkp" type="number" value="${s.markup}" style="width:52px"></td>
+    <td><input class="si" data-lc id="e-disc" type="number" value="${s.discount||0}" style="width:52px"></td>
     <td><div class="av" id="e-mrp">₹${c.mrp.toLocaleString('en-IN')}</div></td>
-    <td><div class="av" id="e-sp">₹${c.sp.toLocaleString('en-IN')}</div></td>
-    <td><div id="e-gst">${gstBadge(c.sp)}</div></td>
-    <td><div class="av" id="e-comm" style="color:var(--ac)">${c.comm}%</div></td>
+    <td><div class="av" id="e-sp">₹${Math.round(c.sp).toLocaleString('en-IN')}</div></td>
+    <td><div class="av" id="e-comm" style="color:var(--ac)">${typeof c.comm==='number'?c.comm.toFixed(2):c.comm}%</div></td>
     <td><div class="av" id="e-pp" style="color:${c.profitRs>0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</div></td>
+    <td><div class="av" id="e-ifd" style="color:${c.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${c.ifDelivered.toFixed(0)}</div></td>
     <td><div class="flex gap8"><button class="btn bp bxs" onclick="saveEdit('${s.id}')">✓</button><button class="btn bg bxs" onclick="cancelEdit()">✕</button></div></td>
   </tr>`;
 }
@@ -2074,22 +2073,19 @@ function renderEditRow(s){
 function renderNewRow(){
   const brandOpts=brands.map(b=>`<option value="${b.id}">${b.name}</option>`).join('');
   const catOpts=CATS.map(c=>`<option>${c}</option>`).join('');
-  const lvlOpts=LEVELS.map(l=>`<option ${l==='Level 2'?'selected':''}>${l}</option>`).join('');
-  const firstBrand=brands[0];
-  const isMyntra=firstBrand?.model==='myntra';
   return`<tr class="er" id="er-new">
     <td><div onclick="openImgModal('new')" style="cursor:pointer;width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div></td>
     <td><input class="si" id="n-sid" placeholder="Style ID" style="width:115px"></td>
     <td><select class="sse" id="n-brand" onchange="onCatSelectChange('n')">${brandOpts}</select></td>
     <td><select class="sse" id="n-cat" onchange="onCatSelectChange('n')">${catOpts}</select></td>
-    <td><select class="sse" id="n-lvl" ${!isMyntra?'disabled style="opacity:.4"':''}>${lvlOpts}</select></td>
     <td><input class="si" data-lc id="n-cost" type="number" placeholder="Cost" style="width:70px"></td>
     <td><input class="si" data-lc id="n-mkp" type="number" placeholder="Mkp%" style="width:52px"></td>
+    <td><input class="si" data-lc id="n-disc" type="number" placeholder="Disc%" value="0" style="width:52px"></td>
     <td><div class="av na" id="n-mrp">—</div></td>
     <td><div class="av na" id="n-sp">—</div></td>
-    <td><div id="n-gst">—</div></td>
     <td><div class="av na" id="n-comm">—</div></td>
     <td><div class="av na" id="n-pp">—</div></td>
+    <td><div class="av na" id="n-ifd">—</div></td>
     <td><div class="flex gap8"><button class="btn bp bxs" onclick="saveNew()">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()">✕</button></div></td>
   </tr>`;
 }
@@ -2097,45 +2093,27 @@ function renderNewRow(){
 function liveCalcRow(row){
   const isNew=row.id==='er-new';
   const pfx=isNew?'n-':'e-';
-  const costEl=el(pfx+'cost'),mkpEl=el(pfx+'mkp'),brandEl=el(pfx+'brand'),catEl=el(pfx+'cat'),lvlEl=el(pfx+'lvl');
-  // Update level disabled state based on brand model
-  if(brandEl&&lvlEl){
-    const brand=brands.find(b=>b.id===brandEl.value);
-    const isMyntra=brand?.model==='myntra';
-    lvlEl.disabled=!isMyntra;
-    lvlEl.style.opacity=isMyntra?'1':'0.4';
-  }
-  const cost=parseFloat(costEl?.value)||0;const mkp=parseFloat(mkpEl?.value)||0;
+  const costEl=el(pfx+'cost'),mkpEl=el(pfx+'mkp'),discEl=el(pfx+'disc'),brandEl=el(pfx+'brand'),catEl=el(pfx+'cat');
+  const cost=parseFloat(costEl?.value)||0;const mkp=parseFloat(mkpEl?.value)||0;const disc=parseFloat(discEl?.value)||0;
   if(cost<=0||mkp<=0){
-    // Clear auto-computed fields instead of leaving stale values
-    [pfx+'mrp',pfx+'sp',pfx+'gst',pfx+'comm',pfx+'pp'].forEach(id=>{
+    [pfx+'mrp',pfx+'sp',pfx+'comm',pfx+'pp',pfx+'ifd'].forEach(id=>{
       const e=el(id);if(e){e.innerHTML='—';e.classList.add('na');}
     });
     return;
   }
-  const brandId=brandEl?.value;const cat=catEl?.value||CATS[0];const level=lvlEl?.value||'Level 2';
-  const mrp=Math.round(cost*(1+mkp/100));const sp=Math.round(mrp*3/100)*100||mrp*3;
-  const gst=autoGST(sp);
+  const brandId=brandEl?.value;const cat=catEl?.value||CATS[0];
+  const level=CAT_LEVEL[cat]||'Level 2';
   const brand=brands.find(b=>b.id===brandId)||{model:'myntra',commOverride:null};
-  let comm=0;
-  if(brand.commOverride!=null) comm=brand.commOverride;
-  else if(brand.model==='myntra') comm=getMyntraComm(cat,sp);
-  else if(brand.model==='ajio-ppmp') comm=COMM_AJIO_PPMP[cat]||18.88;
-  else if(brand.model==='ajio-cc') comm=COMM_AJIO_CC[cat]||18.88;
-  else comm=COMM_AMAZON[cat]||17;
-  const commAmt=sp*comm/100,gstAmt=commAmt*gst;
-  let payout;
-  if(brand.model==='ajio-cc') payout=sp-commAmt-gstAmt;
-  else if(brand.model==='myntra'){const fwd=getMynFwd(level,sp),ret=getMynRet(level),coll=+el('myn-coll')?.value||61,pg=+el('myn-pg')?.value||50.22;payout=sp-commAmt-gstAmt-fwd-ret-coll-pg;}
-  else if(brand.model==='ajio-ppmp'){const fwd=+el('ajfwd-fix')?.value||70,ret=+el('ajret-fix')?.value||70;payout=sp-commAmt-gstAmt-fwd-ret;}
-  else{const fba=+el('amz-fba')?.value||55,close=+el('amz-close')?.value||15,allFees=commAmt+close+fba,gstAmt2=allFees*gst;payout=sp-allFees-gstAmt2;}
-  const profRs=(payout-cost);const pp=(profRs/sp*100).toFixed(1);
-  const mrpEl=el(pfx+'mrp'),spEl=el(pfx+'sp'),gstEl=el(pfx+'gst'),commEl=el(pfx+'comm'),ppEl=el(pfx+'pp');
-  if(mrpEl){mrpEl.innerHTML=`₹${mrp.toLocaleString('en-IN')}`;mrpEl.classList.remove('na');}
-  if(spEl){spEl.innerHTML=`₹${sp.toLocaleString('en-IN')}`;spEl.classList.remove('na');}
-  if(gstEl)gstEl.innerHTML=gstBadge(sp);
-  if(commEl){commEl.innerHTML=`${comm}%`;commEl.style.color='var(--ac)';commEl.classList.remove('na');}
-  if(ppEl){ppEl.innerHTML=`₹${profRs.toFixed(0)}`;ppEl.style.color=profRs>0?'var(--gr)':'var(--re)';ppEl.classList.remove('na');}
+  const mp=brand.model||'myntra';
+  // Use calcSKU logic via temp SKU object for consistency
+  const tmpSKU={cost,markup:mkp,discount:disc,category:cat,level,brandId,ignoreThreshold:false,id:'_tmp'};
+  const c=calcSKU(tmpSKU);
+  const mrpDisp=el(pfx+'mrp'),spDisp=el(pfx+'sp'),commDisp=el(pfx+'comm'),ppDisp=el(pfx+'pp'),ifdDisp=el(pfx+'ifd');
+  if(mrpDisp){mrpDisp.innerHTML=`₹${c.mrp.toLocaleString('en-IN')}`;mrpDisp.classList.remove('na');}
+  if(spDisp){spDisp.innerHTML=`₹${Math.round(c.sp).toLocaleString('en-IN')}`;spDisp.classList.remove('na');}
+  if(commDisp){commDisp.innerHTML=`${typeof c.comm==='number'?c.comm.toFixed(2):c.comm}%`;commDisp.style.color='var(--ac)';commDisp.classList.remove('na');}
+  if(ppDisp){ppDisp.innerHTML=`₹${c.profitRs.toFixed(0)}`;ppDisp.style.color=c.profitRs>0?'var(--gr)':'var(--re)';ppDisp.classList.remove('na');}
+  if(ifdDisp){ifdDisp.innerHTML=`₹${c.ifDelivered.toFixed(0)}`;ifdDisp.style.color=c.ifDelivered>=0?'var(--gr)':'var(--re)';ifdDisp.classList.remove('na');}
 }
 
 function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sid')?.focus(),50);}
@@ -2144,27 +2122,84 @@ function cancelEdit(){editId=null;newImg='';renderSKUs();}
 // promptImg / promptImgNew now replaced by openImgModal — see IMAGE MANAGEMENT section
 
 function saveNew(){
-  const sid=el('n-sid')?.value.trim(),brandId=el('n-brand')?.value,cat=el('n-cat')?.value,lvl=el('n-lvl')?.value;
-  const cost=parseFloat(el('n-cost')?.value)||0,mkp=parseFloat(el('n-mkp')?.value)||0;
+  const sid=el('n-sid')?.value.trim(),brandId=el('n-brand')?.value,cat=el('n-cat')?.value;
+  const cost=parseFloat(el('n-cost')?.value)||0,mkp=parseFloat(el('n-mkp')?.value)||0,disc=parseFloat(el('n-disc')?.value)||0;
+  const lvl=CAT_LEVEL[cat]||'Level 2';
   if(!sid){toast('Style ID required','red');return;}
   if(!cost||cost<=0){toast('Cost price required','red');return;}
   if(!mkp||mkp<=0){toast('Markup % required (must be > 0)','red');return;}
   if(skuDB.find(x=>x.styleId===sid)){toast('Style ID already exists','red');return;}
-  skuDB.push({id:'s'+Date.now(),styleId:sid,brandId,category:cat,level:lvl,cost,markup:mkp,img:newImg||'',ignoreThreshold:false});
+  skuDB.push({id:'s'+Date.now(),styleId:sid,brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,img:newImg||'',ignoreThreshold:false});
   newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');toast(`✓ ${sid} added`,'green');
 }
 
 function saveEdit(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
-  const sid=el('e-sid')?.value.trim(),cost=parseFloat(el('e-cost')?.value)||0,mkp=parseFloat(el('e-mkp')?.value)||0;
+  const sid=el('e-sid')?.value.trim(),cost=parseFloat(el('e-cost')?.value)||0,mkp=parseFloat(el('e-mkp')?.value)||0,disc=parseFloat(el('e-disc')?.value)||0;
   if(!sid||!cost){toast('Fill required fields','red');return;}
-  Object.assign(s,{styleId:sid,brandId:el('e-brand')?.value,category:el('e-cat')?.value,level:el('e-lvl')?.value,cost,markup:mkp});
+  const cat=el('e-cat')?.value;
+  Object.assign(s,{styleId:sid,brandId:el('e-brand')?.value,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc});
   editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');toast(`✓ ${sid} updated`,'green');
 }
 
 async function delSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s||!confirm(`Delete "${esc(s.styleId)}"?`))return;
   skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();await save('skus');toast(`${esc(s.styleId)} deleted`,'red');
+}
+
+// ── Show Calculation Modal ─────────────────────────────
+function showCalcModal(skuId){
+  const s=skuDB.find(x=>x.id===skuId);if(!s)return;
+  const brand=brands.find(b=>b.id===s.brandId)||{model:'myntra',name:'Unknown'};
+  const mp=brand.model||'myntra';
+  const level=CAT_LEVEL[s.category]||s.level||'Level 2';
+  // Run wireframe engine
+  const inputs={cost:s.cost,margin:s.markup,markup:s.markup,discount:s.discount||0,level,cat:s.category,packagingCost:0,retPct:0,_mp:mp};
+  const result=runWFEngine(mp,inputs);
+  const rows=WF[mp]||[];
+  // Build table rows
+  let tableHtml='';
+  for(const row of rows){
+    if(row.hidden)continue;
+    if(row.t==='section'){
+      tableHtml+=`<tr style="background:var(--s2)"><td colspan="3" style="font-weight:600;padding:8px 11px;font-size:12px">${esc(row.l)}</td></tr>`;
+      continue;
+    }
+    const val=row.var?result[row.var]:null;
+    let display='—';
+    if(val!==null&&val!==undefined){
+      if(row.fmt==='%x') display=(val*100).toFixed(0)+'%';
+      else if(typeof val==='number') display=val%1===0?val.toLocaleString('en-IN'):val.toFixed(2);
+      else display=String(val);
+    }
+    const isOutput=row.t==='output';
+    const color=isOutput?(val>=0?'var(--gr)':'var(--re)'):row.sign===-1?'var(--re)':'var(--tx)';
+    const bg=isOutput?'background:rgba(45,212,160,.08);':'';
+    const fw=isOutput?'font-weight:700;':'';
+    tableHtml+=`<tr style="${bg}">
+      <td style="padding:5px 11px;font-size:12px;${fw}">${esc(row.l)}</td>
+      <td style="padding:5px 11px;font-size:12px;font-family:var(--mono);text-align:right;color:${color};${fw}">${display}</td>
+      <td style="padding:5px 11px;font-size:10px;color:var(--tx3)">${esc(row.desc||'')}</td>
+    </tr>`;
+  }
+  setModal(`<div class="mhdr"><div class="mtl">Full Calculation — ${esc(s.styleId)}</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody" style="padding:0">
+      <div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--bd);display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
+        <span><strong>Brand:</strong> ${esc(brand.name)}</span>
+        <span><strong>Category:</strong> ${esc(s.category)}</span>
+        <span><strong>Level:</strong> ${esc(level)}</span>
+        <span><strong>Marketplace:</strong> ${esc(mp)}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--s3)">
+          <th style="text-align:left;padding:8px 11px;font-size:11px">Row</th>
+          <th style="text-align:right;padding:8px 11px;font-size:11px">Value</th>
+          <th style="text-align:left;padding:8px 11px;font-size:11px;color:var(--tx3)">Description</th>
+        </tr></thead>
+        <tbody>${tableHtml}</tbody>
+      </table>
+    </div>
+    <div class="mfoot"><button class="btn bg" onclick="closeModal()">Close</button></div>`);
 }
 
 // ═══════════════════════════════════════════════════════
