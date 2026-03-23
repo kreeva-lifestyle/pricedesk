@@ -1416,7 +1416,10 @@ DROP POLICY IF EXISTS "allow_upsert" ON app_data;
 CREATE POLICY "allow_all" ON app_data FOR ALL USING (true) WITH CHECK (true);
 
 -- Enable Realtime for live sync across multiple PCs
-ALTER PUBLICATION supabase_realtime ADD TABLE app_data;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE app_data;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Backup table for daily automated backups (7-day rolling)
 CREATE TABLE IF NOT EXISTS pd_backups (
@@ -2273,7 +2276,11 @@ function populateFilters(){
   ['f-brand','f-cat'].forEach(fid=>{
     const e=el(fid);if(!e)return;
     const cur=e.value;
-    if(fid==='f-brand') e.innerHTML='<option value="">All Brands</option>'+brands.map(b=>`<option value="${b.id}" ${b.id===cur?'selected':''}>${b.name}</option>`).join('');
+    if(fid==='f-brand'){
+      // Only show brands matching active marketplace tab
+      const filtered=_skuMPTab ? brands.filter(b=>b.model===_skuMPTab) : brands;
+      e.innerHTML='<option value="">All Brands</option>'+filtered.map(b=>`<option value="${b.id}" ${b.id===cur?'selected':''}>${b.name}</option>`).join('');
+    }
     else e.innerHTML='<option value="">All Categories</option>'+CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');
   });
   ['myntra','ajio-ppmp','ajio-cc','amazon'].forEach(mp=>{
@@ -2366,6 +2373,13 @@ function switchSKUTab(tab, mp){
   _skuMPTab = mp;
   document.querySelectorAll('.sku-mp-tab').forEach(t=>t.classList.remove('active'));
   tab.classList.add('active');
+  // Reset brand filter if current selection doesn't belong to this marketplace
+  const fBrand=el('f-brand');
+  if(fBrand&&fBrand.value&&mp){
+    const selBrand=brands.find(b=>b.id===fBrand.value);
+    if(selBrand&&selBrand.model!==mp) fBrand.value='';
+  }
+  populateFilters();
   renderSKUs();
 }
 
