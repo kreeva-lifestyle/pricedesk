@@ -12,8 +12,8 @@ jobs:
     steps:
       - name: Create daily backup
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_URL: 'https://fcmesdnagvrdmjzzuwue.supabase.co'
+          SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbWVzZG5hZ3ZyZG1qenp1d3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxNjM4NTgsImV4cCI6MjA4OTczOTg1OH0.fS1ecV898Dmrka6hr3R0RE6gcKlneWUPbDyDPv30_qU'
         run: |
           set -e
           echo "=== PriceDesk Daily Backup ==="
