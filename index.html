@@ -2627,8 +2627,8 @@ function showCalcModal(skuId){
       <div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--bd);display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
         <span><strong>Brand:</strong> ${esc(brand.name)}</span>
         <span><strong>Category:</strong> ${esc(s.category)}</span>
-        <span><strong>Level:</strong> ${esc(level)}</span>
-        <span><strong>Marketplace:</strong> ${esc(mp)}</span>
+        ${mp==='myntra'?`<span><strong>Level:</strong> ${esc(level)}</span>`:''}
+        <span><strong>Marketplace:</strong> ${esc({'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'}[mp]||mp)}</span>
       </div>
       <table style="width:100%;border-collapse:collapse">
         <thead><tr style="background:var(--s3)">
@@ -2638,8 +2638,7 @@ function showCalcModal(skuId){
         </tr></thead>
         <tbody>${tableHtml}</tbody>
       </table>
-    </div>
-    <div class="mfoot"><button class="btn bg" onclick="closeModal()">Close</button></div>`);
+    </div>`);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -4258,8 +4257,7 @@ async function resetUserPassword(userId){
         <div style="font-size:13px;color:var(--tx2);margin-bottom:12px">Email not configured. Share this link with <strong>${esc(user.name)}</strong>:</div>
         <div style="background:var(--s2);border:1px solid var(--bd2);border-radius:8px;padding:12px;word-break:break-all;font-family:var(--mono);font-size:12px;color:var(--ac);cursor:pointer" onclick="navigator.clipboard.writeText('${escAttr(resetLink)}');this.style.borderColor='var(--gr)';this.insertAdjacentHTML('afterend','<div style=\\'color:var(--gr);font-size:11px;margin-top:6px\\'>✓ Copied!</div>')">${esc(resetLink)}</div>
         <div class="st" style="margin-top:8px">Click the link to copy. Expires in 30 minutes.</div>
-      </div>
-      <div class="mfoot"><button class="btn bp" onclick="closeModal()">Done</button></div>`);
+      </div>`);
   }
 }
 
