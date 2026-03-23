@@ -886,7 +886,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   <div class="filter-bar">
     <div style="position:relative">
       <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:14px;pointer-events:none">⌕</span>
-      <input id="f-search" class="filter-select" style="padding-left:27px;min-width:180px" placeholder="Search by Style ID..." oninput="renderSKUs()">
+      <input id="f-search" class="filter-select" style="padding-left:27px;min-width:180px" placeholder="Search SKU or Style ID..." oninput="renderSKUs()">
     </div>
     <select id="f-brand" class="filter-select" onchange="renderSKUs()"><option value="">All Brands</option></select>
     <select id="f-cat" class="filter-select" onchange="renderSKUs()"><option value="">All Categories</option></select>
@@ -906,30 +906,26 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <table class="ss" style="table-layout:fixed;width:100%">
       <colgroup>
         <col style="width:40px"><!-- Img -->
+        <col style="width:90px"><!-- SKU -->
         <col style="width:100px"><!-- Style ID -->
-        <col style="width:140px"><!-- Brand -->
-        <col style="width:100px"><!-- Category -->
-        <col style="width:75px"><!-- Cost -->
-        <col style="width:65px"><!-- Markup -->
-        <col style="width:65px"><!-- Discount -->
-        <col style="width:75px"><!-- MRP -->
-        <col style="width:80px"><!-- SP -->
-        <col style="width:70px"><!-- Comm -->
-        <col style="width:85px"><!-- Net Profit -->
-        <col style="width:85px"><!-- If Delivered -->
-        <col style="width:130px"><!-- Actions -->
+        <col style="width:110px"><!-- Category -->
+        <col style="width:80px"><!-- Cost -->
+        <col style="width:70px"><!-- Markup -->
+        <col style="width:70px"><!-- Discount -->
+        <col style="width:90px"><!-- Selling Price -->
+        <col style="width:90px"><!-- Net Profit -->
+        <col style="width:90px"><!-- If Delivered -->
+        <col style="width:120px"><!-- Actions -->
       </colgroup>
       <thead><tr>
         <th>Img</th>
+        <th>SKU</th>
         <th>Style ID</th>
-        <th>Brand</th>
         <th>Category</th>
-        <th>Cost</th>
-        <th>Markup</th>
-        <th>Discount</th>
-        <th>MRP</th>
-        <th>Seller Price</th>
-        <th>Comm %</th>
+        <th>Cost ₹</th>
+        <th>Markup %</th>
+        <th>Discount %</th>
+        <th>Selling Price</th>
         <th>Net Profit</th>
         <th>If Delivered</th>
         <th>Actions</th>
@@ -1973,7 +1969,7 @@ function filteredSKUs(){
   const fCat=el('f-cat')?.value||'';
   const fStatus=el('f-status')?.value||'';
   return skuDB.filter(s=>{
-    if(q&&!s.styleId.toLowerCase().includes(q))return false;
+    if(q&&!s.styleId.toLowerCase().includes(q)&&!(s.sku||'').toLowerCase().includes(q))return false;
     if(fBrand&&s.brandId!==fBrand)return false;
     if(fCat&&s.category!==fCat)return false;
     // Marketplace tab filter
@@ -2056,44 +2052,39 @@ function renderSKUs(){
   el('sku-count').textContent=`Showing ${list.length} of ${skuDB.length} SKUs`;
   el('dash-sku').textContent=skuDB.length;
   const t=el('sku-body');if(!t)return;
-  const modelLabels={'myntra':'M','ajio-ppmp':'PPMP','ajio-cc':'CC','amazon':'AMZ'};
   let html=list.map(s=>{
     if(editId===s.id)return renderEditRow(s);
     const c=calcSKU(s);
     const brand=brands.find(b=>b.id===s.brandId);
-    const pp=c.profitRs;
-    const profColor=pp<0?'var(--re)':c.isBreach?'var(--ac)':'var(--gr)';
+    const profColor=c.profitRs<0?'var(--re)':c.isBreach?'var(--ac)':'var(--gr)';
     const ifDelColor=c.ifDelivered>=0?'var(--gr)':'var(--re)';
-    // Status icon
     let statusIcon='';
-    if(s.ignoreThreshold) statusIcon=`<span class="ico-ignore" title="Threshold ignored" onclick="toggleIgnore('${escAttr(s.id)}')">🔕</span>`;
-    else if(c.isBreach) statusIcon=`<span class="ico-breach" title="Threshold breached! ₹${c.profitRs.toFixed(0)} &lt; ₹${c.threshold}">⚠️</span>`;
-    else statusIcon=`<span class="ico-healthy" title="Healthy">✅</span>`;
+    if(s.ignoreThreshold) statusIcon=`<span title="Threshold ignored" onclick="toggleIgnore('${escAttr(s.id)}')" style="cursor:pointer">🔕</span>`;
+    else if(c.isBreach) statusIcon=`<span title="Below threshold: ₹${c.profitRs.toFixed(0)} < ₹${c.threshold}">⚠️</span>`;
+    else statusIcon=`<span title="Healthy">✅</span>`;
     return`<tr>
-      <td><div onclick="openImgModal('${escAttr(s.id)}')" style="cursor:pointer" title="Click to set image">${s.img?`<img src="${esc(fixImg(s.img))}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">🖼</div>`}</div></td>
-      <td class="mono" style="font-size:11px;font-weight:600">${esc(s.styleId)}</td>
-      <td>${brand?`<div style="font-size:12px;font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(brand.name)}">${esc(brand.name)}</div><span class="bdg ${brand.model==='ajio-ppmp'?'bppmp':brand.model==='ajio-cc'?'bcc':'bi'}" style="font-size:10px">${esc(modelLabels[brand.model]||'?')}</span>`:'<span class="st">—</span>'}</td>
+      <td><div onclick="openImgModal('${escAttr(s.id)}')" style="cursor:pointer" title="Set product image">${s.img?`<img src="${esc(fixImg(s.img))}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">+</div>`}</div></td>
+      <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
+      <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}</td>
       <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
       <td class="mono">${s.discount||0}%</td>
-      <td class="av">₹${c.mrp.toLocaleString('en-IN')}</td>
-      <td class="av">₹${Math.round(c.sp).toLocaleString('en-IN')}</td>
-      <td class="av" style="color:var(--ac)">${typeof c.comm==='number'?c.comm.toFixed(2):c.comm}%${brand?.commOverride!=null?' 🔒':''}</td>
-      <td class="av" style="color:${profColor}">₹${c.profitRs.toFixed(0)}</td>
-      <td class="av" style="color:${ifDelColor}">₹${c.ifDelivered.toFixed(0)}</td>
+      <td class="mono" style="color:var(--bl)">₹${Math.round(c.sp).toLocaleString('en-IN')}</td>
+      <td class="mono" style="color:${profColor};font-weight:600">₹${c.profitRs.toFixed(0)}</td>
+      <td class="mono" style="color:${ifDelColor}">₹${c.ifDelivered.toFixed(0)}</td>
       <td>
-        <div class="flex gap8" style="flex-wrap:nowrap;align-items:center">
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:nowrap">
           ${statusIcon}
-          <button class="btn bg bxs" onclick="showCalcModal('${escAttr(s.id)}')" title="Show Calculation" style="font-size:10px;padding:3px 8px">Calc</button>
-          <button class="btn bg bxs" onclick="startEdit('${escAttr(s.id)}')" title="Edit">✎</button>
-          <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Delete">✕</button>
+          <button class="btn bg bxs" onclick="showCalcModal('${escAttr(s.id)}')" title="View full calculation breakdown" style="font-size:10px;padding:3px 8px">Calc</button>
+          <button class="btn bg bxs" onclick="startEdit('${escAttr(s.id)}')" title="Edit this SKU">✎</button>
+          <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Delete this SKU">✕</button>
         </div>
       </td>
     </tr>`;
   }).join('');
   if(editId==='new')html+=renderNewRow();
-  t.innerHTML=html||`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs found. <a href="#" onclick="addRow();return false" style="color:var(--ac)">Add one?</a></td></tr>`;
+  t.innerHTML=html||`<tr><td colspan="11" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs yet. Click <a href="#" onclick="addRow();return false" style="color:var(--ac)">+ Add SKU</a> to get started.</td></tr>`;
   t.querySelectorAll('[data-lc]').forEach(e=>e.addEventListener('input',()=>liveCalcRow(e.closest('tr'))));
 }
 
@@ -2110,18 +2101,17 @@ function renderEditRow(s){
   const c=calcSKU(s);
   return`<tr class="er" id="er-${s.id}">
     <td><div onclick="openImgModal('${s.id}')" style="cursor:pointer">${s.img?`<img src="${fixImg(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div>`}</div></td>
-    <td><input class="si" id="e-sid" value="${s.styleId}" style="width:115px"></td>
-    <td><select class="sse" id="e-brand" onchange="onCatSelectChange('e')">${brandOpts}</select></td>
-    <td><select class="sse" id="e-cat" onchange="onCatSelectChange('e')">${catOpts}</select></td>
-    <td><input class="si" data-lc id="e-cost" type="number" value="${s.cost}" style="width:70px"></td>
-    <td><input class="si" data-lc id="e-mkp" type="number" value="${s.markup}" style="width:52px"></td>
-    <td><input class="si" data-lc id="e-disc" type="number" value="${s.discount||0}" style="width:52px"></td>
-    <td><div class="av" id="e-mrp">₹${c.mrp.toLocaleString('en-IN')}</div></td>
-    <td><div class="av" id="e-sp">₹${Math.round(c.sp).toLocaleString('en-IN')}</div></td>
-    <td><div class="av" id="e-comm" style="color:var(--ac)">${typeof c.comm==='number'?c.comm.toFixed(2):c.comm}%</div></td>
+    <td><input class="si" id="e-sku" value="${s.sku||''}" placeholder="SKU code" style="width:80px"></td>
+    <td><input class="si" id="e-sid" value="${s.styleId}" placeholder="Style ID" style="width:90px"></td>
+    <td><select class="sse" id="e-cat" onchange="onCatSelectChange('e')">${catOpts}</select>
+        <select class="sse" id="e-brand" onchange="onCatSelectChange('e')" style="display:none">${brandOpts}</select></td>
+    <td><input class="si" data-lc id="e-cost" type="number" value="${s.cost}" placeholder="₹" style="width:70px"></td>
+    <td><input class="si" data-lc id="e-mkp" type="number" value="${s.markup}" placeholder="%" style="width:55px"></td>
+    <td><input class="si" data-lc id="e-disc" type="number" value="${s.discount||0}" placeholder="%" style="width:55px"></td>
+    <td><div class="av" id="e-sp" style="color:var(--bl)">₹${Math.round(c.sp).toLocaleString('en-IN')}</div></td>
     <td><div class="av" id="e-pp" style="color:${c.profitRs>0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</div></td>
     <td><div class="av" id="e-ifd" style="color:${c.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${c.ifDelivered.toFixed(0)}</div></td>
-    <td><div class="flex gap8"><button class="btn bp bxs" onclick="saveEdit('${s.id}')">✓</button><button class="btn bg bxs" onclick="cancelEdit()">✕</button></div></td>
+    <td><div style="display:flex;gap:5px"><button class="btn bp bxs" onclick="saveEdit('${s.id}')" title="Save changes">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()" title="Cancel editing">✕</button></div></td>
   </tr>`;
 }
 
@@ -2130,18 +2120,17 @@ function renderNewRow(){
   const catOpts=CATS.map(c=>`<option>${c}</option>`).join('');
   return`<tr class="er" id="er-new">
     <td><div onclick="openImgModal('new')" style="cursor:pointer;width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div></td>
-    <td><input class="si" id="n-sid" placeholder="Style ID" style="width:115px"></td>
-    <td><select class="sse" id="n-brand" onchange="onCatSelectChange('n')">${brandOpts}</select></td>
-    <td><select class="sse" id="n-cat" onchange="onCatSelectChange('n')">${catOpts}</select></td>
-    <td><input class="si" data-lc id="n-cost" type="number" placeholder="Cost" style="width:70px"></td>
-    <td><input class="si" data-lc id="n-mkp" type="number" placeholder="Mkp%" style="width:52px"></td>
-    <td><input class="si" data-lc id="n-disc" type="number" placeholder="Disc%" value="0" style="width:52px"></td>
-    <td><div class="av na" id="n-mrp">—</div></td>
+    <td><input class="si" id="n-sku" placeholder="SKU code" style="width:80px"></td>
+    <td><input class="si" id="n-sid" placeholder="Style ID" style="width:90px"></td>
+    <td><select class="sse" id="n-cat" onchange="onCatSelectChange('n')">${catOpts}</select>
+        <select class="sse" id="n-brand" onchange="onCatSelectChange('n')" style="display:none">${brandOpts}</select></td>
+    <td><input class="si" data-lc id="n-cost" type="number" placeholder="₹ Cost" style="width:70px"></td>
+    <td><input class="si" data-lc id="n-mkp" type="number" placeholder="%" style="width:55px"></td>
+    <td><input class="si" data-lc id="n-disc" type="number" placeholder="%" value="0" style="width:55px"></td>
     <td><div class="av na" id="n-sp">—</div></td>
-    <td><div class="av na" id="n-comm">—</div></td>
     <td><div class="av na" id="n-pp">—</div></td>
     <td><div class="av na" id="n-ifd">—</div></td>
-    <td><div class="flex gap8"><button class="btn bp bxs" onclick="saveNew()">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()">✕</button></div></td>
+    <td><div style="display:flex;gap:5px"><button class="btn bp bxs" onclick="saveNew()" title="Save new SKU">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()" title="Cancel">✕</button></div></td>
   </tr>`;
 }
 
@@ -2151,22 +2140,17 @@ function liveCalcRow(row){
   const costEl=el(pfx+'cost'),mkpEl=el(pfx+'mkp'),discEl=el(pfx+'disc'),brandEl=el(pfx+'brand'),catEl=el(pfx+'cat');
   const cost=parseFloat(costEl?.value)||0;const mkp=parseFloat(mkpEl?.value)||0;const disc=parseFloat(discEl?.value)||0;
   if(cost<=0||mkp<=0){
-    [pfx+'mrp',pfx+'sp',pfx+'comm',pfx+'pp',pfx+'ifd'].forEach(id=>{
+    [pfx+'sp',pfx+'pp',pfx+'ifd'].forEach(id=>{
       const e=el(id);if(e){e.innerHTML='—';e.classList.add('na');}
     });
     return;
   }
   const brandId=brandEl?.value;const cat=catEl?.value||CATS[0];
   const level=CAT_LEVEL[cat]||'Level 2';
-  const brand=brands.find(b=>b.id===brandId)||{model:'myntra',commOverride:null};
-  const mp=brand.model||'myntra';
-  // Use calcSKU logic via temp SKU object for consistency
   const tmpSKU={cost,markup:mkp,discount:disc,category:cat,level,brandId,ignoreThreshold:false,id:'_tmp'};
   const c=calcSKU(tmpSKU);
-  const mrpDisp=el(pfx+'mrp'),spDisp=el(pfx+'sp'),commDisp=el(pfx+'comm'),ppDisp=el(pfx+'pp'),ifdDisp=el(pfx+'ifd');
-  if(mrpDisp){mrpDisp.innerHTML=`₹${c.mrp.toLocaleString('en-IN')}`;mrpDisp.classList.remove('na');}
-  if(spDisp){spDisp.innerHTML=`₹${Math.round(c.sp).toLocaleString('en-IN')}`;spDisp.classList.remove('na');}
-  if(commDisp){commDisp.innerHTML=`${typeof c.comm==='number'?c.comm.toFixed(2):c.comm}%`;commDisp.style.color='var(--ac)';commDisp.classList.remove('na');}
+  const spDisp=el(pfx+'sp'),ppDisp=el(pfx+'pp'),ifdDisp=el(pfx+'ifd');
+  if(spDisp){spDisp.innerHTML=`₹${Math.round(c.sp).toLocaleString('en-IN')}`;spDisp.style.color='var(--bl)';spDisp.classList.remove('na');}
   if(ppDisp){ppDisp.innerHTML=`₹${c.profitRs.toFixed(0)}`;ppDisp.style.color=c.profitRs>0?'var(--gr)':'var(--re)';ppDisp.classList.remove('na');}
   if(ifdDisp){ifdDisp.innerHTML=`₹${c.ifDelivered.toFixed(0)}`;ifdDisp.style.color=c.ifDelivered>=0?'var(--gr)':'var(--re)';ifdDisp.classList.remove('na');}
 }
@@ -2177,23 +2161,25 @@ function cancelEdit(){editId=null;newImg='';renderSKUs();}
 // promptImg / promptImgNew now replaced by openImgModal — see IMAGE MANAGEMENT section
 
 function saveNew(){
+  const skuCode=el('n-sku')?.value.trim()||'';
   const sid=el('n-sid')?.value.trim(),brandId=el('n-brand')?.value,cat=el('n-cat')?.value;
   const cost=parseFloat(el('n-cost')?.value)||0,mkp=parseFloat(el('n-mkp')?.value)||0,disc=parseFloat(el('n-disc')?.value)||0;
   const lvl=CAT_LEVEL[cat]||'Level 2';
-  if(!sid){toast('Style ID required','red');return;}
-  if(!cost||cost<=0){toast('Cost price required','red');return;}
-  if(!mkp||mkp<=0){toast('Markup % required (must be > 0)','red');return;}
-  if(skuDB.find(x=>x.styleId===sid)){toast('Style ID already exists','red');return;}
-  skuDB.push({id:'s'+Date.now(),styleId:sid,brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,img:newImg||'',ignoreThreshold:false});
+  if(!sid){toast('Style ID is required','red');return;}
+  if(!cost||cost<=0){toast('Enter a valid cost price','red');return;}
+  if(!mkp||mkp<=0){toast('Enter markup % (must be greater than 0)','red');return;}
+  if(skuDB.find(x=>x.styleId===sid)){toast('This Style ID already exists','red');return;}
+  skuDB.push({id:'s'+Date.now(),sku:skuCode,styleId:sid,brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,img:newImg||'',ignoreThreshold:false});
   newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');toast(`✓ ${sid} added`,'green');
 }
 
 function saveEdit(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
+  const skuCode=el('e-sku')?.value.trim()||'';
   const sid=el('e-sid')?.value.trim(),cost=parseFloat(el('e-cost')?.value)||0,mkp=parseFloat(el('e-mkp')?.value)||0,disc=parseFloat(el('e-disc')?.value)||0;
-  if(!sid||!cost){toast('Fill required fields','red');return;}
+  if(!sid||!cost){toast('Style ID and Cost are required','red');return;}
   const cat=el('e-cat')?.value;
-  Object.assign(s,{styleId:sid,brandId:el('e-brand')?.value,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc});
+  Object.assign(s,{sku:skuCode,styleId:sid,brandId:el('e-brand')?.value,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc});
   editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');toast(`✓ ${sid} updated`,'green');
 }
 
