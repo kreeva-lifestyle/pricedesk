@@ -658,12 +658,46 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="sc"><div class="sl">Commission Models</div><div class="sv" style="color:var(--ac)">3</div><div class="ss">Myntra · PPMP · CC</div></div>
   </div>
   <div id="dash-alerts"></div>
+
+  <!-- Row 2: GST split + Category split -->
+  <div class="g2 mb16">
+    <div class="card">
+      <div class="ch"><div style="font-size:13px;font-weight:600">GST Bracket Split</div></div>
+      <div class="cb" id="dash-gst-split" style="padding:12px 17px"></div>
+    </div>
+    <div class="card">
+      <div class="ch"><div style="font-size:13px;font-weight:600">Category Breakdown</div></div>
+      <div class="cb" style="padding:0;max-height:220px;overflow-y:auto"><table class="dt" style="font-size:12px"><thead><tr><th>Category</th><th>SKUs</th><th>Avg Profit</th><th>Min</th><th>Max</th></tr></thead><tbody id="dash-cat-split"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- Row 3: Top/Bottom profit SKUs -->
+  <div class="g2 mb16">
+    <div class="card">
+      <div class="ch"><div style="font-size:13px;font-weight:600;color:var(--gr)">Top 5 Most Profitable SKUs</div></div>
+      <div class="cb" style="padding:0"><table class="dt" style="font-size:12px"><thead><tr><th>SKU</th><th>Brand</th><th>Category</th><th>SP</th><th>Profit</th></tr></thead><tbody id="dash-top5"></tbody></table></div>
+    </div>
+    <div class="card">
+      <div class="ch"><div style="font-size:13px;font-weight:600;color:var(--re)">Bottom 5 Least Profitable SKUs</div></div>
+      <div class="cb" style="padding:0"><table class="dt" style="font-size:12px"><thead><tr><th>SKU</th><th>Brand</th><th>Category</th><th>SP</th><th>Profit</th></tr></thead><tbody id="dash-bottom5"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- Row 4: Category Profit Table -->
+  <div class="card mb16">
+    <div class="ch"><div style="font-size:13px;font-weight:600">Category Profit Summary</div></div>
+    <div class="cb" style="padding:0;overflow-x:auto"><table class="dt" style="font-size:12px;min-width:500px"><thead><tr><th>Category</th><th>SKUs</th><th>Avg Profit (₹)</th><th>Total Profit (₹)</th><th>Avg Margin %</th><th>Breaches</th><th>Health</th></tr></thead><tbody id="dash-cat-profit"></tbody></table></div>
+  </div>
+
+  <!-- Row 5: Tasks -->
   <div class="card mb16">
     <div class="ch"><div style="font-size:13px;font-weight:600">Team Tasks</div>
       <button class="btn bp bxs" onclick="openAddTaskModal()">+ Add Task</button>
     </div>
     <div id="dash-tasks" style="padding:0"></div>
   </div>
+
+  <!-- Row 6: Brand summary -->
   <div class="ch" style="background:var(--s);border:1px solid var(--bd);border-radius:var(--r) var(--r) 0 0;padding:13px 17px">
     <div style="font-size:13px;font-weight:600">Profit by Brand & Commission Model</div>
   </div>
@@ -1285,6 +1319,7 @@ function getDB(){
 }
 
 const STORAGE_KEY = 'pricedesk_v2'; // legacy fallback key
+let _lastWriteTs = 0; // Realtime debounce — tracks our own DB writes
 
 // ── Per-data-type DB keys ─────────────────────────────
 const DB_KEYS = {
@@ -1311,6 +1346,7 @@ const DB_KEYS = {
 
 // ── Save a single key to DB ────────────────────────────
 async function dbSet(key, value){
+  _lastWriteTs = Date.now(); // Mark own write for realtime debounce
   const db = getDB(); if(!db) return;
   try{
     const {error} = await db.from('app_data').upsert(
@@ -1378,6 +1414,12 @@ DROP POLICY IF EXISTS "allow_insert" ON app_data;
 DROP POLICY IF EXISTS "allow_update" ON app_data;
 DROP POLICY IF EXISTS "allow_upsert" ON app_data;
 CREATE POLICY "allow_all" ON app_data FOR ALL USING (true) WITH CHECK (true);
+
+-- Enable Realtime for live sync across multiple PCs
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE app_data;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Backup table for daily automated backups (7-day rolling)
 CREATE TABLE IF NOT EXISTS pd_backups (
@@ -1567,9 +1609,9 @@ function updateSyncBadge(synced, msg){
     b.title = msg;
     b.onclick = () => showSqlSetupModal();
   } else if(synced){
-    b.innerHTML = '&#9729; Synced';
+    b.innerHTML = _realtimeChannel ? '&#9889; Live' : '&#9729; Synced';
     b.style.color = 'var(--gr)';
-    b.title = 'Data saved to Supabase database';
+    b.title = _realtimeChannel ? 'Realtime sync active — changes appear on all PCs instantly' : 'Data saved to Supabase database';
     b.onclick = null;
   } else {
     b.innerHTML = '&#9729; Saving&hellip;';
@@ -2074,6 +2116,109 @@ function renderBrandSummary(){
   }).join('');
 }
 
+function renderDashboardWidgets(){
+  if(!skuDB.length) return;
+  const allCalcs=skuDB.map(s=>({s,c:calcSKU(s),b:brands.find(b=>b.id===s.brandId)||{name:'?',model:'?'}}));
+
+  // ── GST bracket split ──
+  const gstEl=el('dash-gst-split');
+  if(gstEl){
+    let low5=0, high18=0;
+    allCalcs.forEach(({c})=>{ if(c.sp>2500) high18++; else low5++; });
+    const total=low5+high18||1;
+    const pct5=Math.round(low5/total*100), pct18=Math.round(high18/total*100);
+    gstEl.innerHTML=`
+      <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px">
+        <div style="flex:1;text-align:center">
+          <div style="font-size:24px;font-weight:700;color:var(--gr)">${low5}</div>
+          <div class="st" style="font-size:11px">GST 5% (SP ≤ ₹2,500)</div>
+        </div>
+        <div style="width:1px;height:40px;background:var(--bd)"></div>
+        <div style="flex:1;text-align:center">
+          <div style="font-size:24px;font-weight:700;color:var(--ac)">${high18}</div>
+          <div class="st" style="font-size:11px">GST 18% (SP > ₹2,500)</div>
+        </div>
+      </div>
+      <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--s2)">
+        <div style="width:${pct5}%;background:var(--gr);transition:width .3s"></div>
+        <div style="width:${pct18}%;background:var(--ac);transition:width .3s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span class="st" style="font-size:10px">${pct5}% at 5%</span>
+        <span class="st" style="font-size:10px">${pct18}% at 18%</span>
+      </div>`;
+  }
+
+  // ── Category bracket split ──
+  const catSplitEl=el('dash-cat-split');
+  if(catSplitEl){
+    const catMap={};
+    allCalcs.forEach(({s,c})=>{
+      if(!catMap[s.category]) catMap[s.category]={count:0,profits:[],min:Infinity,max:-Infinity};
+      const m=catMap[s.category];
+      m.count++;m.profits.push(c.profitRs);
+      if(c.profitRs<m.min)m.min=c.profitRs;
+      if(c.profitRs>m.max)m.max=c.profitRs;
+    });
+    const cats=Object.entries(catMap).sort((a,b)=>b[1].count-a[1].count);
+    catSplitEl.innerHTML=cats.map(([cat,d])=>{
+      const avg=Math.round(d.profits.reduce((a,b)=>a+b,0)/d.count);
+      return`<tr>
+        <td style="font-weight:500">${esc(cat)}</td>
+        <td class="mono">${d.count}</td>
+        <td class="mono" style="color:${avg>=0?'var(--gr)':'var(--re)'}">₹${avg}</td>
+        <td class="mono" style="color:var(--re);font-size:11px">₹${Math.round(d.min)}</td>
+        <td class="mono" style="color:var(--gr);font-size:11px">₹${Math.round(d.max)}</td>
+      </tr>`;
+    }).join('')||'<tr><td colspan="5" class="st" style="text-align:center;padding:12px">No SKUs yet</td></tr>';
+  }
+
+  // ── Top/Bottom 5 profit SKUs ──
+  const sorted=[...allCalcs].sort((a,b)=>b.c.profitRs-a.c.profitRs);
+  const renderProfitRow=({s,c,b})=>`<tr>
+    <td class="mono" style="font-size:11px;font-weight:600">${esc(s.styleId||s.sku||'—')}</td>
+    <td style="font-size:11px">${esc(b.name)}</td>
+    <td><span class="tag tb" style="font-size:9px">${esc(s.category)}</span></td>
+    <td class="mono" style="font-size:11px">₹${Math.round(c.sp)}</td>
+    <td class="mono" style="font-weight:600;color:${c.profitRs>=0?'var(--gr)':'var(--re)'}">₹${Math.round(c.profitRs)}</td>
+  </tr>`;
+  const top5El=el('dash-top5');
+  if(top5El) top5El.innerHTML=sorted.slice(0,5).map(renderProfitRow).join('')||'<tr><td colspan="5" class="st" style="text-align:center;padding:12px">—</td></tr>';
+  const bot5El=el('dash-bottom5');
+  if(bot5El) bot5El.innerHTML=sorted.slice(-5).reverse().map(renderProfitRow).join('')||'<tr><td colspan="5" class="st" style="text-align:center;padding:12px">—</td></tr>';
+
+  // ── Category profit table ──
+  const catProfitEl=el('dash-cat-profit');
+  if(catProfitEl){
+    const catMap={};
+    allCalcs.forEach(({s,c})=>{
+      if(!catMap[s.category]) catMap[s.category]={count:0,totalProfit:0,totalSP:0,breaches:0};
+      const m=catMap[s.category];
+      m.count++;m.totalProfit+=c.profitRs;m.totalSP+=c.sp;
+      if(!s.ignoreThreshold&&c.isBreach) m.breaches++;
+    });
+    const cats=Object.entries(catMap).sort((a,b)=>b[1].count-a[1].count);
+    catProfitEl.innerHTML=cats.map(([cat,d])=>{
+      const avg=Math.round(d.totalProfit/d.count);
+      const margin=d.totalSP>0?((d.totalProfit/d.totalSP)*100).toFixed(1):'0';
+      const healthPct=d.count>0?Math.round((1-d.breaches/d.count)*100):100;
+      const barColor=healthPct>=80?'var(--gr)':healthPct>=50?'var(--ac)':'var(--re)';
+      return`<tr>
+        <td style="font-weight:600">${esc(cat)}</td>
+        <td class="mono">${d.count}</td>
+        <td class="mono" style="color:${avg>=0?'var(--gr)':'var(--re)'}">₹${avg}</td>
+        <td class="mono">₹${Math.round(d.totalProfit).toLocaleString('en-IN')}</td>
+        <td class="mono">${margin}%</td>
+        <td class="mono" style="color:${d.breaches?'var(--re)':'var(--tx3)'}">${d.breaches}</td>
+        <td><div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:6px;border-radius:3px;background:var(--s2);min-width:50px"><div style="width:${healthPct}%;height:100%;border-radius:3px;background:${barColor}"></div></div>
+          <span class="mono" style="font-size:10px;color:${barColor}">${healthPct}%</span>
+        </div></td>
+      </tr>`;
+    }).join('')||'<tr><td colspan="7" class="st" style="text-align:center;padding:12px">No SKUs yet</td></tr>';
+  }
+}
+
 function openBrandModal(id){
   const _default={id:'',name:'',marketplace:'Myntra',model:'myntra',commOverride:null};
   const b=id?(brands.find(x=>x.id===id)||_default):_default;
@@ -2131,7 +2276,11 @@ function populateFilters(){
   ['f-brand','f-cat'].forEach(fid=>{
     const e=el(fid);if(!e)return;
     const cur=e.value;
-    if(fid==='f-brand') e.innerHTML='<option value="">All Brands</option>'+brands.map(b=>`<option value="${b.id}" ${b.id===cur?'selected':''}>${b.name}</option>`).join('');
+    if(fid==='f-brand'){
+      // Only show brands matching active marketplace tab
+      const filtered=_skuMPTab ? brands.filter(b=>b.model===_skuMPTab) : brands;
+      e.innerHTML='<option value="">All Brands</option>'+filtered.map(b=>`<option value="${b.id}" ${b.id===cur?'selected':''}>${b.name}</option>`).join('');
+    }
     else e.innerHTML='<option value="">All Categories</option>'+CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');
   });
   ['myntra','ajio-ppmp','ajio-cc','amazon'].forEach(mp=>{
@@ -2224,6 +2373,13 @@ function switchSKUTab(tab, mp){
   _skuMPTab = mp;
   document.querySelectorAll('.sku-mp-tab').forEach(t=>t.classList.remove('active'));
   tab.classList.add('active');
+  // Hide brand filter when a specific marketplace tab is active (redundant)
+  const fBrand=el('f-brand');
+  if(fBrand){
+    fBrand.parentElement.style.display = mp ? 'none' : '';
+    if(mp) fBrand.value=''; // reset selection
+  }
+  populateFilters();
   renderSKUs();
 }
 
@@ -2929,7 +3085,7 @@ function nav(p){
     });
     renderWFPreviews();
   }
-  if(p==='dashboard'){renderDashTasks();renderBrandSummary();updateAlerts();}
+  if(p==='dashboard'){renderDashTasks();renderBrandSummary();renderDashboardWidgets();updateAlerts();}
   if(p==='commission'){buildCommMyntra();buildCommAjioBrands();buildCommAmazon();}
   if(p==='wireframe')renderWFBuilder();
   if(p==='brands')renderBrands();
@@ -2967,8 +3123,12 @@ function setModal(html){el('modal-root').innerHTML=`<div class="movl" onclick="i
 function closeModal(){el('modal-root').innerHTML='';}
 function toast(msg,type){
   const ex=el('app-toast');if(ex)ex.remove();
-  const d=document.createElement('div');d.id='app-toast';d.className=`toast ${type==='green'?'tg2':'tr2'}`;
-  d.innerHTML=`<span>${type==='green'?'✓':'⚠'}</span> ${msg}`;
+  const d=document.createElement('div');d.id='app-toast';
+  const cls=type==='green'?'tg2':type==='blue'?'tg2':'tr2';
+  d.className=`toast ${cls}`;
+  if(type==='blue') d.style.cssText='background:rgba(78,142,247,.12);border-color:rgba(78,142,247,.3);color:var(--bl)';
+  const icon=type==='green'?'✓':type==='blue'?'⚡':'⚠';
+  d.innerHTML=`<span>${icon}</span> ${msg}`;
   document.body.appendChild(d);setTimeout(()=>d.remove(),3500);
 }
 
@@ -3764,6 +3924,7 @@ async function doLogin(){
   startSessionCheck();
   if(isFirstLogin) sendWelcomeEmail(user);
   audit('login',`${user.name} logged in`);
+  setupRealtime(); // Start live sync
   // Navigate to user's preferred default page
   const defaultPage=getUserPref('defaultPage','dashboard');
   if(defaultPage&&defaultPage!=='dashboard') nav(defaultPage);
@@ -5496,6 +5657,120 @@ function applyUserPrefs(){
 }
 
 // ═══════════════════════════════════════════════════════
+// SUPABASE REALTIME — live sync across all PCs
+// ═══════════════════════════════════════════════════════
+let _realtimeChannel = null;
+
+function setupRealtime(){
+  const db = getDB();
+  if(!db || !db.channel){
+    console.warn('Realtime not available — Supabase client missing .channel()');
+    return;
+  }
+  // Clean up previous subscription if any
+  if(_realtimeChannel){
+    try{ db.removeChannel(_realtimeChannel); }catch(e){}
+  }
+
+  _realtimeChannel = db.channel('app_data_changes')
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'app_data' },
+      (payload) => {
+        // Ignore our own writes (within last 2 seconds)
+        if(Date.now() - _lastWriteTs < 2000) return;
+
+        const key = payload.new?.key || payload.old?.key;
+        if(!key) return;
+        console.log(`⚡ Realtime: ${payload.eventType} on ${key}`);
+        handleRealtimeUpdate(key, payload.new?.value);
+      }
+    )
+    .subscribe((status)=>{
+      if(status==='SUBSCRIBED'){
+        console.log('⚡ Realtime connected — live sync active');
+        updateRealtimeBadge(true);
+      } else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){
+        console.warn('⚡ Realtime error:', status);
+        updateRealtimeBadge(false);
+        // Retry after 5s
+        setTimeout(setupRealtime, 5000);
+      }
+    });
+}
+
+async function handleRealtimeUpdate(key, newValue){
+  // Map DB key back to data type
+  const keyToType={};
+  Object.entries(DB_KEYS).forEach(([type,dbKey])=>{keyToType[dbKey]=type;});
+  const type=keyToType[key];
+  if(!type) return;
+
+  // Fetch fresh value from DB (payload.new.value may be truncated)
+  const freshValue = newValue || await dbGet(key);
+  if(!freshValue) return;
+
+  // Apply the update
+  const applied = applyRealtimeData(type, freshValue);
+  if(!applied) return;
+
+  // Re-render affected views
+  const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
+  if(type==='skus'||type==='brands'){
+    invalidateCalcCache();
+    if(activePage==='skus') renderSKUs();
+    if(activePage==='dashboard'){renderBrandSummary();renderDashboardWidgets();updateAlerts();}
+    if(activePage==='thresholds'){renderBreachList?.();}
+  }
+  if(type==='brands'){
+    if(activePage==='brands') renderBrands();
+    populateFilters();
+  }
+  if(type==='users'&&activePage==='users') renderUsers();
+  if(type==='thresholds'){
+    if(activePage==='thresholds') renderThresholds?.();
+    updateAlerts();
+  }
+  if(key===DB_TASK_KEY||key===DB_COMPLETED_TASK_KEY){
+    if(activePage==='dashboard') renderDashTasks();
+  }
+
+  // Show subtle notification
+  toast(`⚡ ${type} updated from another device`,'blue');
+}
+
+function applyRealtimeData(type, value){
+  try{
+    switch(type){
+      case 'skus': skuDB=value; return true;
+      case 'brands': brands=value; return true;
+      case 'users': users=value; applyDefaultUsers(); return true;
+      case 'thresholds': THRESHOLDS=value; return true;
+      case 'cat_levels': CAT_LEVEL=value; return true;
+      case 'comm_myntra': COMM_MYNTRA=value; return true;
+      case 'comm_ppmp': COMM_AJIO_PPMP=value; return true;
+      case 'comm_cc': COMM_AJIO_CC=value; return true;
+      case 'comm_amazon': COMM_AMAZON=value; return true;
+      case 'logistics':
+        if(value.gt) GT_DATA=value.gt;
+        if(value.rev) REVERSE_FEES=value.rev;
+        if(value.settings) LOGISTICS_SETTINGS=value.settings;
+        return true;
+      default: return false;
+    }
+  }catch(e){ console.warn('Realtime apply error:', type, e); return false; }
+}
+
+function updateRealtimeBadge(connected){
+  const badge=el('sync-badge');
+  if(!badge) return;
+  if(connected){
+    badge.innerHTML='<span style="color:var(--gr)">⚡ Live</span>';
+    badge.style.display='';
+    badge.title='Realtime sync active — changes from other PCs appear instantly';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',async ()=>{
@@ -5544,6 +5819,8 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   if(EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY' && typeof emailjs !== 'undefined'){
     emailjs.init(EMAIL_CONFIG.publicKey);
   }
+  // Start Supabase Realtime for live sync across PCs
+  setupRealtime();
 });
 </script>
 <script>
