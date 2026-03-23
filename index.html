@@ -3105,7 +3105,8 @@ async function doForgotPassword(){
   if(emailReady()){
     sendEmail(EMAIL_CONFIG.templateReset,{
       to_name: user.name, to_email: user.email,
-      reset_link: resetLink, login_url: baseUrl
+      reset_link: resetLink, login_url: baseUrl,
+      reset_token: token
     });
     if(okEl){okEl.textContent='✓ Reset link sent to your email. Check your inbox.';okEl.style.display='block';}
   } else {
@@ -3350,6 +3351,7 @@ async function sendPasswordResetEmail(user){
     to_email:   user.email,
     reset_link: resetLink,
     login_url:  baseUrl,
+    reset_token: token,
   });
   return resetLink;
 }
@@ -4296,10 +4298,17 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   renderGTTable();
   renderRetTable();
   populateLogisticsInputs();
-  // Check for password reset link (?reset=TOKEN)
+  // Check for password reset link (?reset=TOKEN or #reset=TOKEN)
   const urlParams = new URLSearchParams(window.location.search);
-  const resetToken = urlParams.get('reset');
+  let resetToken = urlParams.get('reset');
+  // Fallback: some email clients use hash instead of query
+  if(!resetToken && window.location.hash.startsWith('#reset=')){
+    resetToken = window.location.hash.slice(7);
+  }
   if(resetToken){
+    // Hide login screen and show reset password form
+    console.log('Reset token detected:', resetToken.slice(0,8)+'…');
+    document.getElementById('login-screen').style.display='none';
     showResetPasswordPage(resetToken);
   } else if(!(await checkSession())){
     // Check if already logged in (validates session token against DB)
