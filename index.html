@@ -186,7 +186,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .role-manager{background:rgba(78,142,247,.15);color:var(--bl)}
 .role-viewer{background:rgba(139,154,191,.1);color:var(--tx2)}
 /* ── LOGIN SCREEN ───────────────────────────────────── */
-#login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center}
+#login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;align-items:center;justify-content:center}
+#app-loading{position:fixed;inset:0;background:var(--bg);z-index:9998;display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:14px;font-family:var(--sans)}
 .login-box{background:var(--s);border:1px solid var(--bd2);border-radius:16px;width:380px;max-width:calc(100vw - 32px);padding:36px 32px;text-align:center}
 .login-logo{font-size:22px;font-weight:700;color:var(--ac);font-family:var(--mono);margin-bottom:4px}
 .login-sub{font-size:12px;color:var(--tx3);letter-spacing:2px;text-transform:uppercase;margin-bottom:28px}
@@ -385,6 +386,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 </head>
 <body>
 
+<!-- ═══ LOADING OVERLAY (shown while checking session) ═══ -->
+<div id="app-loading"><div style="text-align:center"><div style="font-size:22px;font-weight:700;color:var(--ac);margin-bottom:8px">PriceDesk</div><div>Loading...</div></div></div>
 <!-- ═══ LOGIN SCREEN ═══ -->
 <div id="login-screen">
   <div class="login-box">
@@ -1531,7 +1534,8 @@ let REVERSE_FEES = {
 let LOGISTICS_SETTINGS = {
   myn_collection_fee: 61, myn_pg_fee: 50.22,
   ajio_fwd: 70, ajio_ret: 70, ajio_platform_fee: 0,
-  amz_fba: 55, amz_close: 15, amz_ret: 55
+  amz_fba: 55, amz_close: 15, amz_ret: 55,
+  packaging_cost: 60
 };
 
 function getMynFwd(level, sp){
@@ -2195,7 +2199,7 @@ function showCalcModal(skuId){
   const mp=brand.model||'myntra';
   const level=CAT_LEVEL[s.category]||s.level||'Level 2';
   // Run wireframe engine
-  const inputs={cost:s.cost,margin:s.markup,markup:s.markup,discount:s.discount||0,level,cat:s.category,packagingCost:0,retPct:0,_mp:mp};
+  const inputs={cost:s.cost,margin:s.markup,markup:s.markup,discount:s.discount||0,level,cat:s.category,packagingCost:LOGISTICS_SETTINGS.packaging_cost||60,retPct:0,_mp:mp};
   const result=runWFEngine(mp,inputs);
   const rows=WF[mp]||[];
   // Build table rows
@@ -2457,6 +2461,13 @@ function renderWFBuilder(){
              onclick="event.stopPropagation();openFB('${escAttr(m)}',${idx})">✎ Edit Formula</button>
         <span style="font-size:10px;font-family:var(--mono);color:var(--tx3);opacity:.7">${(r.expr||'').substring(0,60)}${(r.expr||'').length>60?'…':''}</span>
       </div>`;
+    } else if(r.t==='input'&&r.expr){
+      // Input with formula (was converted from formula to input but kept expr)
+      actionRow = `<div style="margin-top:5px;margin-left:22px;display:flex;align-items:center;gap:10px">
+        <button style="padding:3px 12px;border-radius:5px;border:1px solid var(--ac);background:rgba(245,166,35,.1);color:var(--ac);font-size:11px;cursor:pointer;font-weight:600"
+             onclick="event.stopPropagation();openFB('${escAttr(m)}',${idx})">✎ Edit Formula</button>
+        <span style="font-size:10px;color:var(--tx3);opacity:.6">(formula inactive — type is Input)</span>
+      </div>`;
     }
     // Editable note/description row
     const noteRow = `<div style="margin-top:4px;margin-left:22px;display:flex;align-items:center;gap:6px">
@@ -2484,13 +2495,30 @@ function renderWFBuilder(){
           onclick="event.stopPropagation()">
         ${r.var ? `<span style="font-size:9px;color:var(--tx3);font-family:var(--mono);flex-shrink:0">[${r.var}]</span>` : ''}
         ${previewVal}
-        <span class="bdg ${badgeCls}" style="flex-shrink:0">${isLookup?'LOOKUP':r.t.toUpperCase()}</span>
+        ${isLookup
+          ?`<span class="bdg ${badgeCls}" style="flex-shrink:0" title="Lookup rows auto-fetch from settings">LOOKUP</span>`
+          :`<span class="bdg ${badgeCls}" style="flex-shrink:0;cursor:pointer" title="Click to change type" onclick="event.stopPropagation();cycleWFType('${escAttr(m)}',${idx})">${r.t.toUpperCase()}</span>`}
         ${delBtn}
       </div>
       ${actionRow}
       ${noteRow}
     </div>`;
   }).join('');
+}
+
+// Cycle row type: input → formula → output → input
+function cycleWFType(mp, idx){
+  const row = WF[mp][idx];
+  if(!row || row.t==='lookup' || row.t==='section') return;
+  const types = ['input','formula','output'];
+  const cur = types.indexOf(row.t);
+  const next = types[(cur+1)%types.length];
+  row.t = next;
+  // When switching to formula/output, ensure expr exists
+  if((next==='formula'||next==='output') && !row.expr) row.expr = '0';
+  save('wireframe');
+  renderWFBuilder();
+  toast(`Changed to ${next.toUpperCase()}`,'green');
 }
 
 function wfDragStart(e,idx){
@@ -3448,6 +3476,7 @@ async function checkSession(){
         }
         currentUser = user;
         document.getElementById('login-screen').style.display='none';
+        const loadEl=document.getElementById('app-loading');if(loadEl)loadEl.style.display='none';
         updateSidebarUser(user);
         startSessionTimer();
         startSessionCheck();
@@ -3760,6 +3789,7 @@ function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){
   const result = runWFEngine('myntra', {
     cost, margin: markup, markup, discount: discPct||0,
     level: level||'Level 2', cat: cat||'Kurta Sets',
+    packagingCost: LOGISTICS_SETTINGS.packaging_cost||60,
     retPct: retPct||0
   });
   // Map engine output to expected return shape
@@ -4479,8 +4509,12 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     document.getElementById('login-screen').style.display='none';
     showResetPasswordPage(resetToken);
   } else if(!(await checkSession())){
-    // Check if already logged in (validates session token against DB)
+    // Session invalid — show login screen
+    document.getElementById('app-loading').style.display='none';
     document.getElementById('login-screen').style.display='flex';
+  } else {
+    // Session valid — hide loading overlay
+    document.getElementById('app-loading').style.display='none';
   }
   // Init EmailJS if configured
   if(EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY' && typeof emailjs !== 'undefined'){
