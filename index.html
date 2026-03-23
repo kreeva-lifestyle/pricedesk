@@ -86,6 +86,13 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .ct td{padding:7px 11px;font-size:12px}
 .ct td:first-child{color:var(--tx2);width:56%}
 .ct td:last-child{font-family:var(--mono);text-align:right;font-size:12px}
+.myn-row td{vertical-align:middle}
+.myn-row td:first-child{font-weight:500;color:var(--tx)!important;width:auto;min-width:160px;white-space:nowrap}
+.myn-val{text-align:right!important;font-family:var(--mono)!important;font-weight:600;min-width:80px;padding-right:14px!important}
+.myn-math{font-size:11px!important;color:var(--tx3)!important;font-family:inherit!important;text-align:left!important;padding-left:14px!important;max-width:380px;white-space:normal}
+.myn-pct{font-size:11px!important;color:var(--tx3)!important;text-align:center!important;font-family:inherit!important;min-width:50px}
+.myn-hdr td{border-bottom:2px solid var(--bd2)!important;padding:4px 11px!important;font-size:11px}
+.myn-title td{border-bottom:2px solid var(--bd2)!important}
 .sh td{background:var(--s3);font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;padding:5px 11px}
 .ir td:last-child{padding:3px 7px}
 .ct input[type=number]{background:var(--s3);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-family:var(--mono);font-size:12px;padding:4px 7px;width:95px;text-align:right}
@@ -1583,6 +1590,13 @@ const CD={
 // ═══════════════════════════════════════════════════════
 // DYNAMIC PRICING TABLE RENDERER — driven by WF definitions
 // ═══════════════════════════════════════════════════════
+function fmtMynVal(val, row){
+  if(val===null||val===undefined) return '—';
+  if(row.fmt==='%x') return (val*100).toFixed(0)+'%';
+  if(row.fmt==='%') return typeof val==='number'?val.toFixed(2):''+val;
+  const n = typeof val==='number'?val:parseFloat(val)||0;
+  return n%1===0 ? n.toLocaleString('en-IN') : n.toFixed(2);
+}
 function fmtWFVal(val, row){
   if(val===null||val===undefined) return '—';
   if(row.fmt==='%x') return (val*100).toFixed(0)+'%';
@@ -1611,41 +1625,70 @@ function renderDynamicCalc(mp){
   const profitVal = outputRow&&outputRow.var ? result[outputRow.var]||0 : 0;
   const threshold = THRESHOLDS[d.cat]||0;
   const isBreach = profitVal < threshold;
-  const profitPct = result.sp||result.custPaid||result.mrp
-    ? ((profitVal)/(result.sp||result.custPaid||result.mrp)*100).toFixed(1) : '0.0';
+
+  // Use Excel-like 4-column layout for Myntra
+  const isMyntra = mp==='myntra';
 
   let html = '';
+  if(isMyntra){
+    // Title row
+    html+=`<tr class="myn-title"><td colspan="4" style="text-align:center;font-weight:700;font-size:13px;background:var(--s3);padding:8px 11px;text-transform:uppercase;letter-spacing:1px">MYNTRA CALCULATION</td></tr>`;
+    // Header row
+    html+=`<tr class="myn-hdr"><td style="font-weight:600;min-width:160px"></td><td style="font-weight:600;text-align:right;min-width:80px"></td><td style="font-weight:600;color:var(--tx3);font-size:11px">Mathematics</td><td style="font-weight:600;color:var(--tx3);font-size:11px;min-width:50px">Percentage Base calculation</td></tr>`;
+  }
+
   for(const row of rows){
+    if(row.hidden) continue;
     if(row.t==='section'){
-      // Section header — include hint if present
-      const hintHtml = row.hint==='✓' ? ` style="background:rgba(45,212,160,.05)"><td colspan="2" style="color:var(--gr)">✓ ${esc(row.l)}` : `><td colspan="2">${esc(row.l)}`;
-      html+=`<tr class="sh"${hintHtml}</td></tr>`;
+      if(!isMyntra){
+        const hintHtml = row.hint==='✓' ? ` style="background:rgba(45,212,160,.05)"><td colspan="4" style="color:var(--gr)">✓ ${esc(row.l)}` : `><td colspan="4">${esc(row.l)}`;
+        html+=`<tr class="sh"${hintHtml}</td></tr>`;
+      }
     }
     else if(row.t==='input'){
       const val = d[row.var]!==undefined ? d[row.var] : (result[row.var]||0);
       const mpSafe = escAttr(mp);
       const varSafe = escAttr(row.var);
-      html+=`<tr class="ir"><td>${esc(row.l)}</td><td><input type="number" value="${val}" onchange="CD['${mpSafe}']['${varSafe}']=+this.value;renderDynamicCalc('${mpSafe}')"></td></tr>`;
+      if(isMyntra){
+        html+=`<tr class="ir myn-row"><td>${esc(row.l)}</td><td class="myn-val"><input type="number" value="${val}" onchange="CD['${mpSafe}']['${varSafe}']=+this.value;renderDynamicCalc('${mpSafe}')"></td><td class="myn-math">${esc(row.desc||'')}</td><td class="myn-pct">${row.pct?'%':''}</td></tr>`;
+      } else {
+        html+=`<tr class="ir"><td>${esc(row.l)}</td><td><input type="number" value="${val}" onchange="CD['${mpSafe}']['${varSafe}']=+this.value;renderDynamicCalc('${mpSafe}')"></td></tr>`;
+      }
     }
     else if(row.t==='formula'||row.t==='lookup'){
       const val = row.var ? result[row.var] : null;
-      const display = fmtWFVal(val, row);
-      const color = row.sign===-1 ? 'var(--re)' : row.fmt==='%'||row.fmt==='%x' ? 'var(--ac)' : 'var(--bl)';
-      html+=`<tr class="cform"><td>${esc(row.l)}</td><td class="mono" style="color:${color}">${display}</td></tr>`;
+      if(isMyntra){
+        const plainVal = fmtMynVal(val, row);
+        const isHighlight = row.var==='expectedPayment'||row.var==='totalLogistic';
+        const bgStyle = isHighlight ? 'background:rgba(255,243,205,.35);' : '';
+        const isBold = row.var==='mrp'||row.var==='gtCharge'||row.var==='commPct'||row.var==='retFee'||row.var==='collFee'||row.var==='expectedPayment'||row.var==='totalLogistic';
+        const fw = isBold ? 'font-weight:700' : 'font-weight:600';
+        html+=`<tr class="cform myn-row" style="${bgStyle}"><td>${esc(row.l)}</td><td class="mono myn-val" style="${fw}">${plainVal}</td><td class="myn-math">${esc(row.desc||'')}</td><td class="myn-pct">${row.pct?'%':''}</td></tr>`;
+      } else {
+        const color = row.sign===-1 ? 'var(--re)' : row.fmt==='%'||row.fmt==='%x' ? 'var(--ac)' : 'var(--bl)';
+        html+=`<tr class="cform"><td>${esc(row.l)}</td><td class="mono" style="color:${color}">${display}</td></tr>`;
+      }
     }
     else if(row.t==='output'){
       const val = row.var ? result[row.var]||0 : 0;
-      const color = val>=0 ? 'var(--gr)' : 'var(--re)';
       const isMainProfit = row.var==='profit';
-      const threshHint = isMainProfit ? ` <span class="st">Threshold: ₹${threshold}</span>` : '';
       const breachClass = isMainProfit&&isBreach ? 'cbreach' : 'ctotal';
-      const breachIcon = isMainProfit&&isBreach ? ' ⚠ Below Threshold' : '';
-      html+=`<tr class="${breachClass}"><td>${esc(row.l)}${threshHint}${breachIcon}</td><td class="mono" style="color:${color}">₹${val.toFixed(0)}</td></tr>`;
+      if(isMyntra){
+        const color = val>=0 ? 'var(--gr)' : 'var(--re)';
+        const breachIcon = isMainProfit&&isBreach ? ' ⚠ Below Threshold' : '';
+        const threshHint = isMainProfit ? ` <span class="st" style="font-size:10px">Threshold: ₹${threshold}</span>` : '';
+        html+=`<tr class="${breachClass} myn-row"><td style="font-weight:700">${esc(row.l)}${threshHint}${breachIcon}</td><td class="mono myn-val" style="color:${color};font-weight:700">${val.toFixed(2)}</td><td class="myn-math">${esc(row.desc||'')}</td><td class="myn-pct"></td></tr>`;
+      } else {
+        const color = val>=0 ? 'var(--gr)' : 'var(--re)';
+        const threshHint = isMainProfit ? ` <span class="st">Threshold: ₹${threshold}</span>` : '';
+        const breachIcon = isMainProfit&&isBreach ? ' ⚠ Below Threshold' : '';
+        html+=`<tr class="${breachClass}"><td>${esc(row.l)}${threshHint}${breachIcon}</td><td class="mono" style="color:${color}">₹${val.toFixed(0)}</td></tr>`;
+      }
     }
   }
-  // Profit % row at the bottom
-  if(outputRow){
-    html+=`<tr class="${isBreach?'cbreach':'ctotal'}"><td>Net Profit %</td><td class="mono" style="color:${profitVal>=0?'var(--gr)':'var(--re)'}">${profitPct}%</td></tr>`;
+  // Note row for Myntra
+  if(isMyntra){
+    html+=`<tr><td colspan="4" style="padding:10px 11px;font-size:11px;color:var(--re);font-style:italic;border-top:2px solid var(--bd)">Note: The above calculation is for ${esc(d.cat||'')} category and the selling price is ${(result.sellerPrice||0)>2500?'above':'below'} 2500 so the GST applied is ${(result.sellerPrice||0)>2500?'18%':'5%'}, It falls under ${esc(d.level||'')}, commission is applied accordingly</td></tr>`;
   }
   tableEl.innerHTML = html;
 }
@@ -2203,37 +2246,32 @@ async function deleteUser(id){
 // WIREFRAME
 // ═══════════════════════════════════════════════════════
 const WF={myntra:[
-  {id:1,   t:'section', l:'Pricing'},
-  {id:2,   t:'input',   l:'Cost Price (₹)',                          var:'cost'},
-  {id:3,   t:'input',   l:'Profit Margin %',                         var:'margin', fmt:'%'},
-  {id:3.1, t:'formula', l:'Profit Including Cost',                   expr:'cost + cost * margin/100', var:'reality'},
-  {id:4,   t:'formula', l:'MRP (3× of Profit Including Cost)',       expr:'reality * 3', var:'mrpRaw'},
-  {id:4.1, t:'formula', l:'MRP Round Off (↑ nearest ₹50)',           expr:'Math.ceil(mrpRaw/50)*50', var:'mrp', locked:true},
-  {id:4.5, t:'input',   l:'Discount %',                              var:'discount', fmt:'%'},
-  {id:5,   t:'formula', l:'Customer Paid = MRP − Discount%',         expr:'mrp - mrp * discount/100', var:'custPaid'},
-  {id:5.5, t:'lookup',  l:'Forward (GT Charges) — auto from level & price slab', fn:'gtCharge', var:'gtCharge', locked:true, sign:-1, desc:'VLOOKUP from GT Charges table'},
-  {id:5.6, t:'formula', l:'Seller Price = Customer Paid − GT Charges',expr:'custPaid - gtCharge', var:'sellerPrice', locked:true},
-  {id:6,   t:'section', l:'Tax (on Seller Price)'},
-  {id:6.1, t:'formula', l:'GST Rate (18% if SP > ₹2500, else 5%)',   expr:'sellerPrice > 2499 ? 0.18 : 0.05', var:'gstRate', locked:true, fmt:'%x'},
-  {id:6.2, t:'formula', l:'GST Amount (inclusive of SP)',             expr:'sellerPrice - sellerPrice/(1+gstRate)', var:'gstAmt', locked:true, sign:-1},
-  {id:6.3, t:'formula', l:'Taxable Amount = SP − GST',               expr:'sellerPrice - gstAmt', var:'taxableAmt', locked:true},
-  {id:6.4, t:'formula', l:'TCS (0.1% of Taxable Amt)',               expr:'taxableAmt * 0.001', var:'tcs', sign:-1, fmt:'₹'},
-  {id:6.5, t:'formula', l:'TDS (0.5% of Taxable Amt)',               expr:'taxableAmt * 0.005', var:'tds', sign:-1, fmt:'₹'},
-  {id:7,   t:'section', l:'Commission (on Seller Price)'},
-  {id:7.1, t:'lookup',  l:'Commission % — auto from category & slab', fn:'commPct', var:'commPct', locked:true, fmt:'%'},
-  {id:7.2, t:'input',   l:'Incentive %',                              var:'incentive', fmt:'%'},
-  {id:7.3, t:'formula', l:'Eff. Commission % = Comm% − Incentive%',   expr:'Math.max(0, commPct-(incentive||0))', var:'effCommPct', locked:true, fmt:'%'},
-  {id:7.4, t:'formula', l:'Commission Amount = SP × Eff.Comm%',       expr:'sellerPrice * effCommPct/100', var:'commAmt', locked:true, sign:-1},
-  {id:8,   t:'section', l:'Logistics'},
-  {id:8.1, t:'lookup',  l:'Reverse Fees — auto from level',           fn:'retFee', var:'retFee', locked:true, sign:-1},
-  {id:8.2, t:'lookup',  l:'Fix Fees (Collection Fee)',                 fn:'collFee', var:'collFee', locked:true, sign:-1},
-  {id:8.3, t:'formula', l:'Tax on Logistics = (Reverse + Fix) × 18%', expr:'(retFee + collFee) * 0.18', var:'taxOnLogistic', locked:true, sign:-1},
-  {id:8.4, t:'formula', l:'Total Logistics = Reverse + Fix + Tax',    expr:'retFee + collFee + taxOnLogistic', var:'totalLogistic', locked:true, sign:-1},
-  {id:8.5, t:'input',   l:'Packaging Cost (₹)',                       var:'packagingCost'},
-  {id:9,   t:'section', l:'Result'},
-  {id:9.1, t:'formula', l:'Expected Payment = SP − TCS − TDS − Comm − Logistics', expr:'sellerPrice - tcs - tds - commAmt - totalLogistic', var:'expectedPayment', locked:true},
-  {id:10,  t:'output',  l:'Profit = Expected Payment − Cost − Packaging', expr:'expectedPayment - cost - (packagingCost||0)', var:'profit'},
-  {id:10.1,t:'output',  l:'If Delivered (Profit + Reverse Fees)',      expr:'(expectedPayment - cost - (packagingCost||0)) + retFee', var:'ifDelivered'}
+  {id:2,   t:'input',   l:'COST',                                     var:'cost',          desc:'Input by user'},
+  {id:3,   t:'input',   l:'Profit Margin%',                            var:'margin', fmt:'%', desc:'Input by user', pct:true},
+  {id:3.1, t:'formula', l:'Profit including cost',                     expr:'cost + cost * margin/100', var:'reality', desc:'Cost+profit margin% = Profit including cost'},
+  {id:4,   t:'formula', l:'MRP',                                      expr:'reality * 3', var:'mrpRaw', desc:'This is 3x of profit including cost for 3x we need setting to change it anytime we want'},
+  {id:4.1, t:'formula', l:'MRP Round Off',                            expr:'Math.ceil(mrpRaw/50)*50', var:'mrp', locked:true, desc:'This is around off of MRP'},
+  {id:4.5, t:'input',   l:'Discount',                                  var:'discount', fmt:'%', desc:'Input by user', pct:true},
+  {id:5,   t:'formula', l:'Customer Paid',                             expr:'mrp - mrp * discount/100', var:'custPaid', desc:'This is MRP Round Off - Discount %'},
+  {id:5.5, t:'lookup',  l:'Forward (GT Charges)',                      fn:'gtCharge', var:'gtCharge', locked:true, sign:-1, desc:'Automatic according to level and price slab'},
+  {id:5.6, t:'formula', l:'Seller Price',                              expr:'custPaid - gtCharge', var:'sellerPrice', locked:true, desc:'This Customer Paid - GT Charges'},
+  {id:6.1, t:'formula', l:'TAX',                                      expr:'sellerPrice > 2499 ? 0.18 : 0.05', var:'gstRate', locked:true, fmt:'%x', desc:'Already mentioned if Seller price is above 2500 than 18% if below 2500 than 5%.', pct:true},
+  {id:6.2, t:'formula', l:'GST(Amt)',                                  expr:'sellerPrice - sellerPrice/(1+gstRate)', var:'gstAmt', locked:true, sign:-1, desc:'Most important its inclusive 18% of SELLER PRICE'},
+  {id:6.3, t:'formula', l:'Taxable Amt',                               expr:'sellerPrice - gstAmt', var:'taxableAmt', locked:true, desc:'This is Seller Price-GST(Amt)'},
+  {id:6.4, t:'formula', l:'TCS(0.1%)',                                 expr:'taxableAmt * 0.001', var:'tcs', sign:-1, fmt:'₹', desc:'0.1% of Taxable Amount', pct:true},
+  {id:6.5, t:'formula', l:'TDS(0.5%)',                                 expr:'taxableAmt * 0.005', var:'tds', sign:-1, fmt:'₹', desc:'0.5% of Taxable Amount', pct:true},
+  {id:7.1, t:'lookup',  l:'COMMISION %',                               fn:'commPct', var:'commPct', locked:true, fmt:'%', desc:'Automatic according to level and category', pct:true},
+  {id:7.2, t:'input',   l:'Incentive %',                               var:'incentive', fmt:'%', desc:'Input by user', pct:true, hidden:true},
+  {id:7.3, t:'formula', l:'Eff. Commission %',                         expr:'Math.max(0, commPct-(incentive||0))', var:'effCommPct', locked:true, fmt:'%', hidden:true},
+  {id:7.4, t:'formula', l:'COMMISION(AMT)',                             expr:'sellerPrice * effCommPct/100', var:'commAmt', locked:true, sign:-1, desc:'This is Seller price-commission %'},
+  {id:8.1, t:'lookup',  l:'REVERSE FEES',                              fn:'retFee', var:'retFee', locked:true, sign:-1, desc:'According to level and category'},
+  {id:8.2, t:'lookup',  l:'FIX FEES',                                  fn:'collFee', var:'collFee', locked:true, sign:-1, desc:'Rs.61 is fixed but can change so we need setting to change it anytime we want.'},
+  {id:8.3, t:'formula', l:'TAX ON LOGISTIC',                           expr:'(retFee + collFee) * 0.18', var:'taxOnLogistic', locked:true, sign:-1, desc:'18% tax is fixed on reverse logistic', pct:true},
+  {id:8.4, t:'formula', l:'REVERSE, FF, REVERSE TAX',                  expr:'retFee + collFee + taxOnLogistic', var:'totalLogistic', locked:true, sign:-1, desc:'This is Reverse Fees+Tax on Reverse Charges+FIX FEES'},
+  {id:9.1, t:'formula', l:'EXPECTED PAYMENT',                          expr:'sellerPrice - tcs - tds - commAmt - totalLogistic', var:'expectedPayment', locked:true, desc:'This is Seller Price-(TCS(0.1%)+COMMISION(AMT)+REVERSE, FF, REVERSE TAX)'},
+  {id:8.5, t:'input',   l:'PACKGING COST',                             var:'packagingCost', desc:'Rs.60 is fixed but can change so we need setting to change it anytime we want.'},
+  {id:10,  t:'output',  l:'PROFIT',                                    expr:'expectedPayment - cost - (packagingCost||0)', var:'profit', desc:'This is Expect Payment - COST - PACKING COST'},
+  {id:10.1,t:'output',  l:'IF DELIVERED',                               expr:'(expectedPayment - cost - (packagingCost||0)) + retFee', var:'ifDelivered', desc:'This is Profit+reverse fees+tax on logistic'}
 ],'ajio-ppmp':[
   {id:1,   t:'section', l:'Pricing'},
   {id:2,   t:'input',   l:'Cost Price (₹)',                           var:'cost'},
@@ -2368,7 +2406,7 @@ function renderWFBuilder(){
         <span style="color:${isLocked?'var(--tx3)':'var(--ac)'};cursor:${isLocked?'default':'grab'};font-size:16px;user-select:none;flex-shrink:0;opacity:${isLocked?'.3':'1'}">⠿</span>
         <input style="flex:1;background:transparent;border:none;color:${isLocked?'var(--tx2)':'var(--tx)'};font-size:12px;font-family:var(--sans);outline:none"
           value="${r.l.replace(/"/g,'&quot;')}"
-          onchange="WF['${escAttr(m)}'][${idx}].l=this.value;save('wireframe')"
+          onchange="WF['${escAttr(m)}'][${idx}].l=this.value;save('wireframe');renderDynamicCalc('${escAttr(m)}')"
           onclick="event.stopPropagation()" ${isLocked?'readonly':''}>
         ${r.var ? `<span style="font-size:9px;color:var(--tx3);font-family:var(--mono);flex-shrink:0">[${r.var}]</span>` : ''}
         ${previewVal}
