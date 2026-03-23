@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-:root{--bg:#0f1117;--s:#181c26;--s2:#1f2435;--s3:#262d42;--bd:#2a3148;--bd2:#3a4560;--tx:#e8ecf4;--tx2:#8b9abf;--tx3:#5a6a90;--ac:#f5a623;--gr:#2dd4a0;--re:#f5575c;--bl:#4e8ef7;--pu:#9b6dff;--mn:#ff3f6c;--aj:#e94560;--amz:#ff9900;--r:8px;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif}
+:root{--bg:#0f1117;--s:#181c26;--s2:#1f2435;--s3:#262d42;--bd:#2a3148;--bd2:#3a4560;--tx:#e8ecf4;--tx2:#8b9abf;--tx3:#5a6a90;--ac:#f5a623;--gr:#2dd4a0;--re:#f5575c;--bl:#4e8ef7;--pu:#9b6dff;--mn:#ff3f6c;--aj:#e94560;--amz:#ff9900;--r:4px;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh;display:flex}
 .sidebar{width:230px;height:100vh;background:var(--s);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;z-index:100;overflow-y:auto}
@@ -32,7 +32,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .page{display:none}.page.active{display:block;animation:fi .18s ease}
 @keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 /* BUTTONS */
-.btn{padding:7px 15px;border-radius:var(--r);border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--sans);transition:all .12s;display:inline-flex;align-items:center;gap:5px}
+.btn{padding:7px 15px;border-radius:4px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--sans);transition:all .12s;display:inline-flex;align-items:center;gap:5px;letter-spacing:.2px}
+.btn[disabled]{opacity:.6;cursor:not-allowed}
+.sku-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:500;background:rgba(155,109,255,.12);color:var(--pu);border:1px solid rgba(155,109,255,.25);margin:1px 2px}
 .bp{background:var(--ac);color:#000}.bp:hover{background:#e8941a}
 .bg{background:transparent;color:var(--tx2);border:1px solid var(--bd2)}.bg:hover{background:var(--s2);color:var(--tx)}
 .br{background:rgba(245,87,92,.15);color:var(--re);border:1px solid rgba(245,87,92,.3)}.br:hover{background:rgba(245,87,92,.25)}
@@ -616,7 +618,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="nav-sec">Products</div>
     <div class="nav-item" data-page="skus" onclick="nav('skus')"><span class="ni">⊟</span> SKUs</div>
     <div class="nav-sec">Admin</div>
-    <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni">⊠</span> Wireframe Builder</div>
+    <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni">☰</span> Wireframe Builder</div>
     <div class="nav-item" data-page="users" onclick="nav('users')"><span class="ni">◉</span> User Access</div>
     <div class="nav-item" data-page="settings" onclick="nav('settings')"><span class="ni">⚙</span> App Settings</div>
   </nav>
@@ -636,7 +638,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     </div>
     <div class="flex gap12">
       <span id="sync-badge" style="font-size:11px;display:none"></span>
-      <div id="alert-badge" style="background:var(--re);color:#fff;border-radius:12px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;animation:pulse 2s infinite;display:none" onclick="nav('thresholds')"></div>
+      <div id="alert-badge" style="background:var(--re);color:#fff;border-radius:4px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;animation:pulse 2s infinite;display:none" onclick="dismissAlertBadge()"></div>
       <button class="btn bp bsm" onclick="nav('skus')">+ Add SKU</button>
     </div>
   </div>
@@ -651,6 +653,12 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="sc"><div class="sl">Commission Models</div><div class="sv" style="color:var(--ac)">3</div><div class="ss">Myntra · PPMP · CC</div></div>
   </div>
   <div id="dash-alerts"></div>
+  <div class="card mb16">
+    <div class="ch"><div style="font-size:13px;font-weight:600">Team Tasks</div>
+      <button class="btn bp bxs" onclick="openAddTaskModal()">+ Add Task</button>
+    </div>
+    <div id="dash-tasks" style="padding:0"></div>
+  </div>
   <div class="ch" style="background:var(--s);border:1px solid var(--bd);border-radius:var(--r) var(--r) 0 0;padding:13px 17px">
     <div style="font-size:13px;font-weight:600">Profit by Brand & Commission Model</div>
   </div>
@@ -661,54 +669,42 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
 <!-- ═══ PRICING TABLES ═══ -->
 <div class="page" id="page-pricing">
-  <div class="info">GST: 5% if SP &lt; ₹2,500 · 18% if SP ≥ ₹2,500. Ajio CC = commission only.</div>
+  <div class="info" style="font-size:12px;line-height:1.6"><strong>How it works:</strong> Enter Cost, Markup % and Discount % to see your profit. GST is auto-applied (5% below ₹2,500 · 18% above). Commission and logistics are deducted per marketplace rules.</div>
   <div class="tabs">
     <div class="tab tm-t active" onclick="switchMP('myntra',this)"><span class="tdot" style="background:var(--mn)"></span>Myntra</div>
     <div class="tab taj-t" onclick="switchMP('ajio-ppmp',this)"><span class="tdot" style="background:var(--aj)"></span>Ajio — PPMP</div>
     <div class="tab taj-t" onclick="switchMP('ajio-cc',this)"><span class="tdot" style="background:var(--gr)"></span>Ajio — CC</div>
     <div class="tab tamz-t" onclick="switchMP('amazon',this)"><span class="tdot" style="background:var(--amz)"></span>Amazon</div>
   </div>
-  <div id="mp-myntra"><div class="playout">
-    <div><div class="st mb8" style="text-transform:uppercase;letter-spacing:1px">Structure</div><div id="wfp-myntra"></div></div>
-    <div>
-      <div class="flexb mb12">
-        <div class="st" style="text-transform:uppercase;letter-spacing:1px">Live Calculator</div>
-        <select class="fi" id="cat-sel-myntra" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('myntra')">
-          <option value="">Select Category</option>
-        </select>
-      </div>
-      <div class="card"><div style="padding:0"><table class="ct" id="ct-myntra"></table></div></div>
+  <div id="mp-myntra">
+    <div class="flexb mb12">
+      <div class="st" style="text-transform:uppercase;letter-spacing:1px">Live Calculator</div>
+      <select class="fi" id="cat-sel-myntra" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('myntra')">
+        <option value="">Select Category</option>
+      </select>
     </div>
-  </div></div>
-  <div id="mp-ajio-ppmp" style="display:none"><div class="playout">
-    <div><div class="st mb8" style="text-transform:uppercase;letter-spacing:1px">PPMP Structure</div><div id="wfp-ajio-ppmp"></div></div>
-    <div>
-      <div class="flexb mb12">
-        <div><div style="font-size:13px;font-weight:600">Ajio — PPMP</div><div class="st">Commission (per brand) + Logistics + Marketing</div></div>
-      </div>
-      <div class="card"><div style="padding:0"><table class="ct" id="ct-ajio-ppmp"></table></div></div>
+    <div class="card"><div style="padding:0"><table class="ct" id="ct-myntra"></table></div></div>
+  </div>
+  <div id="mp-ajio-ppmp" style="display:none">
+    <div class="flexb mb12">
+      <div><div style="font-size:13px;font-weight:600">Ajio — PPMP</div><div class="st">Commission (per brand) + Logistics + Marketing</div></div>
     </div>
-  </div></div>
-  <div id="mp-ajio-cc" style="display:none"><div class="playout">
-    <div><div class="st mb8" style="text-transform:uppercase;letter-spacing:1px">CC Structure</div><div id="wfp-ajio-cc"></div></div>
-    <div>
-      <div class="flexb mb12">
-        <div><div style="font-size:13px;font-weight:600">Ajio — CC</div><div class="st">Commission (per brand) + Marketing — No logistics</div></div>
-      </div>
-      <div class="card"><div style="padding:0"><table class="ct" id="ct-ajio-cc"></table></div></div>
-      <div class="success" style="margin-top:10px">✓ CC Model: No logistics charged. Only commission + marketing deducted.</div>
+    <div class="card"><div style="padding:0"><table class="ct" id="ct-ajio-ppmp"></table></div></div>
+  </div>
+  <div id="mp-ajio-cc" style="display:none">
+    <div class="flexb mb12">
+      <div><div style="font-size:13px;font-weight:600">Ajio — CC</div><div class="st">Commission (per brand) + Marketing — No logistics</div></div>
     </div>
-  </div></div>
-  <div id="mp-amazon" style="display:none"><div class="playout">
-    <div><div class="st mb8" style="text-transform:uppercase;letter-spacing:1px">Amazon Structure</div><div id="wfp-amazon"></div></div>
-    <div>
-      <div class="flexb mb12">
-        <div class="st" style="text-transform:uppercase;letter-spacing:1px">Live Calculator</div>
-        <select class="fi" id="cat-sel-amazon" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('amazon')"><option value="">Select Category</option></select>
-      </div>
-      <div class="card"><div style="padding:0"><table class="ct" id="ct-amazon"></table></div></div>
+    <div class="card"><div style="padding:0"><table class="ct" id="ct-ajio-cc"></table></div></div>
+    <div class="success" style="margin-top:10px">CC Model: No logistics charged. Only commission + marketing deducted.</div>
+  </div>
+  <div id="mp-amazon" style="display:none">
+    <div class="flexb mb12">
+      <div class="st" style="text-transform:uppercase;letter-spacing:1px">Live Calculator</div>
+      <select class="fi" id="cat-sel-amazon" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('amazon')"><option value="">Select Category</option></select>
     </div>
-  </div></div>
+    <div class="card"><div style="padding:0"><table class="ct" id="ct-amazon"></table></div></div>
+  </div>
 </div>
 
 <!-- ═══ THRESHOLDS ═══ -->
@@ -720,7 +716,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
           <div style="font-size:13px;font-weight:600">Category Profit Thresholds</div>
           <div class="st" style="margin-top:3px">Alert when <strong style="color:var(--tx)">Net Profit in ₹</strong> drops below this amount for any SKU</div>
         </div>
-        <button class="btn bp bsm" onclick="saveThr()">Save Thresholds</button>
+        <button class="btn bp bsm" onclick="showBtnProgress(this,saveThr())">Save Thresholds</button>
       </div>
       <div class="cb">
         <div class="info mb12">Set minimum profit in <strong style="color:var(--tx)">Rupees (₹)</strong>. Example: Set ₹500 for Lehenga Choli — any SKU earning less than ₹500 net profit triggers a daily alert.</div>
@@ -777,19 +773,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div style="padding:0;overflow-x:auto"><table class="comm-table" id="comm-myntra-table"></table></div></div>
   </div>
   <div id="comm-ajio" style="display:none">
-    <div class="info mb12">Ajio PPMP &amp; CC: Commission is <strong>per brand</strong>, not per category. Set each brand's commission via <strong>Commission Override %</strong> in the brand settings (edit brand → Commission Override). The category-based table below is only used as a fallback if no override is set.</div>
-    <div class="g2">
-      <div class="card"><div class="ch"><div><span class="bdg bppmp" style="margin-right:6px">PPMP</span>Fallback Commission (if no brand override)</div><button class="btn bp bsm" onclick="saveComm()">✓ Save</button></div>
-        <div class="cb"><table class="comm-table" id="comm-ajio-ppmp-table"></table>
-        </div>
-      </div>
-      <div class="card"><div class="ch"><div><span class="bdg bcc" style="margin-right:6px">CC</span>Fallback Commission (if no brand override)</div><button class="btn bp bsm" onclick="saveComm()">✓ Save</button></div>
-        <div class="cb">
-          <table class="comm-table" id="comm-ajio-cc-table"></table>
-        </div>
-      </div>
-    </div>
-    <div class="card" style="margin-top:14px"><div class="ch"><div style="font-size:13px;font-weight:600">Brand Commission Overview</div></div>
+    <div class="info mb12">Ajio PPMP &amp; CC: Commission is <strong>flat per brand</strong> — not category-based. Set each brand's commission via <strong>Commission Override %</strong> on the Brands page. SKUs cannot be saved without this.</div>
+    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Brand Commission — Ajio PPMP &amp; CC</div></div>
       <div class="cb"><table class="comm-table" id="comm-ajio-brand-table"></table></div>
     </div>
   </div>
@@ -903,6 +888,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <option value="ignored">Threshold Ignored</option>
       <option value="healthy">Healthy</option>
     </select>
+    <select id="f-tag" class="filter-select" onchange="renderSKUs()"><option value="">All Tags</option></select>
     <button class="filter-clear" onclick="clearFilters()" style="display:none" id="f-clear-btn">✕ Clear Filters</button>
   </div>
   <div id="active-filter-chips" class="active-filters" style="margin-bottom:8px"></div>
@@ -940,6 +926,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <tbody id="sku-body"></tbody>
     </table>
   </div>
+  <div id="sku-pagination" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding:8px"></div>
 </div>
 
 <!-- ═══ WIREFRAME ═══ -->
@@ -1634,10 +1621,9 @@ function calcSKU(s){
     const grossSale=mrpRnd-discAmt;
     const gstRate=grossSale>2500?0.18:0.05;
     const gstValue=grossSale*gstRate/(1+gstRate);
-    // Commission: per-brand override, else fallback to old category table
+    // Commission: per-brand only — no category fallback for Ajio
     if(brand.commOverride!=null) comm=brand.commOverride;
-    else if(mp==='ajio-ppmp') comm=COMM_AJIO_PPMP[s.category]||18.88;
-    else comm=COMM_AJIO_CC[s.category]||18.88;
+    else comm=0; // No fallback — brand commission must be set
     const commAmt=grossSale*comm/100;
     const purchasePrice=mrpRnd-discAmt-gstValue-commAmt;
     const gstB2B=purchasePrice>2500?0.18:0.05;
@@ -1847,7 +1833,7 @@ function buildCommAjioBrands(){
     const modelLabel=b.model==='ajio-ppmp'?'PPMP':'CC';
     const comm=b.commOverride!=null?b.commOverride:'—';
     const cls=b.commOverride==null?'style="color:var(--re);font-style:italic"':'';
-    h+=`<tr><td>${esc(b.name)}</td><td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':'bcc'}">${modelLabel}</span></td><td ${cls}>${b.commOverride!=null?comm+'%':'Not set (using fallback)'}</td></tr>`;
+    h+=`<tr><td>${esc(b.name)}</td><td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':'bcc'}">${modelLabel}</span></td><td ${cls}>${b.commOverride!=null?comm+'%':'<span style="color:var(--re);font-weight:600">⚠ Not set — required</span> <a href="#" onclick="openBrandModal(\''+escAttr(b.id)+'\');return false" style="color:var(--ac);font-size:11px">Set now →</a>'}</td></tr>`;
   });
   t.innerHTML=h+'</tbody>';
 }
@@ -1857,7 +1843,7 @@ function buildCommAmazon(){
   CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AMAZON[cat]||17}" onchange="COMM_AMAZON['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
-function saveComm(){triggerRecalc();renderSKUs();save('cat_levels');save('comm_myntra');save('comm_ppmp');save('comm_cc');save('comm_amazon');toast('✓ Commission saved to database','green');}
+async function saveComm(){triggerRecalc();renderSKUs();await Promise.all([save('cat_levels'),save('comm_myntra'),save('comm_ppmp'),save('comm_cc'),save('comm_amazon')]);toast('Commission saved','green');}
 
 // ═══════════════════════════════════════════════════════
 // THRESHOLD (in ₹)
@@ -1894,8 +1880,8 @@ function renderBreachList(){
     }).join('')+'</tbody></table>';
 }
 
-function saveThr(){
-  triggerRecalc();renderSKUs();updateAlerts();save('thresholds');renderBreachList();
+async function saveThr(){
+  triggerRecalc();renderSKUs();updateAlerts();await save('thresholds');renderBreachList();
   // Send alert email if configured
   const alertEmail = document.querySelector('#page-thresholds input[type=email]')?.value||'';
   const freq = document.querySelector('#page-thresholds select')?.value||'';
@@ -1909,7 +1895,14 @@ function saveThr(){
 function updateAlerts(){
   const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
   const badge=el('alert-badge');const dashBreaches=el('dash-breaches');const dashAlerts=el('dash-alerts');
-  if(badge){badge.textContent=`⚠ ${breached.length} Alert${breached.length!==1?'s':''}`;badge.style.display=breached.length?'':'none';}
+  if(badge){
+    if(breached.length===0){badge.style.display='none';_lastSeenBreachCount=0;}
+    else if(breached.length!==_lastSeenBreachCount){
+      const countText=breached.length>99?'99+':breached.length;
+      badge.textContent=`⚠ ${countText} Alert${breached.length!==1?'s':''}`;
+      badge.style.display='';
+    }
+  }
   if(dashBreaches)dashBreaches.textContent=breached.length;
   if(dashAlerts){
     dashAlerts.innerHTML=breached.slice(0,5).map(s=>{
@@ -2062,10 +2055,12 @@ function filteredSKUs(){
   const fBrand=el('f-brand')?.value||'';
   const fCat=el('f-cat')?.value||'';
   const fStatus=el('f-status')?.value||'';
+  const fTag=el('f-tag')?.value||'';
   return skuDB.filter(s=>{
     if(q&&!s.styleId.toLowerCase().includes(q)&&!(s.sku||'').toLowerCase().includes(q))return false;
     if(fBrand&&s.brandId!==fBrand)return false;
     if(fCat&&s.category!==fCat)return false;
+    if(fTag&&(!s.tags||!s.tags.includes(fTag)))return false;
     // Marketplace tab filter
     if(_skuMPTab){
       const brand=brands.find(b=>b.id===s.brandId);
@@ -2092,6 +2087,8 @@ function renderActiveFilterChips(){
     const mpLabels={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
     chips.push(`<span class="af-chip" onclick="document.querySelector('.sku-mp-tab[data-mp=\\'\\']').click()">Marketplace: ${mpLabels[_skuMPTab]||_skuMPTab} ✕</span>`);
   }
+  const fTag=el('f-tag')?.value||'';
+  if(fTag) chips.push(`<span class="af-chip" onclick="el('f-tag').value='';renderSKUs()">Tag: ${esc(fTag)} ✕</span>`);
   ['f-brand','f-cat','f-status'].forEach(fid=>{
     const e=el(fid);
     if(e&&e.value){
@@ -2107,7 +2104,7 @@ function renderActiveFilterChips(){
 }
 
 function clearFilters(){
-  ['f-search','f-brand','f-cat','f-status'].forEach(fid=>{const e=el(fid);if(e)e.value='';});
+  ['f-search','f-brand','f-cat','f-status','f-tag'].forEach(fid=>{const e=el(fid);if(e)e.value='';});
   // Reset marketplace tab to All
   _skuMPTab='';
   document.querySelectorAll('.sku-mp-tab').forEach(t=>t.classList.remove('active'));
@@ -2143,10 +2140,16 @@ function renderSKUs(){
   invalidateCalcCache();
   const list=filteredSKUs();
   renderActiveFilterChips();
-  el('sku-count').textContent=`Showing ${list.length} of ${skuDB.length} SKUs`;
+  const totalFiltered=list.length;
+  const totalPages=Math.ceil(totalFiltered/SKU_PAGE_SIZE);
+  if(_skuPage>totalPages&&totalPages>0)_skuPage=totalPages;
+  const startIdx=(_skuPage-1)*SKU_PAGE_SIZE;
+  const pageList=list.slice(startIdx, startIdx+SKU_PAGE_SIZE);
+  el('sku-count').textContent=`Showing ${Math.min(startIdx+1,totalFiltered)}–${Math.min(startIdx+SKU_PAGE_SIZE,totalFiltered)} of ${totalFiltered} SKUs (${skuDB.length} total)`;
   el('dash-sku').textContent=skuDB.length;
+  renderSKUPagination(totalFiltered);
   const t=el('sku-body');if(!t)return;
-  let html=list.map(s=>{
+  let html=pageList.map(s=>{
     if(editId===s.id)return renderEditRow(s);
     const c=calcSKU(s);
     const brand=brands.find(b=>b.id===s.brandId);
@@ -2160,7 +2163,7 @@ function renderSKUs(){
       <td><div onclick="openImgModal('${escAttr(s.id)}')" style="cursor:pointer" title="Set product image">${s.img?`<img src="${esc(fixImg(s.img))}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">+</div>`}</div></td>
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
       <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}</td>
-      <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
+      <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span>${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}</span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
       <td class="mono">${s.discount||0}%</td>
@@ -2171,6 +2174,7 @@ function renderSKUs(){
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:nowrap">
           ${statusIcon}
           <button class="btn bg bxs" onclick="showCalcModal('${escAttr(s.id)}')" title="View full calculation breakdown" style="font-size:10px;padding:3px 8px">Calc</button>
+          <button class="btn bg bxs" onclick="openTagsModal('${escAttr(s.id)}')" title="Notes & Tags" style="font-size:10px;padding:3px 6px">🏷</button>
           <button class="btn bg bxs" onclick="startEdit('${escAttr(s.id)}')" title="Edit this SKU">✎</button>
           <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Delete this SKU">✕</button>
         </div>
@@ -2210,7 +2214,7 @@ function renderEditRow(s){
 }
 
 function renderNewRow(){
-  const brandChks=brands.map(b=>`<label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;white-space:nowrap"><input type="checkbox" class="n-brand-chk" value="${b.id}" style="accent-color:var(--ac)">${esc(b.name)}</label>`).join('');
+  const brandChks=brands.map(b=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap;padding:4px 2px;border-radius:4px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"><input type="checkbox" class="n-brand-chk" value="${b.id}" style="accent-color:var(--ac);width:15px;height:15px">${esc(b.name)}</label>`).join('');
   const catOpts=CATS.map(c=>`<option>${c}</option>`).join('');
   return`<tr class="er" id="er-new">
     <td><div onclick="openImgModal('new')" style="cursor:pointer;width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div></td>
@@ -2219,8 +2223,8 @@ function renderNewRow(){
     <td>
       <select class="sse" id="n-cat" onchange="onCatSelectChange('n')">${catOpts}</select>
       <div style="position:relative;display:inline-block">
-        <button class="sse" id="n-brand-btn" type="button" onclick="toggleBrandPicker()" style="font-size:10px;cursor:pointer;min-width:90px;text-align:left">Select Brands ▾</button>
-        <div id="n-brand-picker" style="display:none;position:absolute;left:0;top:100%;margin-top:2px;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.3);z-index:100;padding:8px;max-height:200px;overflow-y:auto;min-width:180px">
+        <button class="sse" id="n-brand-btn" type="button" onclick="toggleBrandPicker()" style="font-size:11px;cursor:pointer;min-width:110px;text-align:left;padding:5px 8px;border:1px solid var(--ac);color:var(--ac);background:rgba(245,166,35,.06)">Select Brands ▾</button>
+        <div id="n-brand-picker" style="display:none;position:absolute;left:0;top:100%;margin-top:4px;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 8px 28px rgba(0,0,0,.45);z-index:200;padding:10px;max-height:240px;overflow-y:auto;min-width:220px">
           <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--bd);padding-bottom:4px;margin-bottom:4px"><input type="checkbox" id="n-brand-all" onchange="toggleAllBrands(this.checked)" style="accent-color:var(--ac)">Select All</label>
           ${brandChks}
         </div>
@@ -2276,6 +2280,13 @@ function saveNew(){
   // Get all selected brands
   const selectedBrands=[...document.querySelectorAll('.n-brand-chk:checked')].map(c=>c.value);
   if(!selectedBrands.length){toast('Select at least one brand','red');return;}
+  // Ajio brands must have commission override set
+  for(const bid of selectedBrands){
+    const b=brands.find(x=>x.id===bid);
+    if(b&&(b.model==='ajio-ppmp'||b.model==='ajio-cc')&&b.commOverride==null){
+      toast(`Set Commission Override % for "${b.name}" in Brands page before adding SKUs`,'red');return;
+    }
+  }
   // Check style ID uniqueness
   if(sid && skuDB.find(x=>x.styleId===sid)){toast('This Style ID already exists','red');return;}
   // Create one SKU per selected brand
@@ -2375,17 +2386,22 @@ const ROLE_ACCESS={admin:'Full access — edit everything',manager:'Edit pricing
 
 function renderUsers(){
   const t=el('users-table-body');if(!t)return;
-  t.innerHTML=users.map(u=>`<tr>
-    <td><strong>${esc(u.name)}</strong></td>
+  t.innerHTML=users.map(u=>{
+    const isRevoked=u.revoked;
+    const revokedBadge=isRevoked?'<span style="font-size:10px;background:rgba(245,87,92,.15);color:var(--re);padding:1px 6px;border-radius:3px;margin-left:6px">REVOKED</span>':'';
+    return`<tr${isRevoked?' style="opacity:.5"':''}>
+    <td><strong>${esc(u.name)}</strong>${revokedBadge}</td>
     <td class="mono st">${esc(u.email)}</td>
     <td><span class="bdg ${ROLE_COLORS[u.role]}">${esc(ROLE_LABELS[u.role])}</span></td>
     <td class="st">${esc(u.added)}</td>
     <td><div class="flex gap8">
       <button class="btn bg bxs" onclick="openUserModal('${escAttr(u.id)}')" aria-label="Edit user">✎ Edit</button>
-      <button class="btn bg bxs" onclick="resetUserPassword('${escAttr(u.id)}')" title="Reset password" aria-label="Reset password">🔑</button>
-      ${u.id!=='u0'&&u.id!=='u1'?`<button class="btn br bxs" onclick="deleteUser('${escAttr(u.id)}')">✕ Remove</button>`:''}
+      <button class="btn bg bxs" onclick="resetUserPassword('${escAttr(u.id)}')" title="Reset password">🔑</button>
+      ${u.id!=='u0'&&u.id!=='u1'?(isRevoked
+        ?`<button class="btn bg bxs" style="color:var(--gr);border-color:var(--gr)" onclick="reinstateUser('${escAttr(u.id)}')">↩ Restore</button>`
+        :`<button class="btn br bxs" onclick="revokeUser('${escAttr(u.id)}')" title="Revoke access">⊘ Revoke</button>`):''}
     </div></td>
-  </tr>`).join('');
+  </tr>`;}).join('');
 }
 
 function openUserModal(id){
@@ -2790,10 +2806,11 @@ function nav(p){
     });
     renderWFPreviews();
   }
-  if(p==='commission'){buildCommMyntra();buildCommAjioPPMP();buildCommAjioCC();buildCommAjioBrands();buildCommAmazon();}
+  if(p==='dashboard'){renderDashTasks();renderBrandSummary();updateAlerts();}
+  if(p==='commission'){buildCommMyntra();buildCommAjioBrands();buildCommAmazon();}
   if(p==='wireframe')renderWFBuilder();
   if(p==='brands')renderBrands();
-  if(p==='skus'){populateFilters();renderSKUs();}
+  if(p==='skus'){populateFilters();populateTagFilter();renderSKUs();}
   if(p==='thresholds')renderThresholds();
   if(p==='users')renderUsers();
   if(p==='settings'){ loadConfig(); populateSettingsPage(); loadBackupList(); }
@@ -3104,10 +3121,20 @@ async function saveImgFromModal(){
     newImg = url;
   } else {
     const s = skuDB.find(x=>x.id===_imgTargetId);
-    if(s){ s.img = url; await save('skus'); }
+    if(s){
+      s.img = url;
+      // Immediately update the image in the DOM without waiting for full save
+      const imgCell = document.querySelector(`tr td div[onclick*="${_imgTargetId}"]`);
+      if(imgCell && url){
+        imgCell.innerHTML=`<img src="${fixImg(url)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`;
+      } else if(imgCell){
+        imgCell.innerHTML=`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">+</div>`;
+      }
+      save('skus'); // Save in background
+    }
   }
   closeModal();
-  renderSKUs();
+  if(_imgTargetId === 'new') renderSKUs();
   // Restore new row draft values after re-render
   if(_imgTargetId === 'new' && _newRowDraft){
     const d = _newRowDraft;
@@ -3583,6 +3610,7 @@ async function doLogin(){
   // Find user — use generic error to avoid email enumeration
   const user = users.find(u => u.email.toLowerCase()===email);
   if(!user){ showLoginErr('Invalid email or password.'); return; }
+  if(user.revoked){ showLoginErr('Your access has been revoked. Contact your admin.'); return; }
   // Password check — stored as hash or plain (first login uses default password)
   const storedHash = user.passwordHash || null;
   const defaultPass = 'pricedesk123'; // default for new users
@@ -4875,6 +4903,156 @@ function runBugDetector(){
 }
 
 // ═══════════════════════════════════════════════════════
+// SKU PAGINATION
+// ═══════════════════════════════════════════════════════
+const SKU_PAGE_SIZE = 25;
+let _skuPage = 1;
+function renderSKUPagination(total){
+  const pgEl=el('sku-pagination');if(!pgEl)return;
+  const pages=Math.ceil(total/SKU_PAGE_SIZE);
+  if(pages<=1){pgEl.innerHTML='';return;}
+  if(_skuPage>pages)_skuPage=pages;
+  let h=`<button class="btn bg bxs" onclick="_skuPage=1;renderSKUs()" ${_skuPage===1?'disabled':''}>&laquo;</button>`;
+  h+=`<button class="btn bg bxs" onclick="_skuPage=Math.max(1,_skuPage-1);renderSKUs()" ${_skuPage===1?'disabled':''}>&lsaquo;</button>`;
+  const start=Math.max(1,_skuPage-2),end=Math.min(pages,_skuPage+2);
+  for(let p=start;p<=end;p++){
+    h+=`<button class="btn ${p===_skuPage?'bp':'bg'} bxs" onclick="_skuPage=${p};renderSKUs()">${p}</button>`;
+  }
+  h+=`<button class="btn bg bxs" onclick="_skuPage=Math.min(${pages},_skuPage+1);renderSKUs()" ${_skuPage===pages?'disabled':''}>&rsaquo;</button>`;
+  h+=`<button class="btn bg bxs" onclick="_skuPage=${pages};renderSKUs()" ${_skuPage===pages?'disabled':''}>&raquo;</button>`;
+  h+=`<span class="st" style="margin-left:8px">Page ${_skuPage} of ${pages}</span>`;
+  pgEl.innerHTML=h;
+}
+
+// ═══════════════════════════════════════════════════════
+// SKU NOTES / TAGS
+// ═══════════════════════════════════════════════════════
+function getAllTags(){
+  const tags=new Set();
+  skuDB.forEach(s=>{if(s.tags)s.tags.forEach(t=>tags.add(t));});
+  return [...tags].sort();
+}
+function populateTagFilter(){
+  const sel=el('f-tag');if(!sel)return;
+  const cur=sel.value;
+  const tags=getAllTags();
+  sel.innerHTML='<option value="">All Tags</option>'+tags.map(t=>`<option ${t===cur?'selected':''}>${esc(t)}</option>`).join('');
+}
+function openTagsModal(skuId){
+  const s=skuDB.find(x=>x.id===skuId);if(!s)return;
+  const tags=(s.tags||[]).join(', ');
+  const note=s.note||'';
+  setModal(`<div class="mhdr"><div class="mtl">Notes & Tags — ${esc(s.styleId)}</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="fg"><label class="fl">Note</label><textarea class="fi" id="sku-note" rows="3" style="resize:vertical;font-size:13px" placeholder="Add a note...">${esc(note)}</textarea></div>
+      <div class="fg"><label class="fl">Tags <span class="st" style="text-transform:none">(comma separated)</span></label><input class="fi" id="sku-tags" value="${esc(tags)}" placeholder="e.g. urgent, reorder, seasonal"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px" id="tag-suggestions"></div>
+    </div>
+    <div class="mfoot"><button class="btn bg" onclick="closeModal()">Cancel</button><button class="btn bp" onclick="saveSkuTags('${escAttr(skuId)}')">Save</button></div>`);
+  const allTags=getAllTags();
+  const sugEl=document.getElementById('tag-suggestions');
+  if(sugEl&&allTags.length){
+    sugEl.innerHTML=allTags.map(t=>`<span style="font-size:11px;padding:2px 8px;border-radius:3px;background:var(--s2);border:1px solid var(--bd);color:var(--tx2);cursor:pointer" onclick="addTagSuggestion('${escAttr(t)}')">${esc(t)}</span>`).join('');
+  }
+}
+function addTagSuggestion(tag){
+  const inp=document.getElementById('sku-tags');if(!inp)return;
+  const current=inp.value.split(',').map(t=>t.trim()).filter(Boolean);
+  if(!current.includes(tag)){current.push(tag);inp.value=current.join(', ');}
+}
+function saveSkuTags(skuId){
+  const s=skuDB.find(x=>x.id===skuId);if(!s)return;
+  s.note=document.getElementById('sku-note')?.value.trim()||'';
+  s.tags=(document.getElementById('sku-tags')?.value||'').split(',').map(t=>t.trim()).filter(Boolean);
+  closeModal();save('skus');populateTagFilter();renderSKUs();toast('Tags saved','green');
+}
+
+// ═══════════════════════════════════════════════════════
+// DASHBOARD TASKS (shared across all users)
+// ═══════════════════════════════════════════════════════
+let dashTasks=[];
+const DB_TASK_KEY='pd_tasks';
+async function loadTasks(){
+  const data=await dbGet(DB_TASK_KEY);
+  if(data&&Array.isArray(data)) dashTasks=data;
+}
+async function saveTasks(){ await dbSet(DB_TASK_KEY, dashTasks); }
+function renderDashTasks(){
+  const t=el('dash-tasks');if(!t)return;
+  if(!dashTasks.length){t.innerHTML=`<div style="padding:14px;text-align:center;color:var(--tx3);font-size:12px">No tasks yet. Add one to track team work.</div>`;return;}
+  t.innerHTML=`<table class="dt"><thead><tr><th>Task</th><th>Added By</th><th>Date</th><th style="width:80px">Action</th></tr></thead><tbody>`+
+    dashTasks.map((tk,i)=>`<tr>
+      <td style="font-size:13px">${esc(tk.text)}</td>
+      <td class="st">${esc(tk.addedBy||'—')}</td>
+      <td class="st mono">${esc(tk.date||'')}</td>
+      <td><button class="btn bg bxs" onclick="completeTask(${i})" title="Mark complete">✓ Done</button></td>
+    </tr>`).join('')+'</tbody></table>';
+}
+function openAddTaskModal(){
+  setModal(`<div class="mhdr"><div class="mtl">Add Team Task</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="fg"><label class="fl">Task Description</label><input class="fi" id="task-text" placeholder="e.g. Update Lehenga Choli pricing" autofocus></div>
+    </div>
+    <div class="mfoot"><button class="btn bg" onclick="closeModal()">Cancel</button><button class="btn bp" onclick="addTask()">Add Task</button></div>`);
+}
+function addTask(){
+  const text=document.getElementById('task-text')?.value.trim();
+  if(!text){toast('Enter a task','red');return;}
+  dashTasks.push({text,addedBy:currentUser?.name||'Unknown',date:new Date().toISOString().slice(0,10)});
+  closeModal();saveTasks();renderDashTasks();toast('Task added','green');
+}
+function completeTask(idx){
+  dashTasks.splice(idx,1);
+  saveTasks();renderDashTasks();toast('Task completed','green');
+}
+
+// ═══════════════════════════════════════════════════════
+// ALERT DISMISS — hide badge until new alert
+// ═══════════════════════════════════════════════════════
+let _lastSeenBreachCount = -1;
+function dismissAlertBadge(){
+  const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+  _lastSeenBreachCount=breached.length;
+  const badge=el('alert-badge');if(badge)badge.style.display='none';
+  nav('thresholds');
+}
+
+// ═══════════════════════════════════════════════════════
+// USER REVOKE ACCESS
+// ═══════════════════════════════════════════════════════
+async function revokeUser(id){
+  if(id==='u0'||id==='u1'){toast('Cannot revoke default admin accounts','red');return;}
+  const u=users.find(x=>x.id===id);if(!u)return;
+  if(!confirm(`Revoke access for "${u.name}"? They will not be able to log in again.`))return;
+  u.revoked=true;
+  await clearSessionToken(u.id);
+  renderUsers();await save('users');
+  toast(`${u.name} access revoked`,'red');
+}
+async function reinstateUser(id){
+  const u=users.find(x=>x.id===id);if(!u)return;
+  u.revoked=false;
+  renderUsers();await save('users');
+  toast(`${u.name} access restored`,'green');
+}
+
+// ═══════════════════════════════════════════════════════
+// PROGRESS INDICATOR FOR SAVE BUTTONS
+// ═══════════════════════════════════════════════════════
+function showBtnProgress(btn, promise){
+  if(!btn||!promise)return promise;
+  const origText=btn.innerHTML;
+  btn.disabled=true;
+  btn.innerHTML='<span style="animation:pulse 1s infinite">Saving...</span>';
+  btn.style.opacity='.7';
+  return promise.finally(()=>{
+    btn.innerHTML=origText;
+    btn.disabled=false;
+    btn.style.opacity='';
+  });
+}
+
+// ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',async ()=>{
@@ -4886,11 +5064,14 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   const tableOk = await ensureTable();
   if(!tableOk){ console.warn('app_data table missing — showing setup guide'); }
   await loadFromStorage();
+  await loadTasks();
   populateFilters();
+  populateTagFilter();
   renderBrandSummary();
   renderWFPreviews();
   updateAlerts();
   renderUsers();
+  renderDashTasks();
   // Render editable tables (they use live data from GT_DATA / REVERSE_FEES)
   renderGTTable();
   renderRetTable();
