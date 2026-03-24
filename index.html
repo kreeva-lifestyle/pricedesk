@@ -949,19 +949,19 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="st" id="sku-count"></div>
   </div>
   <div class="ss-wrap">
-    <table class="ss" style="width:100%">
+    <table class="ss" style="table-layout:fixed;width:100%">
       <colgroup>
         <col style="width:38px"><!-- Img -->
-        <col style="min-width:80px"><!-- SKU -->
-        <col style="min-width:80px"><!-- Style ID -->
-        <col style="min-width:100px"><!-- Category -->
-        <col style="min-width:75px"><!-- Cost -->
-        <col style="min-width:65px"><!-- Markup -->
-        <col style="min-width:65px"><!-- Discount -->
-        <col style="min-width:85px"><!-- Selling Price -->
-        <col style="min-width:80px"><!-- Net Profit -->
-        <col style="min-width:80px"><!-- If Delivered -->
-        <col style="min-width:160px"><!-- Actions -->
+        <col><!-- SKU -->
+        <col><!-- Style ID -->
+        <col style="width:105px"><!-- Category -->
+        <col style="width:80px"><!-- Cost -->
+        <col style="width:72px"><!-- Markup -->
+        <col style="width:72px"><!-- Discount -->
+        <col style="width:90px"><!-- Selling Price -->
+        <col style="width:85px"><!-- Net Profit -->
+        <col style="width:85px"><!-- If Delivered -->
+        <col style="width:190px"><!-- Actions -->
       </colgroup>
       <thead><tr>
         <th>Img</th>
@@ -2339,7 +2339,10 @@ function filteredSKUs(){
     if(q&&!s.styleId.toLowerCase().includes(q)&&!(s.sku||'').toLowerCase().includes(q))return false;
     if(fBrand&&s.brandId!==fBrand)return false;
     if(fCat&&s.category!==fCat)return false;
-    if(fTag&&(!s.tags||!s.tags.includes(fTag)))return false;
+    if(fTag){
+      const allTags=[...getAutoTags(s),...(s.tags||[])];
+      if(!allTags.includes(fTag))return false;
+    }
     // Marketplace tab filter
     if(_skuMPTab){
       const brand=brands.find(b=>b.id===s.brandId);
@@ -2450,7 +2453,7 @@ function renderSKUs(){
       <td><div data-sku-img="${escAttr(s.id)}" onclick="openImgModal('${escAttr(s.id)}')" style="cursor:pointer" title="Set product image">${s.img?`<img src="${esc(fixImg(s.img))}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">+</div>`}</div></td>
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
       <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}</td>
-      <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span>${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
+      <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span>${!s.img?'<span class="sku-tag" style="background:rgba(255,59,48,.12);color:var(--re);border-color:rgba(255,59,48,.25)">No Image</span>':''}${!s.styleId?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
       <td class="mono">${s.discount||0}%</td>
@@ -3247,8 +3250,13 @@ function toast(msg,type){
 function dlTemplate(){
   if(typeof XLSX==='undefined'){toast('SheetJS loading…','red');return;}
   const mpLabels={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
-  // Dynamic brand list: "BrandName — Marketplace"
-  const brandList=brands.map(b=>b.name+' — '+(mpLabels[b.model]||b.model));
+  // Dynamic brand list: "BrandName — ModelLabel"
+  const brandList=brands.map(b=>{
+    const modelLabel=mpLabels[b.model]||b.model||b.marketplace||'';
+    // Avoid duplication if brand name already contains the marketplace
+    if(b.name.includes('—')||b.name.toLowerCase().includes(modelLabel.toLowerCase())) return b.name;
+    return b.name+' — '+modelLabel;
+  });
   const catList=[...CATS];
   const wb=XLSX.utils.book_new();
   // Main template sheet
@@ -3277,8 +3285,8 @@ function dlTemplate(){
   for(let i=0;i<maxLen;i++) refData.push([brandList[i]||'',catList[i]||'']);
   const wsRef=XLSX.utils.aoa_to_sheet(refData);
   wsRef['!cols']=[{wch:35},{wch:20}];
-  XLSX.utils.book_append_sheet(wb,wsRef,'_Lookups');
   XLSX.utils.book_append_sheet(wb,ws,'SKUs');
+  XLSX.utils.book_append_sheet(wb,wsRef,'_Lookups');
   XLSX.writeFile(wb,'PriceDesk_SKU_Template.xlsx');toast('✓ Template downloaded','green');
 }
 
@@ -3322,7 +3330,8 @@ function previewImport(input){
         });
       } else {
         const wb=XLSX.read(e.target.result,{type:'array'});
-        const ws=wb.Sheets[wb.SheetNames[0]];
+        // Prefer sheet named "SKUs" or "Edit & Re-Import", fall back to first non-lookup sheet
+        const ws=wb.Sheets['SKUs']||wb.Sheets['Edit & Re-Import']||wb.Sheets[wb.SheetNames.find(n=>!n.startsWith('_'))||wb.SheetNames[0]];
         const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
         rows=raw.map(r=>{const n={};Object.keys(r).forEach(k=>n[k.trim().replace(/\*$/,'').toUpperCase()]=String(r[k]));return n;});
       }
@@ -3331,15 +3340,18 @@ function previewImport(input){
       const mpLabels={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
       function matchBrand(raw){
         if(!raw)return null;
-        const lower=raw.toLowerCase();
-        // Try exact "Name — Marketplace" match first
-        const found=brands.find(b=>{
-          const full=(b.name+' — '+(mpLabels[b.model]||b.model)).toLowerCase();
-          return full===lower;
-        });
-        if(found)return found;
-        // Fallback: match by name only
-        return brands.find(b=>b.name.toLowerCase()===lower)||null;
+        const lower=raw.trim().toLowerCase();
+        // Try multiple matching strategies
+        for(const b of brands){
+          const modelLabel=(mpLabels[b.model]||b.model||'').toLowerCase();
+          // Match "Name — Model" (e.g. "Fusionic — Ajio PPMP")
+          if(lower===(b.name+' — '+modelLabel)) return b;
+          // Match "Name — Marketplace" (e.g. "Fusionic — Myntra")
+          if(lower===(b.name+' — '+(b.marketplace||'')).toLowerCase()) return b;
+          // Match brand name alone if unique
+          if(lower===b.name.toLowerCase()) return b;
+        }
+        return null;
       }
       importRows=[];importUpdates=[];const errors=[];const preview=[];const previewUpdates=[];
       rows.forEach((r,i)=>{
@@ -5352,8 +5364,15 @@ function renderSKUPagination(total){
 // ═══════════════════════════════════════════════════════
 // SKU NOTES / TAGS
 // ═══════════════════════════════════════════════════════
+const AUTO_TAGS=['No Image','No Style ID'];
+function getAutoTags(s){
+  const at=[];
+  if(!s.img) at.push('No Image');
+  if(!s.styleId) at.push('No Style ID');
+  return at;
+}
 function getAllTags(){
-  const tags=new Set();
+  const tags=new Set(AUTO_TAGS);
   skuDB.forEach(s=>{if(s.tags)s.tags.forEach(t=>tags.add(t));});
   return [...tags].sort();
 }
