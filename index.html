@@ -3247,8 +3247,13 @@ function toast(msg,type){
 function dlTemplate(){
   if(typeof XLSX==='undefined'){toast('SheetJS loading…','red');return;}
   const mpLabels={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
-  // Dynamic brand list: "BrandName — Marketplace"
-  const brandList=brands.map(b=>b.name+' — '+(mpLabels[b.model]||b.model));
+  // Dynamic brand list: "BrandName — ModelLabel"
+  const brandList=brands.map(b=>{
+    const modelLabel=mpLabels[b.model]||b.model||b.marketplace||'';
+    // Avoid duplication if brand name already contains the marketplace
+    if(b.name.includes('—')||b.name.toLowerCase().includes(modelLabel.toLowerCase())) return b.name;
+    return b.name+' — '+modelLabel;
+  });
   const catList=[...CATS];
   const wb=XLSX.utils.book_new();
   // Main template sheet
@@ -3277,8 +3282,8 @@ function dlTemplate(){
   for(let i=0;i<maxLen;i++) refData.push([brandList[i]||'',catList[i]||'']);
   const wsRef=XLSX.utils.aoa_to_sheet(refData);
   wsRef['!cols']=[{wch:35},{wch:20}];
-  XLSX.utils.book_append_sheet(wb,wsRef,'_Lookups');
   XLSX.utils.book_append_sheet(wb,ws,'SKUs');
+  XLSX.utils.book_append_sheet(wb,wsRef,'_Lookups');
   XLSX.writeFile(wb,'PriceDesk_SKU_Template.xlsx');toast('✓ Template downloaded','green');
 }
 
@@ -3322,7 +3327,8 @@ function previewImport(input){
         });
       } else {
         const wb=XLSX.read(e.target.result,{type:'array'});
-        const ws=wb.Sheets[wb.SheetNames[0]];
+        // Prefer sheet named "SKUs" or "Edit & Re-Import", fall back to first non-lookup sheet
+        const ws=wb.Sheets['SKUs']||wb.Sheets['Edit & Re-Import']||wb.Sheets[wb.SheetNames.find(n=>!n.startsWith('_'))||wb.SheetNames[0]];
         const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
         rows=raw.map(r=>{const n={};Object.keys(r).forEach(k=>n[k.trim().replace(/\*$/,'').toUpperCase()]=String(r[k]));return n;});
       }
@@ -3331,15 +3337,18 @@ function previewImport(input){
       const mpLabels={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
       function matchBrand(raw){
         if(!raw)return null;
-        const lower=raw.toLowerCase();
-        // Try exact "Name — Marketplace" match first
-        const found=brands.find(b=>{
-          const full=(b.name+' — '+(mpLabels[b.model]||b.model)).toLowerCase();
-          return full===lower;
-        });
-        if(found)return found;
-        // Fallback: match by name only
-        return brands.find(b=>b.name.toLowerCase()===lower)||null;
+        const lower=raw.trim().toLowerCase();
+        // Try multiple matching strategies
+        for(const b of brands){
+          const modelLabel=(mpLabels[b.model]||b.model||'').toLowerCase();
+          // Match "Name — Model" (e.g. "Fusionic — Ajio PPMP")
+          if(lower===(b.name+' — '+modelLabel)) return b;
+          // Match "Name — Marketplace" (e.g. "Fusionic — Myntra")
+          if(lower===(b.name+' — '+(b.marketplace||'')).toLowerCase()) return b;
+          // Match brand name alone if unique
+          if(lower===b.name.toLowerCase()) return b;
+        }
+        return null;
       }
       importRows=[];importUpdates=[];const errors=[];const preview=[];const previewUpdates=[];
       rows.forEach((r,i)=>{
