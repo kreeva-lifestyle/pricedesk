@@ -1506,6 +1506,7 @@ async function save(type){
     logistics:   { gt: GT_DATA, rev: REVERSE_FEES, settings: LOGISTICS_SETTINGS },
     wireframe:   WF,
     email_cfg:   EMAIL_CONFIG,
+    alert:       ALERT_SETTINGS,
   };
   const val = dataMap[type];
   if(val === undefined){ console.warn('Unknown save type:', type); return; }
@@ -1531,6 +1532,7 @@ async function loadFromStorage(){
     if(loaded.skus)        skuDB           = loaded.skus;
     if(loaded.brands)      brands          = loaded.brands;
     if(loaded.thresholds)  THRESHOLDS      = loaded.thresholds;
+    if(loaded.alert)       ALERT_SETTINGS  = loaded.alert;
     if(loaded.cat_levels)  CAT_LEVEL       = loaded.cat_levels;
     if(loaded.comm_myntra) COMM_MYNTRA     = loaded.comm_myntra;
     if(loaded.comm_ppmp)   COMM_AJIO_PPMP  = loaded.comm_ppmp;
@@ -1692,6 +1694,7 @@ let THRESHOLDS={
   'Kurta Sets':300,'Lehenga Choli':500,'Ethnic Dresses':250,
   'Sarees':300,'Co-Ords':250,'Jumpsuit':250,'Tops':150,'Kurtas':300,
 };
+let ALERT_SETTINGS={email:'',frequency:'Immediately on breach'};
 
 // ═══════════════════════════════════════════════════════
 // BRANDS
@@ -2053,9 +2056,9 @@ function renderBreachList(){
 
 async function saveThr(){
   triggerRecalc();renderSKUs();updateAlerts();await save('thresholds');renderBreachList();audit('threshold','Thresholds updated');
-  // Send alert email if configured
-  const alertEmail = document.querySelector('#page-thresholds input[type=email]')?.value||'';
-  const freq = document.querySelector('#page-thresholds select')?.value||'';
+  // Send alert email if configured (read from persisted settings)
+  const alertEmail = ALERT_SETTINGS.email||document.querySelector('#page-thresholds input[type=email]')?.value||'';
+  const freq = ALERT_SETTINGS.frequency||'';
   if(alertEmail && freq.includes('Immediately')){
     const breached = skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
     if(breached.length) sendThresholdAlertEmail(breached, alertEmail);
@@ -3317,7 +3320,7 @@ function nav(p){
   if(p==='wireframe')renderWFBuilder();
   if(p==='brands')renderBrands();
   if(p==='skus'){populateFilters();populateTagFilter();renderSKUs();}
-  if(p==='thresholds')renderThresholds();
+  if(p==='thresholds'){renderThresholds();loadAlertSettingsUI();}
   if(p==='users')renderUsers();
   if(p==='activity'){ renderAuditLog(); renderImportLog(); populateAuditFilters(); populateSkuHistorySelect(); loadUserPrefsUI(); }
   if(p==='settings'){ loadConfig(); populateSettingsPage(); loadBackupList(); }
@@ -4011,8 +4014,13 @@ function importDataPrompt(){
 
 function saveAlertSettings(){
   const email = document.getElementById('alert-email-input')?.value||'';
+  const freq = document.getElementById('alert-freq-select')?.value||'Immediately on breach';
   if(email && !email.includes('@')){ toast('Enter a valid email','red'); return; }
-  // Test email status
+  // Persist to DB
+  ALERT_SETTINGS.email=email;
+  ALERT_SETTINGS.frequency=freq;
+  save('alert');
+  // Update email status display
   const statusBox = document.getElementById('email-status-box');
   if(statusBox){
     if(emailReady()){
@@ -4024,7 +4032,19 @@ function saveAlertSettings(){
       statusBox.style.color='var(--ac)';
     }
   }
+  audit('alert_settings',`Alert settings updated: ${email||'no email'}, ${freq}`);
   toast('✓ Alert settings saved','green');
+}
+
+function loadAlertSettingsUI(){
+  const emailInput=document.getElementById('alert-email-input');
+  const freqSelect=document.getElementById('alert-freq-select');
+  if(emailInput) emailInput.value=ALERT_SETTINGS.email||'';
+  if(freqSelect){
+    const opts=[...freqSelect.options];
+    const match=opts.find(o=>o.value===ALERT_SETTINGS.frequency);
+    if(match) freqSelect.value=match.value;
+  }
 }
 
 
