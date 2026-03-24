@@ -2609,6 +2609,8 @@ function saveNew(){
       toast(`Set Commission Override % for "${b.name}" in Brands page before adding SKUs`,'red');return;
     }
   }
+  // SKU and Style ID cannot be the same
+  if(sid && sid===skuCode){toast('SKU and Style ID cannot be the same','red');return;}
   // Check style ID uniqueness
   if(sid && skuDB.find(x=>x.styleId===sid)){toast('This Style ID already exists','red');return;}
   // Create one SKU per selected brand
@@ -2628,6 +2630,10 @@ function saveEdit(id){
   const skuCode=el('e-sku')?.value.trim()||'';
   const sid=el('e-sid')?.value.trim(),cost=parseFloat(el('e-cost')?.value)||0,mkp=parseFloat(el('e-mkp')?.value)||0,disc=parseFloat(el('e-disc')?.value)||0;
   if(!cost){toast('Cost price is required','red');return;}
+  // SKU and Style ID cannot be the same
+  if(sid && sid===skuCode){toast('SKU and Style ID cannot be the same','red');return;}
+  // Check style ID uniqueness (exclude current SKU)
+  if(sid && skuDB.find(x=>x.styleId===sid && x.id!==id)){toast('This Style ID already exists','red');return;}
   const cat=el('e-cat')?.value;
   // Track price history
   if(s.cost!==cost) trackSkuChange(id,'cost',s.cost,cost);
@@ -3366,7 +3372,7 @@ function previewImport(input){
         }
         return null;
       }
-      importRows=[];importUpdates=[];const errors=[];const preview=[];const previewUpdates=[];
+      importRows=[];importUpdates=[];const _importSeenStyleIds=new Set();const errors=[];const preview=[];const previewUpdates=[];
       rows.forEach((r,i)=>{
         // Skip completely empty rows
         const hasData=Object.values(r).some(v=>String(v).trim());
@@ -3386,6 +3392,22 @@ function previewImport(input){
         // Category is mandatory
         if(!cat){errors.push(`Row ${i+2} (${skuCode}): Missing Category`);return;}
         if(!CATS.includes(cat)){errors.push(`Row ${i+2} (${skuCode}): Unknown category "${cat}"`);return;}
+
+        // SKU and Style ID cannot be the same
+        if(sid && sid===skuCode){errors.push(`Row ${i+2} (${skuCode}): SKU and Style ID cannot be the same`);return;}
+        // Style ID duplicate check — against existing DB
+        if(sid){
+          const sidDupDB=skuDB.find(x=>x.styleId===sid);
+          // For updates: allow if the dup is the same SKU code being updated; for new: always block
+          const existingBySku=skuDB.filter(x=>x.sku===skuCode);
+          const isOwnSid=existingBySku.some(x=>x.styleId===sid);
+          if(sidDupDB && !isOwnSid){errors.push(`Row ${i+2} (${skuCode}): Style ID "${sid}" already exists in database`);return;}
+        }
+        // Style ID duplicate check — within this import file
+        if(sid){
+          if(_importSeenStyleIds.has(sid)){errors.push(`Row ${i+2} (${skuCode}): Duplicate Style ID "${sid}" in import file`);return;}
+          _importSeenStyleIds.add(sid);
+        }
 
         // Check if this is an update to existing SKU(s) — match by SKU code
         const existing=skuDB.filter(x=>x.sku===skuCode);
