@@ -306,7 +306,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
   /* SKU sheet: horizontal scroll */
   .ss-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .ss{min-width:900px}
+  .ss{min-width:1050px}
   .ss th,.ss td{padding:5px 6px;font-size:11px}
   .ss th:nth-child(n+8),.ss td:nth-child(n+8){min-width:70px}
 
@@ -949,19 +949,19 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="st" id="sku-count"></div>
   </div>
   <div class="ss-wrap">
-    <table class="ss" style="table-layout:fixed;width:100%">
+    <table class="ss" style="width:100%;min-width:1050px">
       <colgroup>
-        <col style="width:38px"><!-- Img -->
-        <col><!-- SKU -->
-        <col><!-- Style ID -->
-        <col style="width:105px"><!-- Category -->
+        <col style="width:36px"><!-- Img -->
+        <col style="width:100px"><!-- SKU -->
+        <col style="width:90px"><!-- Style ID -->
+        <col style="width:120px"><!-- Category -->
         <col style="width:80px"><!-- Cost -->
-        <col style="width:72px"><!-- Markup -->
-        <col style="width:72px"><!-- Discount -->
-        <col style="width:90px"><!-- Selling Price -->
-        <col style="width:85px"><!-- Net Profit -->
-        <col style="width:85px"><!-- If Delivered -->
-        <col style="width:190px"><!-- Actions -->
+        <col style="width:75px"><!-- Markup -->
+        <col style="width:80px"><!-- Discount -->
+        <col style="width:95px"><!-- Selling Price -->
+        <col style="width:88px"><!-- Net Profit -->
+        <col style="width:88px"><!-- If Delivered -->
+        <col style="width:195px"><!-- Actions -->
       </colgroup>
       <thead><tr>
         <th>Img</th>
@@ -2505,21 +2505,34 @@ function renderEditRow(s){
 }
 
 function renderNewRow(){
-  const brandChks=brands.map(b=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap;padding:4px 2px;border-radius:4px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"><input type="checkbox" class="n-brand-chk" value="${b.id}" style="accent-color:var(--ac);width:15px;height:15px">${esc(b.name)}</label>`).join('');
+  // Filter brands by active marketplace tab
+  const filteredBrands=_skuMPTab?brands.filter(b=>b.model===_skuMPTab):brands;
   const catOpts=CATS.map(c=>`<option>${c}</option>`).join('');
+  let brandCell='';
+  if(filteredBrands.length===1){
+    // Single brand — auto-select, no picker needed
+    const b=filteredBrands[0];
+    brandCell=`<span style="font-size:11px;color:var(--gr);font-weight:500">${esc(b.name)}</span><input type="checkbox" class="n-brand-chk" value="${b.id}" checked style="display:none">`;
+  } else if(filteredBrands.length>1){
+    // Multiple brands — show picker
+    const brandChks=filteredBrands.map(b=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap;padding:4px 2px;border-radius:4px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"><input type="checkbox" class="n-brand-chk" value="${b.id}" style="accent-color:var(--ac);width:15px;height:15px">${esc(b.name)}</label>`).join('');
+    brandCell=`<div style="position:relative;display:inline-block">
+        <button class="sse" id="n-brand-btn" type="button" onclick="toggleBrandPicker()" style="font-size:11px;cursor:pointer;min-width:110px;text-align:left;padding:5px 8px;border:1px solid var(--ac);color:var(--ac);background:rgba(245,166,35,.06)">Select Brands ▾</button>
+        <div id="n-brand-picker" style="display:none;position:fixed;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 8px 28px rgba(0,0,0,.45);z-index:9999;padding:10px;max-height:240px;overflow-y:auto;min-width:220px">
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--bd);padding-bottom:4px;margin-bottom:4px"><input type="checkbox" id="n-brand-all" onchange="toggleAllBrands(this.checked)" style="accent-color:var(--ac)">Select All</label>
+          ${brandChks}
+        </div>
+      </div>`;
+  } else {
+    brandCell='<span style="font-size:11px;color:var(--re)">No brands</span>';
+  }
   return`<tr class="er" id="er-new">
     <td><div onclick="openImgModal('new')" style="cursor:pointer;width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div></td>
     <td><input class="si" id="n-sku" placeholder="SKU *" style="width:80px" required></td>
     <td><input class="si" id="n-sid" placeholder="Style ID" style="width:90px"></td>
     <td>
       <select class="sse" id="n-cat" onchange="onCatSelectChange('n')">${catOpts}</select>
-      <div style="position:relative;display:inline-block">
-        <button class="sse" id="n-brand-btn" type="button" onclick="toggleBrandPicker()" style="font-size:11px;cursor:pointer;min-width:110px;text-align:left;padding:5px 8px;border:1px solid var(--ac);color:var(--ac);background:rgba(245,166,35,.06)">Select Brands ▾</button>
-        <div id="n-brand-picker" style="display:none;position:fixed;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 8px 28px rgba(0,0,0,.45);z-index:9999;padding:10px;max-height:240px;overflow-y:auto;min-width:220px">
-          <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--bd);padding-bottom:4px;margin-bottom:4px"><input type="checkbox" id="n-brand-all" onchange="toggleAllBrands(this.checked)" style="accent-color:var(--ac)">Select All</label>
-          ${brandChks}
-        </div>
-      </div>
+      ${brandCell}
     </td>
     <td><input class="si" data-lc id="n-cost" type="number" placeholder="₹ Cost" style="width:70px"></td>
     <td><input class="si" data-lc id="n-mkp" type="number" placeholder="%" style="width:55px"></td>
@@ -2571,7 +2584,7 @@ function liveCalcRow(row){
   if(ifdDisp){ifdDisp.innerHTML=`₹${c.ifDelivered.toFixed(0)}`;ifdDisp.style.color=c.ifDelivered>=0?'var(--gr)':'var(--re)';ifdDisp.classList.remove('na');}
 }
 
-function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sid')?.focus(),50);}
+function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sku')?.focus(),50);}
 function startEdit(id){editId=id;renderSKUs();setTimeout(()=>el('e-sid')?.focus(),50);}
 function cancelEdit(){editId=null;newImg='';renderSKUs();}
 // promptImg / promptImgNew now replaced by openImgModal — see IMAGE MANAGEMENT section
@@ -2596,6 +2609,8 @@ function saveNew(){
       toast(`Set Commission Override % for "${b.name}" in Brands page before adding SKUs`,'red');return;
     }
   }
+  // SKU and Style ID cannot be the same
+  if(sid && sid===skuCode){toast('SKU and Style ID cannot be the same','red');return;}
   // Check style ID uniqueness
   if(sid && skuDB.find(x=>x.styleId===sid)){toast('This Style ID already exists','red');return;}
   // Create one SKU per selected brand
@@ -2615,6 +2630,10 @@ function saveEdit(id){
   const skuCode=el('e-sku')?.value.trim()||'';
   const sid=el('e-sid')?.value.trim(),cost=parseFloat(el('e-cost')?.value)||0,mkp=parseFloat(el('e-mkp')?.value)||0,disc=parseFloat(el('e-disc')?.value)||0;
   if(!cost){toast('Cost price is required','red');return;}
+  // SKU and Style ID cannot be the same
+  if(sid && sid===skuCode){toast('SKU and Style ID cannot be the same','red');return;}
+  // Check style ID uniqueness (exclude current SKU)
+  if(sid && skuDB.find(x=>x.styleId===sid && x.id!==id)){toast('This Style ID already exists','red');return;}
   const cat=el('e-cat')?.value;
   // Track price history
   if(s.cost!==cost) trackSkuChange(id,'cost',s.cost,cost);
@@ -3353,7 +3372,7 @@ function previewImport(input){
         }
         return null;
       }
-      importRows=[];importUpdates=[];const errors=[];const preview=[];const previewUpdates=[];
+      importRows=[];importUpdates=[];const _importSeenStyleIds=new Set();const errors=[];const preview=[];const previewUpdates=[];
       rows.forEach((r,i)=>{
         // Skip completely empty rows
         const hasData=Object.values(r).some(v=>String(v).trim());
@@ -3373,6 +3392,22 @@ function previewImport(input){
         // Category is mandatory
         if(!cat){errors.push(`Row ${i+2} (${skuCode}): Missing Category`);return;}
         if(!CATS.includes(cat)){errors.push(`Row ${i+2} (${skuCode}): Unknown category "${cat}"`);return;}
+
+        // SKU and Style ID cannot be the same
+        if(sid && sid===skuCode){errors.push(`Row ${i+2} (${skuCode}): SKU and Style ID cannot be the same`);return;}
+        // Style ID duplicate check — against existing DB
+        if(sid){
+          const sidDupDB=skuDB.find(x=>x.styleId===sid);
+          // For updates: allow if the dup is the same SKU code being updated; for new: always block
+          const existingBySku=skuDB.filter(x=>x.sku===skuCode);
+          const isOwnSid=existingBySku.some(x=>x.styleId===sid);
+          if(sidDupDB && !isOwnSid){errors.push(`Row ${i+2} (${skuCode}): Style ID "${sid}" already exists in database`);return;}
+        }
+        // Style ID duplicate check — within this import file
+        if(sid){
+          if(_importSeenStyleIds.has(sid)){errors.push(`Row ${i+2} (${skuCode}): Duplicate Style ID "${sid}" in import file`);return;}
+          _importSeenStyleIds.add(sid);
+        }
 
         // Check if this is an update to existing SKU(s) — match by SKU code
         const existing=skuDB.filter(x=>x.sku===skuCode);
