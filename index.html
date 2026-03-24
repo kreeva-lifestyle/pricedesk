@@ -2505,21 +2505,34 @@ function renderEditRow(s){
 }
 
 function renderNewRow(){
-  const brandChks=brands.map(b=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap;padding:4px 2px;border-radius:4px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"><input type="checkbox" class="n-brand-chk" value="${b.id}" style="accent-color:var(--ac);width:15px;height:15px">${esc(b.name)}</label>`).join('');
+  // Filter brands by active marketplace tab
+  const filteredBrands=_skuMPTab?brands.filter(b=>b.model===_skuMPTab):brands;
   const catOpts=CATS.map(c=>`<option>${c}</option>`).join('');
+  let brandCell='';
+  if(filteredBrands.length===1){
+    // Single brand — auto-select, no picker needed
+    const b=filteredBrands[0];
+    brandCell=`<span style="font-size:11px;color:var(--gr);font-weight:500">${esc(b.name)}</span><input type="checkbox" class="n-brand-chk" value="${b.id}" checked style="display:none">`;
+  } else if(filteredBrands.length>1){
+    // Multiple brands — show picker
+    const brandChks=filteredBrands.map(b=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap;padding:4px 2px;border-radius:4px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"><input type="checkbox" class="n-brand-chk" value="${b.id}" style="accent-color:var(--ac);width:15px;height:15px">${esc(b.name)}</label>`).join('');
+    brandCell=`<div style="position:relative;display:inline-block">
+        <button class="sse" id="n-brand-btn" type="button" onclick="toggleBrandPicker()" style="font-size:11px;cursor:pointer;min-width:110px;text-align:left;padding:5px 8px;border:1px solid var(--ac);color:var(--ac);background:rgba(245,166,35,.06)">Select Brands ▾</button>
+        <div id="n-brand-picker" style="display:none;position:fixed;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 8px 28px rgba(0,0,0,.45);z-index:9999;padding:10px;max-height:240px;overflow-y:auto;min-width:220px">
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--bd);padding-bottom:4px;margin-bottom:4px"><input type="checkbox" id="n-brand-all" onchange="toggleAllBrands(this.checked)" style="accent-color:var(--ac)">Select All</label>
+          ${brandChks}
+        </div>
+      </div>`;
+  } else {
+    brandCell='<span style="font-size:11px;color:var(--re)">No brands</span>';
+  }
   return`<tr class="er" id="er-new">
     <td><div onclick="openImgModal('new')" style="cursor:pointer;width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div></td>
     <td><input class="si" id="n-sku" placeholder="SKU *" style="width:80px" required></td>
     <td><input class="si" id="n-sid" placeholder="Style ID" style="width:90px"></td>
     <td>
       <select class="sse" id="n-cat" onchange="onCatSelectChange('n')">${catOpts}</select>
-      <div style="position:relative;display:inline-block">
-        <button class="sse" id="n-brand-btn" type="button" onclick="toggleBrandPicker()" style="font-size:11px;cursor:pointer;min-width:110px;text-align:left;padding:5px 8px;border:1px solid var(--ac);color:var(--ac);background:rgba(245,166,35,.06)">Select Brands ▾</button>
-        <div id="n-brand-picker" style="display:none;position:fixed;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 8px 28px rgba(0,0,0,.45);z-index:9999;padding:10px;max-height:240px;overflow-y:auto;min-width:220px">
-          <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--bd);padding-bottom:4px;margin-bottom:4px"><input type="checkbox" id="n-brand-all" onchange="toggleAllBrands(this.checked)" style="accent-color:var(--ac)">Select All</label>
-          ${brandChks}
-        </div>
-      </div>
+      ${brandCell}
     </td>
     <td><input class="si" data-lc id="n-cost" type="number" placeholder="₹ Cost" style="width:70px"></td>
     <td><input class="si" data-lc id="n-mkp" type="number" placeholder="%" style="width:55px"></td>
@@ -2571,7 +2584,7 @@ function liveCalcRow(row){
   if(ifdDisp){ifdDisp.innerHTML=`₹${c.ifDelivered.toFixed(0)}`;ifdDisp.style.color=c.ifDelivered>=0?'var(--gr)':'var(--re)';ifdDisp.classList.remove('na');}
 }
 
-function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sid')?.focus(),50);}
+function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sku')?.focus(),50);}
 function startEdit(id){editId=id;renderSKUs();setTimeout(()=>el('e-sid')?.focus(),50);}
 function cancelEdit(){editId=null;newImg='';renderSKUs();}
 // promptImg / promptImgNew now replaced by openImgModal — see IMAGE MANAGEMENT section
