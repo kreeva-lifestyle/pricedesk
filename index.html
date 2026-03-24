@@ -2339,7 +2339,10 @@ function filteredSKUs(){
     if(q&&!s.styleId.toLowerCase().includes(q)&&!(s.sku||'').toLowerCase().includes(q))return false;
     if(fBrand&&s.brandId!==fBrand)return false;
     if(fCat&&s.category!==fCat)return false;
-    if(fTag&&(!s.tags||!s.tags.includes(fTag)))return false;
+    if(fTag){
+      const allTags=[...getAutoTags(s),...(s.tags||[])];
+      if(!allTags.includes(fTag))return false;
+    }
     // Marketplace tab filter
     if(_skuMPTab){
       const brand=brands.find(b=>b.id===s.brandId);
@@ -2450,7 +2453,7 @@ function renderSKUs(){
       <td><div data-sku-img="${escAttr(s.id)}" onclick="openImgModal('${escAttr(s.id)}')" style="cursor:pointer" title="Set product image">${s.img?`<img src="${esc(fixImg(s.img))}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">+</div>`}</div></td>
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
       <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}</td>
-      <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span>${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
+      <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span>${!s.img?'<span class="sku-tag" style="background:rgba(255,59,48,.12);color:var(--re);border-color:rgba(255,59,48,.25)">No Image</span>':''}${!s.styleId?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
       <td class="mono">${s.discount||0}%</td>
@@ -5361,8 +5364,15 @@ function renderSKUPagination(total){
 // ═══════════════════════════════════════════════════════
 // SKU NOTES / TAGS
 // ═══════════════════════════════════════════════════════
+const AUTO_TAGS=['No Image','No Style ID'];
+function getAutoTags(s){
+  const at=[];
+  if(!s.img) at.push('No Image');
+  if(!s.styleId) at.push('No Style ID');
+  return at;
+}
 function getAllTags(){
-  const tags=new Set();
+  const tags=new Set(AUTO_TAGS);
   skuDB.forEach(s=>{if(s.tags)s.tags.forEach(t=>tags.add(t));});
   return [...tags].sort();
 }
