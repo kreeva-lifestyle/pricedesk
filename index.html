@@ -2046,11 +2046,11 @@ function renderBreachList(){
   const t=el('thr-breach-list');if(!t)return;
   const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
   if(!breached.length){t.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:12px">✓ No active breaches</div>`;return;}
-  t.innerHTML=`<table class="dt"><thead><tr><th>SKU</th><th>Category</th><th>Brand</th><th>Net Profit (₹)</th><th>Threshold (₹)</th></tr></thead><tbody>`+
+  t.innerHTML=`<table class="dt"><thead><tr><th>SKU</th><th>Category</th><th>Brand</th><th>Net Profit (₹)</th><th>Threshold (₹)</th><th></th></tr></thead><tbody>`+
     breached.map(s=>{
       const c=calcSKU(s);
       const brand=brands.find(b=>b.id===s.brandId);
-      return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${s.styleId}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td></tr>`;
+      return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${s.styleId}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:3px 8px;white-space:nowrap">🔕 Ignore</button></td></tr>`;
     }).join('')+'</tbody></table>';
 }
 
