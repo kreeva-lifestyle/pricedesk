@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>PriceDesk — Marketplace Pricing Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +12,7 @@
 <style>
 :root{--bg:#0f1117;--s:#181c26;--s2:#1f2435;--s3:#262d42;--bd:#2a3148;--bd2:#3a4560;--tx:#e8ecf4;--tx2:#8b9abf;--tx3:#5a6a90;--ac:#f5a623;--gr:#2dd4a0;--re:#f5575c;--bl:#4e8ef7;--pu:#9b6dff;--mn:#ff3f6c;--aj:#e94560;--amz:#ff9900;--r:4px;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh;display:flex}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh;display:flex;-webkit-text-size-adjust:100%;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 .sidebar{width:230px;height:100vh;background:var(--s);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;z-index:100;overflow-y:auto}
 .logo{padding:18px;border-bottom:1px solid var(--bd)}
 .logo-text{font-size:17px;font-weight:700;color:var(--ac);font-family:var(--mono)}
@@ -26,7 +26,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .sb-btm{padding:14px 16px;border-top:1px solid var(--bd);margin-top:auto}
 .ava{width:28px;height:28px;border-radius:50%;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000;flex-shrink:0}
 .main{margin-left:230px;flex:1;display:flex;flex-direction:column;min-width:0}
-.topbar{background:var(--s);border-bottom:1px solid var(--bd);padding:12px 26px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar{background:var(--s);border-bottom:1px solid var(--bd);padding:12px 26px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;gap:8px}
 .pt{font-size:15px;font-weight:600}
 .content{padding:22px 26px;flex:1;overflow-x:hidden}
 .page{display:none}.page.active{display:block;animation:fi .18s ease}
@@ -135,7 +135,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .ci{width:68px;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-family:var(--mono);font-size:12px;padding:4px 6px;text-align:right}
 .ci:focus{outline:none;border-color:var(--ac)}
 /* SKU SHEET */
-.ss-wrap{overflow-x:auto;border:1px solid var(--bd);border-radius:var(--r)}
+.ss-wrap{overflow-x:auto;border:1px solid var(--bd);border-radius:var(--r);-webkit-overflow-scrolling:touch}
 .ss{width:100%;border-collapse:collapse;font-size:12px}
 .ss th{background:var(--s2);color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding:9px 10px;border-bottom:2px solid var(--bd);white-space:nowrap;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis}
 .ss th.auto-h{color:var(--gr);background:rgba(45,212,160,.05)}
@@ -292,11 +292,12 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   /* Main takes full width */
   .main{margin-left:0}
 
-  /* Topbar */
-  .topbar{padding:10px 16px}
+  /* Topbar: compact */
+  .topbar{padding:10px 12px;gap:8px}
+  .topbar>.flex{gap:8px}
 
   /* Content padding reduced */
-  .content{padding:14px 14px}
+  .content{padding:14px 12px}
 
   /* Dashboard drag handles — inline on mobile */
   #page-dashboard{padding-left:0}
@@ -312,65 +313,80 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   .playout{grid-template-columns:1fr;gap:14px}
 
   /* Tabs: horizontally scrollable */
-  .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:2px;scrollbar-width:none}
   .tabs::-webkit-scrollbar{height:0}
   .tab{white-space:nowrap;padding:9px 13px;font-size:12px}
 
-  /* Filter bar: wrap nicely */
-  .filter-bar{gap:6px;padding:10px 10px}
-  .filter-select{min-width:0;font-size:11px;padding:5px 7px}
+  /* SKU page: marketplace tabs + action buttons stack */
+  #page-skus>.mp-tabs-wrap{flex-direction:column;align-items:stretch!important;gap:10px}
+  .mp-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-shrink:0}
+  .mp-tabs::-webkit-scrollbar{height:0}
+  .sku-mp-tab{white-space:nowrap;padding:8px 12px;font-size:11px}
+  .sku-actions-wrap{justify-content:flex-start!important}
+
+  /* Filter bar: wrap + full-width search */
+  .filter-bar{gap:8px;padding:10px 10px;flex-direction:row;flex-wrap:wrap}
+  .filter-bar>div:first-child{width:100%}
+  .filter-bar>div:first-child .filter-select{width:100%!important;min-width:0!important}
+  .filter-select{min-width:0;flex:1;padding:7px 9px}
   .filter-sep{display:none}
 
   /* SKU sheet: horizontal scroll */
-  .ss-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .ss{min-width:1150px}
+  .ss-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:0 12px;scrollbar-width:thin}
+  .ss{min-width:1100px}
   .ss th,.ss td{padding:5px 6px;font-size:11px}
-  .ss th:nth-child(n+9),.ss td:nth-child(n+9){min-width:70px}
+
+  /* Hide Style ID & Tags columns to save space */
+  .ss th:nth-child(3),.ss td:nth-child(3){display:none}
+  .ss th:nth-child(5),.ss td:nth-child(5){display:none}
 
   /* Global search: compact on mobile */
-  #global-search{width:140px!important;font-size:11px!important;padding:5px 10px 5px 24px!important}
-  #global-search-results{min-width:280px!important;right:0!important}
+  #global-search{width:130px!important;font-size:12px!important;padding:6px 10px 6px 26px!important}
+  #global-search-results{min-width:280px!important;right:0!important;left:auto!important}
 
   /* Calc table */
   .ct td{padding:6px 9px;font-size:12px}
   .ct input[type=number]{width:80px}
 
-  /* Cards */
+  /* Cards: wrap headers */
   .card .ch{flex-wrap:wrap;gap:8px}
   .ch .btn,.ch button{font-size:11px;padding:5px 9px}
 
   /* Info/warning boxes */
-  .info,.success,.warn{font-size:11px;padding:8px 11px}
+  .info,.success,.warn{font-size:11px;padding:8px 11px;line-height:1.5}
 
   /* Stat cards */
   .sc{padding:12px 13px}
   .sv{font-size:18px}
 
-  /* Brand grid */
-  .brand-card{padding:13px}
+  /* Brand grid: 2 cols */
+  .brand-card{padding:12px}
 
-  /* Alert items */
-  .aitem{padding:10px 12px}
+  /* Alert items: stack text */
+  .aitem{padding:10px 12px;flex-wrap:wrap;gap:8px}
+  .aitem>div:last-child{min-width:0;word-break:break-word}
 
   /* Comm table scrollable */
   .comm-table{font-size:11px}
   .comm-table th,.comm-table td{padding:5px 7px}
-  .ci{width:56px;font-size:11px}
+  .ci{width:56px}
 
   /* Threshold rows */
-  .thr-row{gap:10px}
+  .thr-row{gap:10px;flex-wrap:wrap}
   .thr-input{width:80px}
 
-  /* On mobile: table scrolls horizontally, hide Style ID column to save space */
-  .ss th:nth-child(3),.ss td:nth-child(3){display:none}
-
-  /* Modals full-width on mobile */
-  .modal{width:calc(100% - 32px);max-height:90vh}
+  /* Modals: full-width sheet from bottom */
+  .movl{align-items:flex-end}
+  .modal{width:100%;max-width:100%;max-height:92vh;border-radius:16px 16px 0 0;border-left:none;border-right:none;border-bottom:none;animation:slideUp .22s ease}
+  @keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .mbody{padding:16px}
+  .mhdr{padding:14px 16px}
+  .mfoot{padding:12px 16px}
 
   /* Inputs: prevent iOS auto-zoom (must be >=16px) */
-  .filter-select{font-size:16px}
-  .ci{font-size:16px}
+  .fi,.filter-select,.ci,.si,.sse,.thr-input{font-size:16px!important}
   .ct input[type=number]{font-size:16px}
+  select{font-size:16px!important}
 
   /* Page title smaller */
   .pt{font-size:14px}
@@ -379,42 +395,107 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   .wfrow{padding:6px 9px}
 
   /* Nav items larger touch target */
-  .nav-item{padding:11px 16px;font-size:14px}
+  .nav-item{padding:12px 16px;font-size:14px;min-height:44px}
   .nav-sec{padding:14px 16px 6px}
 
-  /* Close sidebar when nav item tapped */
+  /* Form rows: stack */
+  .frow{grid-template-columns:1fr;gap:10px}
+
+  /* Dashboard tables: horizontal scroll */
+  .dash-block .card .cb{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .dash-block .dt{min-width:420px}
+
+  /* Buttons: ensure touch-friendly size */
+  .btn{min-height:36px;padding:8px 14px}
+  .bsm{min-height:32px;padding:6px 10px}
+  .bxs{min-height:28px;padding:5px 8px}
+
+  /* Formula builder: mobile friendly */
+  .fb-box{width:100%;max-width:100%;max-height:92vh;border-radius:16px 16px 0 0}
+  .fb-row{padding:8px 10px}
+
+  /* Image zoom */
+  #img-zoom-overlay img{max-width:96vw;max-height:80vh}
+  #img-zoom-overlay .zoom-close{top:10px;right:10px;min-width:44px;min-height:44px}
+
+  /* Flexb utility: allow wrapping */
+  .flexb{flex-wrap:wrap;gap:8px}
+
+  /* Active filter chips: scroll */
+  .active-filters{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:4px;scrollbar-width:none}
+  .active-filters::-webkit-scrollbar{height:0}
+  .af-chip{flex-shrink:0}
 }
 
 @media(max-width:480px){
-  .g4{grid-template-columns:repeat(2,1fr);gap:9px}
+  .g4{grid-template-columns:repeat(2,1fr);gap:8px}
   .g3{grid-template-columns:1fr;gap:10px}
-  .sv{font-size:20px}
-  .sc{padding:11px 12px}
-  .content{padding:12px 12px}
+  .sv{font-size:18px}
+  .sc{padding:10px 11px}
+  .sl{font-size:9px;margin-bottom:5px}
+  .content{padding:10px 10px}
   .tabs .tab{font-size:11px;padding:8px 10px}
-  /* Alert badge: shorter text */
+
+  /* Alert badge: shorter */
   #alert-badge{font-size:10px;padding:3px 7px}
-  /* Add SKU button compact */
-  .topbar .btn{font-size:11px;padding:5px 8px}
-  /* Filter bar: two rows */
-  .filter-bar{flex-wrap:wrap}
-  .filter-bar .btn{margin-left:0}
-  /* Modal full screen — use 100% not 100vw to avoid scrollbar overflow */
-  .modal{width:100%;max-height:100vh;border-radius:0;border-left:none;border-right:none;border-bottom:none}
-  .movl{align-items:flex-end}
+
+  /* Topbar buttons compact */
+  .topbar .btn{font-size:11px;padding:5px 8px;min-height:32px}
+
+  /* Filter bar: full-width dropdowns */
+  .filter-bar{gap:6px;padding:8px}
+  .filter-select{width:100%;flex:1 1 calc(50% - 4px)}
+  .filter-bar .btn{margin-left:0;width:100%}
+
+  /* Modal: true full screen */
+  .modal{max-height:100vh;border-radius:0}
+  .movl{align-items:stretch}
+
   /* Login box: fit narrow screens */
-  .login-box{padding:28px 20px;border-radius:12px}
-  /* Session warning: stack at bottom center */
-  #session-warn{right:12px;left:12px;bottom:12px}
-  /* Toast: center on mobile */
-  .toast{right:12px;left:12px}
+  .login-box{padding:24px 16px;border-radius:10px;width:calc(100% - 24px)}
+
+  /* Session warning: bottom center */
+  #session-warn{right:8px;left:8px;bottom:8px}
+
+  /* Toast: full-width bottom */
+  .toast{right:8px;left:8px;bottom:12px}
+
   /* Formula builder: reduce padding */
   .fb-hdr{padding:12px 14px}
-  .fb-body{padding:14px}
-  .fb-foot{padding:10px 14px}
-  /* Global search: narrower on small screens */
-  #global-search{width:110px!important;font-size:11px!important}
-  #global-search-results{min-width:calc(100vw - 32px)!important;left:-60px!important;right:auto!important}
+  .fb-body{padding:12px}
+  .fb-foot{padding:10px 14px;flex-wrap:wrap;gap:8px}
+  .fb-box{border-radius:0}
+
+  /* Global search: full width dropdown */
+  #global-search{width:100px!important;font-size:12px!important}
+  #global-search-results{position:fixed!important;left:8px!important;right:8px!important;top:auto!important;min-width:0!important;max-width:none!important}
+
+  /* SKU action buttons: compact */
+  .ss .btn,.ss button{font-size:10px!important;padding:3px 6px!important;min-height:26px!important}
+
+  /* Dashboard tables: narrower */
+  .dash-block .dt{min-width:360px}
+  .dash-block .dt th,.dash-block .dt td{padding:6px 8px;font-size:11px}
+
+  /* Brand grid: single column */
+  .brand-card{padding:10px}
+
+  /* Comm table: smaller cells */
+  .ci{width:50px;padding:3px 5px}
+
+  /* Threshold page: stack */
+  .thr-row{flex-direction:column;align-items:flex-start;gap:6px}
+  .thr-row .flex{width:100%;justify-content:space-between}
+
+  /* SKU table: hide more columns for very small screens */
+  .ss th:nth-child(8),.ss td:nth-child(8){display:none}
+  .ss{min-width:900px}
+
+  /* Page title */
+  .pt{font-size:13px}
+
+  /* Marketplace tabs: smaller */
+  .sku-mp-tab{padding:7px 10px;font-size:10px}
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -941,7 +1022,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 <!-- ═══ SKUs ═══ -->
 <div class="page" id="page-skus">
   <!-- MARKETPLACE TABS -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  <div class="mp-tabs-wrap" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <div class="mp-tabs" style="display:flex;gap:0;border-bottom:2px solid var(--bd)">
       <div class="sku-mp-tab active" data-mp="" onclick="switchSKUTab(this,'')">All SKUs</div>
       <div class="sku-mp-tab" data-mp="myntra" onclick="switchSKUTab(this,'myntra')">Myntra</div>
@@ -949,7 +1030,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <div class="sku-mp-tab" data-mp="ajio-cc" onclick="switchSKUTab(this,'ajio-cc')">Ajio CC</div>
       <div class="sku-mp-tab" data-mp="amazon" onclick="switchSKUTab(this,'amazon')">Amazon</div>
     </div>
-    <div style="display:flex;gap:6px;align-items:center">
+    <div class="sku-actions-wrap" style="display:flex;gap:6px;align-items:center">
       <div class="btn bp bsm" onclick="addRow()">+ Add SKU</div>
       <div style="position:relative;display:inline-block" id="import-dropdown">
         <button class="btn bg bsm" onclick="toggleImportMenu()" style="min-width:80px">Import ▾</button>
