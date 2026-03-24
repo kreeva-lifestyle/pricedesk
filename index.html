@@ -30,6 +30,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .pt{font-size:15px;font-weight:600}
 .content{padding:22px 26px;flex:1;overflow-x:hidden}
 .page{display:none}.page.active{display:block;animation:fi .18s ease}
+#page-dashboard{padding-left:30px}
 @keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 /* BUTTONS */
 .btn{padding:7px 15px;border-radius:4px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--sans);transition:all .12s;display:inline-flex;align-items:center;gap:5px;letter-spacing:.2px}
@@ -52,6 +53,17 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+/* DASHBOARD DRAG-AND-DROP */
+.dash-block{position:relative;margin-bottom:16px;border-radius:var(--r);transition:box-shadow .2s,opacity .2s,transform .15s}
+.dash-block:last-child{margin-bottom:0}
+.dash-drag-handle{position:absolute;top:8px;left:-28px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3);cursor:grab;opacity:0;transition:opacity .2s;border-radius:4px;user-select:none;z-index:2}
+.dash-block:hover .dash-drag-handle{opacity:.6}
+.dash-drag-handle:hover{opacity:1!important;background:rgba(255,255,255,.06);color:var(--ac)}
+.dash-drag-handle:active{cursor:grabbing}
+.dash-block.dragging{opacity:.4;box-shadow:0 0 0 2px var(--ac);transform:scale(.98)}
+.dash-block.drag-over-top{box-shadow:0 -3px 0 0 var(--ac)}
+.dash-block.drag-over-bottom{box-shadow:0 3px 0 0 var(--ac)}
+.mb0{margin-bottom:0!important}
 /* STAT CARDS */
 .sc{background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:15px 17px}
 .sl{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:7px}
@@ -285,6 +297,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
   /* Content padding reduced */
   .content{padding:14px 14px}
+
+  /* Dashboard drag handles — inline on mobile */
+  #page-dashboard{padding-left:0}
+  .dash-drag-handle{position:static;display:inline-flex;width:100%;height:18px;font-size:12px;opacity:.35;justify-content:center;margin-bottom:2px}
+  .dash-block:hover .dash-drag-handle{opacity:.5}
 
   /* Grids: 4→2→1 cols */
   .g4{grid-template-columns:repeat(2,1fr);gap:10px}
@@ -665,59 +682,76 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
 <!-- ═══ DASHBOARD ═══ -->
 <div class="page active" id="page-dashboard">
-  <div class="g4 mb20">
-    <div class="sc"><div class="sl">Total SKUs</div><div class="sv" style="color:var(--bl)" id="dash-sku">0</div><div class="ss">Across all brands</div></div>
-    <div class="sc"><div class="sl">Active Brands</div><div class="sv" style="color:var(--pu)" id="dash-brands">0</div></div>
-    <div class="sc"><div class="sl">Threshold Breaches</div><div class="sv" style="color:var(--re)" id="dash-breaches">0</div><div class="ss">Not ignored</div></div>
-    <div class="sc"><div class="sl">Commission Models</div><div class="sv" style="color:var(--ac)">3</div><div class="ss">Myntra · PPMP · CC</div></div>
-  </div>
-  <div id="dash-alerts"></div>
 
-  <!-- Row 2: GST split + Category split -->
-  <div class="g2 mb16">
-    <div class="card">
-      <div class="ch"><div style="font-size:13px;font-weight:600">GST Bracket Split</div></div>
-      <div class="cb" id="dash-gst-split" style="padding:12px 17px"></div>
-    </div>
-    <div class="card">
-      <div class="ch"><div style="font-size:13px;font-weight:600">Category Breakdown</div></div>
-      <div class="cb" style="padding:0;max-height:220px;overflow-y:auto"><table class="dt" style="font-size:12px"><thead><tr><th>Category</th><th>SKUs</th><th>Avg Profit</th><th>Min</th><th>Max</th></tr></thead><tbody id="dash-cat-split"></tbody></table></div>
+  <div class="dash-block" data-dash-id="stats" draggable="true">
+    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+    <div class="g4 mb0">
+      <div class="sc"><div class="sl">Total SKUs</div><div class="sv" style="color:var(--bl)" id="dash-sku">0</div><div class="ss">Across all brands</div></div>
+      <div class="sc"><div class="sl">Active Brands</div><div class="sv" style="color:var(--pu)" id="dash-brands">0</div></div>
+      <div class="sc"><div class="sl">Threshold Breaches</div><div class="sv" style="color:var(--re)" id="dash-breaches">0</div><div class="ss">Not ignored</div></div>
+      <div class="sc"><div class="sl">Commission Models</div><div class="sv" style="color:var(--ac)">3</div><div class="ss">Myntra · PPMP · CC</div></div>
     </div>
   </div>
 
-  <!-- Row 3: Top/Bottom profit SKUs -->
-  <div class="g2 mb16">
-    <div class="card">
-      <div class="ch"><div style="font-size:13px;font-weight:600;color:var(--gr)">Top 5 Most Profitable SKUs</div></div>
-      <div class="cb" style="padding:0"><table class="dt" style="font-size:12px"><thead><tr><th>SKU</th><th>Brand</th><th>Category</th><th>SP</th><th>Profit</th></tr></thead><tbody id="dash-top5"></tbody></table></div>
-    </div>
-    <div class="card">
-      <div class="ch"><div style="font-size:13px;font-weight:600;color:var(--re)">Bottom 5 Least Profitable SKUs</div></div>
-      <div class="cb" style="padding:0"><table class="dt" style="font-size:12px"><thead><tr><th>SKU</th><th>Brand</th><th>Category</th><th>SP</th><th>Profit</th></tr></thead><tbody id="dash-bottom5"></tbody></table></div>
+  <div class="dash-block" data-dash-id="alerts" draggable="true">
+    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+    <div id="dash-alerts"></div>
+  </div>
+
+  <div class="dash-block" data-dash-id="gst-cat" draggable="true">
+    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+    <div class="g2 mb0">
+      <div class="card">
+        <div class="ch"><div style="font-size:13px;font-weight:600">GST Bracket Split</div></div>
+        <div class="cb" id="dash-gst-split" style="padding:12px 17px"></div>
+      </div>
+      <div class="card">
+        <div class="ch"><div style="font-size:13px;font-weight:600">Category Breakdown</div></div>
+        <div class="cb" style="padding:0;max-height:220px;overflow-y:auto"><table class="dt" style="font-size:12px"><thead><tr><th>Category</th><th>SKUs</th><th>Avg Profit</th><th>Min</th><th>Max</th></tr></thead><tbody id="dash-cat-split"></tbody></table></div>
+      </div>
     </div>
   </div>
 
-  <!-- Row 4: Category Profit Table -->
-  <div class="card mb16">
-    <div class="ch"><div style="font-size:13px;font-weight:600">Category Profit Summary</div></div>
-    <div class="cb" style="padding:0;overflow-x:auto"><table class="dt" style="font-size:12px;min-width:500px"><thead><tr><th>Category</th><th>SKUs</th><th>Avg Profit (₹)</th><th>Total Profit (₹)</th><th>Avg Margin %</th><th>Breaches</th><th>Health</th></tr></thead><tbody id="dash-cat-profit"></tbody></table></div>
-  </div>
-
-  <!-- Row 5: Tasks -->
-  <div class="card mb16">
-    <div class="ch"><div style="font-size:13px;font-weight:600">Team Tasks</div>
-      <button class="btn bp bxs" onclick="openAddTaskModal()">+ Add Task</button>
+  <div class="dash-block" data-dash-id="top-bottom" draggable="true">
+    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+    <div class="g2 mb0">
+      <div class="card">
+        <div class="ch"><div style="font-size:13px;font-weight:600;color:var(--gr)">Top 5 Most Profitable SKUs</div></div>
+        <div class="cb" style="padding:0"><table class="dt" style="font-size:12px"><thead><tr><th>SKU</th><th>Brand</th><th>Category</th><th>SP</th><th>Profit</th></tr></thead><tbody id="dash-top5"></tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="ch"><div style="font-size:13px;font-weight:600;color:var(--re)">Bottom 5 Least Profitable SKUs</div></div>
+        <div class="cb" style="padding:0"><table class="dt" style="font-size:12px"><thead><tr><th>SKU</th><th>Brand</th><th>Category</th><th>SP</th><th>Profit</th></tr></thead><tbody id="dash-bottom5"></tbody></table></div>
+      </div>
     </div>
-    <div id="dash-tasks" style="padding:0"></div>
   </div>
 
-  <!-- Row 6: Brand summary -->
-  <div class="ch" style="background:var(--s);border:1px solid var(--bd);border-radius:var(--r) var(--r) 0 0;padding:13px 17px">
-    <div style="font-size:13px;font-weight:600">Profit by Brand & Commission Model</div>
+  <div class="dash-block" data-dash-id="cat-profit" draggable="true">
+    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+    <div class="card mb0">
+      <div class="ch"><div style="font-size:13px;font-weight:600">Category Profit Summary</div></div>
+      <div class="cb" style="padding:0;overflow-x:auto"><table class="dt" style="font-size:12px;min-width:500px"><thead><tr><th>Category</th><th>SKUs</th><th>Avg Profit (₹)</th><th>Total Profit (₹)</th><th>Avg Margin %</th><th>Breaches</th><th>Health</th></tr></thead><tbody id="dash-cat-profit"></tbody></table></div>
+    </div>
   </div>
-  <div class="card" style="border-radius:0 0 var(--r) var(--r);border-top:none;overflow-x:auto;-webkit-overflow-scrolling:touch">
-    <table class="dt" style="min-width:600px"><thead><tr><th>Brand</th><th>Marketplace</th><th>Model</th><th>SKUs</th><th>Avg Commission</th><th>Avg Net Profit (₹)</th><th>Status</th></tr></thead><tbody id="brand-summary-body"></tbody></table>
+
+  <div class="dash-block" data-dash-id="tasks" draggable="true">
+    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+    <div class="card mb0">
+      <div class="ch"><div style="font-size:13px;font-weight:600">Team Tasks</div>
+        <button class="btn bp bxs" onclick="openAddTaskModal()">+ Add Task</button>
+      </div>
+      <div id="dash-tasks" style="padding:0"></div>
+    </div>
   </div>
+
+  <div class="dash-block" data-dash-id="brand-summary" draggable="true">
+    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+    <div class="card mb0" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <div class="ch"><div style="font-size:13px;font-weight:600">Profit by Brand & Commission Model</div></div>
+      <table class="dt" style="min-width:600px"><thead><tr><th>Brand</th><th>Marketplace</th><th>Model</th><th>SKUs</th><th>Avg Commission</th><th>Avg Net Profit (₹)</th><th>Status</th></tr></thead><tbody id="brand-summary-body"></tbody></table>
+    </div>
+  </div>
+
 </div>
 
 <!-- ═══ PRICING TABLES ═══ -->
@@ -2117,6 +2151,120 @@ function renderBrandSummary(){
     </tr>`;
   }).join('');
 }
+
+// ═══════════════════════════════════════════════════════
+// DASHBOARD DRAG-AND-DROP REORDER
+// ═══════════════════════════════════════════════════════
+const DASH_ORDER_KEY='pricedesk_dash_order';
+let _dashDragEl=null;
+
+function initDashDrag(){
+  const container=document.getElementById('page-dashboard');
+  if(!container)return;
+  // Restore saved order
+  const saved=JSON.parse(localStorage.getItem(DASH_ORDER_KEY)||'null');
+  if(saved&&Array.isArray(saved)){
+    const blocks=[...container.querySelectorAll('.dash-block')];
+    const map={};blocks.forEach(b=>map[b.dataset.dashId]=b);
+    saved.forEach(id=>{if(map[id]){container.appendChild(map[id]);delete map[id];}});
+    // Append any remaining blocks not in saved order
+    Object.values(map).forEach(b=>container.appendChild(b));
+  }
+  // Attach drag events
+  container.querySelectorAll('.dash-block').forEach(block=>{
+    const handle=block.querySelector('.dash-drag-handle');
+    // Only start drag from the handle
+    block.addEventListener('dragstart',e=>{
+      if(!e.target.closest('.dash-drag-handle')&&e.target!==handle){e.preventDefault();return;}
+      _dashDragEl=block;
+      block.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain',block.dataset.dashId);
+    });
+    block.addEventListener('dragend',()=>{
+      block.classList.remove('dragging');
+      container.querySelectorAll('.dash-block').forEach(b=>b.classList.remove('drag-over-top','drag-over-bottom'));
+      _dashDragEl=null;
+    });
+    block.addEventListener('dragover',e=>{
+      e.preventDefault();
+      if(!_dashDragEl||_dashDragEl===block)return;
+      e.dataTransfer.dropEffect='move';
+      const rect=block.getBoundingClientRect();
+      const mid=rect.top+rect.height/2;
+      block.classList.remove('drag-over-top','drag-over-bottom');
+      if(e.clientY<mid) block.classList.add('drag-over-top');
+      else block.classList.add('drag-over-bottom');
+    });
+    block.addEventListener('dragleave',()=>{
+      block.classList.remove('drag-over-top','drag-over-bottom');
+    });
+    block.addEventListener('drop',e=>{
+      e.preventDefault();
+      block.classList.remove('drag-over-top','drag-over-bottom');
+      if(!_dashDragEl||_dashDragEl===block)return;
+      const rect=block.getBoundingClientRect();
+      const mid=rect.top+rect.height/2;
+      if(e.clientY<mid) container.insertBefore(_dashDragEl,block);
+      else container.insertBefore(_dashDragEl,block.nextSibling);
+      saveDashOrder();
+    });
+    // Prevent drag when clicking inside content (buttons, links, inputs)
+    handle.addEventListener('mousedown',()=>{block.setAttribute('draggable','true');});
+    block.addEventListener('mousedown',e=>{
+      if(!e.target.closest('.dash-drag-handle')) block.setAttribute('draggable','false');
+    });
+  });
+  // Touch support for mobile
+  let _touchBlock=null,_touchClone=null,_touchStartY=0;
+  container.querySelectorAll('.dash-drag-handle').forEach(handle=>{
+    handle.addEventListener('touchstart',e=>{
+      _touchBlock=handle.closest('.dash-block');
+      _touchStartY=e.touches[0].clientY;
+      _touchBlock.classList.add('dragging');
+      e.preventDefault();
+    },{passive:false});
+  });
+  document.addEventListener('touchmove',e=>{
+    if(!_touchBlock)return;
+    e.preventDefault();
+    const ty=e.touches[0].clientY;
+    const blocks=[...container.querySelectorAll('.dash-block')];
+    blocks.forEach(b=>b.classList.remove('drag-over-top','drag-over-bottom'));
+    for(const b of blocks){
+      if(b===_touchBlock)continue;
+      const rect=b.getBoundingClientRect();
+      if(ty>=rect.top&&ty<=rect.bottom){
+        const mid=rect.top+rect.height/2;
+        if(ty<mid) b.classList.add('drag-over-top');
+        else b.classList.add('drag-over-bottom');
+        break;
+      }
+    }
+  },{passive:false});
+  document.addEventListener('touchend',()=>{
+    if(!_touchBlock)return;
+    const blocks=[...container.querySelectorAll('.dash-block')];
+    const over=blocks.find(b=>b.classList.contains('drag-over-top')||b.classList.contains('drag-over-bottom'));
+    if(over&&over!==_touchBlock){
+      if(over.classList.contains('drag-over-top')) container.insertBefore(_touchBlock,over);
+      else container.insertBefore(_touchBlock,over.nextSibling);
+      saveDashOrder();
+    }
+    blocks.forEach(b=>b.classList.remove('drag-over-top','drag-over-bottom'));
+    _touchBlock.classList.remove('dragging');
+    _touchBlock=null;
+  });
+}
+
+function saveDashOrder(){
+  const container=document.getElementById('page-dashboard');
+  const order=[...container.querySelectorAll('.dash-block')].map(b=>b.dataset.dashId);
+  localStorage.setItem(DASH_ORDER_KEY,JSON.stringify(order));
+}
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded',()=>setTimeout(initDashDrag,100));
 
 function renderDashboardWidgets(){
   if(!skuDB.length) return;
