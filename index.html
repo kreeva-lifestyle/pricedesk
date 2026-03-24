@@ -323,9 +323,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 
   /* SKU sheet: horizontal scroll */
   .ss-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .ss{min-width:1050px}
+  .ss{min-width:1150px}
   .ss th,.ss td{padding:5px 6px;font-size:11px}
-  .ss th:nth-child(n+8),.ss td:nth-child(n+8){min-width:70px}
+  .ss th:nth-child(n+9),.ss td:nth-child(n+9){min-width:70px}
 
   /* Global search: compact on mobile */
   #global-search{width:140px!important;font-size:11px!important;padding:5px 10px 5px 24px!important}
@@ -983,12 +983,13 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="st" id="sku-count"></div>
   </div>
   <div class="ss-wrap">
-    <table class="ss" style="width:100%;min-width:1050px">
+    <table class="ss" style="width:100%;min-width:1150px">
       <colgroup>
         <col style="width:36px"><!-- Img -->
         <col style="width:100px"><!-- SKU -->
         <col style="width:90px"><!-- Style ID -->
-        <col style="width:120px"><!-- Category -->
+        <col style="width:95px"><!-- Category -->
+        <col style="width:120px"><!-- Tags -->
         <col style="width:80px"><!-- Cost -->
         <col style="width:75px"><!-- Markup -->
         <col style="width:80px"><!-- Discount -->
@@ -1002,6 +1003,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         <th class="sortable" onclick="sortSKUs('sku')" data-sort="sku">SKU <span class="sort-arrow" id="sort-sku"></span></th>
         <th class="sortable" onclick="sortSKUs('styleId')" data-sort="styleId">Style ID <span class="sort-arrow" id="sort-styleId"></span></th>
         <th class="sortable" onclick="sortSKUs('category')" data-sort="category">Category <span class="sort-arrow" id="sort-category"></span></th>
+        <th>Tags</th>
         <th class="sortable" onclick="sortSKUs('cost')" data-sort="cost">Cost ₹ <span class="sort-arrow" id="sort-cost"></span></th>
         <th class="sortable" onclick="sortSKUs('markup')" data-sort="markup">Markup % <span class="sort-arrow" id="sort-markup"></span></th>
         <th class="sortable" onclick="sortSKUs('discount')" data-sort="discount">Discount % <span class="sort-arrow" id="sort-discount"></span></th>
@@ -2610,7 +2612,8 @@ function renderSKUs(){
       <td><div data-sku-img="${escAttr(s.id)}" onclick="openImgModal('${escAttr(s.id)}')" style="cursor:pointer" title="Set product image">${s.img?`<img src="${esc(fixImg(s.img))}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">+</div>`}</div></td>
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
       <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}</td>
-      <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span>${!s.img?'<span class="sku-tag" style="background:rgba(255,59,48,.12);color:var(--re);border-color:rgba(255,59,48,.25)">No Image</span>':''}${!s.styleId?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
+      <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
+      <td style="line-height:1.6">${!s.img?'<span class="sku-tag" style="background:rgba(255,59,48,.12);color:var(--re);border-color:rgba(255,59,48,.25)">No Image</span>':''}${!s.styleId?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
       <td class="mono">${s.discount||0}%</td>
