@@ -2157,6 +2157,7 @@ function renderBrandSummary(){
 // ═══════════════════════════════════════════════════════
 const DASH_ORDER_KEY='pricedesk_dash_order';
 let _dashDragEl=null;
+let _dashHandleActive=false;
 
 function initDashDrag(){
   const container=document.getElementById('page-dashboard');
@@ -2167,15 +2168,26 @@ function initDashDrag(){
     const blocks=[...container.querySelectorAll('.dash-block')];
     const map={};blocks.forEach(b=>map[b.dataset.dashId]=b);
     saved.forEach(id=>{if(map[id]){container.appendChild(map[id]);delete map[id];}});
-    // Append any remaining blocks not in saved order
     Object.values(map).forEach(b=>container.appendChild(b));
   }
-  // Attach drag events
+  // All blocks start as not draggable — only the handle enables it
   container.querySelectorAll('.dash-block').forEach(block=>{
+    block.setAttribute('draggable','false');
     const handle=block.querySelector('.dash-drag-handle');
-    // Only start drag from the handle
+    // Handle mousedown enables drag on this block
+    handle.addEventListener('mousedown',()=>{
+      _dashHandleActive=true;
+      block.setAttribute('draggable','true');
+    });
+    // Any non-handle mousedown keeps it non-draggable
+    block.addEventListener('mousedown',e=>{
+      if(!e.target.closest('.dash-drag-handle')){
+        _dashHandleActive=false;
+        block.setAttribute('draggable','false');
+      }
+    });
     block.addEventListener('dragstart',e=>{
-      if(!e.target.closest('.dash-drag-handle')&&e.target!==handle){e.preventDefault();return;}
+      if(!_dashHandleActive){e.preventDefault();return;}
       _dashDragEl=block;
       block.classList.add('dragging');
       e.dataTransfer.effectAllowed='move';
@@ -2183,6 +2195,8 @@ function initDashDrag(){
     });
     block.addEventListener('dragend',()=>{
       block.classList.remove('dragging');
+      block.setAttribute('draggable','false');
+      _dashHandleActive=false;
       container.querySelectorAll('.dash-block').forEach(b=>b.classList.remove('drag-over-top','drag-over-bottom'));
       _dashDragEl=null;
     });
@@ -2208,11 +2222,6 @@ function initDashDrag(){
       if(e.clientY<mid) container.insertBefore(_dashDragEl,block);
       else container.insertBefore(_dashDragEl,block.nextSibling);
       saveDashOrder();
-    });
-    // Prevent drag when clicking inside content (buttons, links, inputs)
-    handle.addEventListener('mousedown',()=>{block.setAttribute('draggable','true');});
-    block.addEventListener('mousedown',e=>{
-      if(!e.target.closest('.dash-drag-handle')) block.setAttribute('draggable','false');
     });
   });
   // Touch support for mobile
