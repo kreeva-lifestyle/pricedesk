@@ -161,6 +161,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .active-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .af-chip{background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3);border-radius:12px;padding:2px 9px;font-size:11px;color:var(--ac);cursor:pointer;display:flex;align-items:center;gap:4px}
 .gs-item:hover,.gs-active{background:var(--s2)!important}
+.sortable{cursor:pointer;user-select:none;white-space:nowrap}.sortable:hover{color:var(--ac)}
+.sort-arrow{font-size:10px;color:var(--tx3);margin-left:2px}.sort-arrow.asc::after{content:'▲';color:var(--ac)}.sort-arrow.desc::after{content:'▼';color:var(--ac)}
 .af-chip:hover{background:rgba(245,166,35,.2)}
 /* BRAND CARD */
 .brand-card{background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:15px;transition:border-color .12s}
@@ -957,15 +959,15 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       </colgroup>
       <thead><tr>
         <th>Img</th>
-        <th>SKU</th>
-        <th>Style ID</th>
-        <th>Category</th>
-        <th>Cost ₹</th>
-        <th>Markup %</th>
-        <th>Discount %</th>
-        <th>Selling Price</th>
-        <th>Net Profit</th>
-        <th>If Delivered</th>
+        <th class="sortable" onclick="sortSKUs('sku')" data-sort="sku">SKU <span class="sort-arrow" id="sort-sku"></span></th>
+        <th class="sortable" onclick="sortSKUs('styleId')" data-sort="styleId">Style ID <span class="sort-arrow" id="sort-styleId"></span></th>
+        <th class="sortable" onclick="sortSKUs('category')" data-sort="category">Category <span class="sort-arrow" id="sort-category"></span></th>
+        <th class="sortable" onclick="sortSKUs('cost')" data-sort="cost">Cost ₹ <span class="sort-arrow" id="sort-cost"></span></th>
+        <th class="sortable" onclick="sortSKUs('markup')" data-sort="markup">Markup % <span class="sort-arrow" id="sort-markup"></span></th>
+        <th class="sortable" onclick="sortSKUs('discount')" data-sort="discount">Discount % <span class="sort-arrow" id="sort-discount"></span></th>
+        <th class="sortable" onclick="sortSKUs('sp')" data-sort="sp">Selling Price <span class="sort-arrow" id="sort-sp"></span></th>
+        <th class="sortable" onclick="sortSKUs('profit')" data-sort="profit">Net Profit <span class="sort-arrow" id="sort-profit"></span></th>
+        <th class="sortable" onclick="sortSKUs('ifDelivered')" data-sort="ifDelivered">If Delivered <span class="sort-arrow" id="sort-ifDelivered"></span></th>
         <th>Actions</th>
       </tr></thead>
       <tbody id="sku-body"></tbody>
@@ -2284,13 +2286,50 @@ function populateFilters(){
   });
 }
 
+// ── SKU Sorting ──
+let _skuSortCol=''; // current sort column key
+let _skuSortDir=''; // 'asc' or 'desc'
+
+function sortSKUs(col){
+  if(_skuSortCol===col){
+    _skuSortDir=_skuSortDir==='asc'?'desc':_skuSortDir==='desc'?'':'asc';
+    if(!_skuSortDir) _skuSortCol='';
+  } else {
+    _skuSortCol=col;_skuSortDir='asc';
+  }
+  // Update sort arrow indicators
+  document.querySelectorAll('.sort-arrow').forEach(a=>{a.className='sort-arrow';});
+  if(_skuSortCol&&_skuSortDir){
+    const arrow=el('sort-'+_skuSortCol);
+    if(arrow) arrow.className='sort-arrow '+_skuSortDir;
+  }
+  _skuPage=1;
+  renderSKUs();
+}
+
+function applySKUSort(list){
+  if(!_skuSortCol||!_skuSortDir) return list;
+  const sorted=[...list];
+  const dir=_skuSortDir==='asc'?1:-1;
+  sorted.sort((a,b)=>{
+    let va,vb;
+    if(_skuSortCol==='sp'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.sp;vb=cb.sp;}
+    else if(_skuSortCol==='profit'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.profitRs;vb=cb.profitRs;}
+    else if(_skuSortCol==='ifDelivered'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.ifDelivered;vb=cb.ifDelivered;}
+    else{va=a[_skuSortCol];vb=b[_skuSortCol];}
+    if(typeof va==='string'&&typeof vb==='string') return va.localeCompare(vb)*dir;
+    return ((va||0)-(vb||0))*dir;
+  });
+  return sorted;
+}
+
 function filteredSKUs(){
   const q=(el('f-search')?.value||'').toLowerCase();
   const fBrand=el('f-brand')?.value||'';
   const fCat=el('f-cat')?.value||'';
   const fStatus=el('f-status')?.value||'';
   const fTag=el('f-tag')?.value||'';
-  return skuDB.filter(s=>{
+  let result=skuDB.filter(s=>{
     if(q&&!s.styleId.toLowerCase().includes(q)&&!(s.sku||'').toLowerCase().includes(q))return false;
     if(fBrand&&s.brandId!==fBrand)return false;
     if(fCat&&s.category!==fCat)return false;
@@ -2308,6 +2347,7 @@ function filteredSKUs(){
     }
     return true;
   });
+  return applySKUSort(result);
 }
 
 function renderActiveFilterChips(){
@@ -2460,7 +2500,7 @@ function renderNewRow(){
   const catOpts=CATS.map(c=>`<option>${c}</option>`).join('');
   return`<tr class="er" id="er-new">
     <td><div onclick="openImgModal('new')" style="cursor:pointer;width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div></td>
-    <td><input class="si" id="n-sku" placeholder="SKU code" style="width:80px"></td>
+    <td><input class="si" id="n-sku" placeholder="SKU *" style="width:80px" required></td>
     <td><input class="si" id="n-sid" placeholder="Style ID" style="width:90px"></td>
     <td>
       <select class="sse" id="n-cat" onchange="onCatSelectChange('n')">${catOpts}</select>
@@ -2529,9 +2569,12 @@ function cancelEdit(){editId=null;newImg='';renderSKUs();}
 
 function saveNew(){
   const skuCode=el('n-sku')?.value.trim()||'';
-  const sid=el('n-sid')?.value.trim(),cat=el('n-cat')?.value;
+  const sid=el('n-sid')?.value.trim()||'';
+  const cat=el('n-cat')?.value;
   const cost=parseFloat(el('n-cost')?.value)||0,mkp=parseFloat(el('n-mkp')?.value)||0,disc=parseFloat(el('n-disc')?.value)||0;
   const lvl=CAT_LEVEL[cat]||'Level 2';
+  if(!skuCode){toast('SKU code is mandatory','red');return;}
+  if(!cat){toast('Category is required','red');return;}
   if(!cost||cost<=0){toast('Enter a valid cost price','red');return;}
   if(!mkp||mkp<=0){toast('Enter markup % (must be greater than 0)','red');return;}
   // Get all selected brands
@@ -3197,15 +3240,35 @@ function toast(msg,type){
 
 function dlTemplate(){
   if(typeof XLSX==='undefined'){toast('SheetJS loading…','red');return;}
+  // Dynamic brand list: "BrandName — Marketplace"
+  const brandList=brands.map(b=>{
+    const mpLabels={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
+    return b.name+' — '+(mpLabels[b.model]||b.model);
+  });
+  const catList=[...CATS];
+  const wb=XLSX.utils.book_new();
+  // Reference sheet with brand & category lists (for dropdown validation)
+  const refData=[['Brands','Categories']];
+  const maxLen=Math.max(brandList.length,catList.length);
+  for(let i=0;i<maxLen;i++) refData.push([brandList[i]||'',catList[i]||'']);
+  const wsRef=XLSX.utils.aoa_to_sheet(refData);
+  wsRef['!cols']=[{wch:40},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,wsRef,'_Lookups');
+  // Main template sheet
   const ws=XLSX.utils.aoa_to_sheet([
-    ['STYLE_ID*','BRAND_NAME*','CATEGORY*','COST_PRICE*','MARKUP_PCT*','DISCOUNT','IMAGE_URL'],
-    ['SP39-ORANGE-M','Fusionic — Myntra','Kurta Sets',950,78,55,''],
-    ['TF-202','Fusionic — Ajio PPMP, Fusionic — Ajio CC','Lehenga Choli',1650,81,50,''],
-    ['NKB55-WINE-XS','Fusionic — Ajio CC','Kurta Sets',1250,60,45,''],
-    ['LNB1228-RED','LNB — Amazon','Lehenga Choli',1000,100,0,'']
+    ['SKU*','BRAND_NAME*','CATEGORY*','COST_PRICE*','MARKUP_PCT*','DISCOUNT*','STYLE_ID','IMAGE_URL'],
+    ['SP39-ORANGE-M',brandList[0]||'',catList[0]||'',950,78,55,'SP39-STYLE',''],
+    ['TF-202',brandList[1]||brandList[0]||'',catList[1]||catList[0]||'',1650,81,50,'',''],
   ]);
-  ws['!cols']=[{wch:18},{wch:40},{wch:16},{wch:12},{wch:12},{wch:12},{wch:50}];
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'SKUs');
+  ws['!cols']=[{wch:18},{wch:40},{wch:16},{wch:12},{wch:12},{wch:12},{wch:16},{wch:50}];
+  // Add data validation dropdowns for BRAND_NAME (col B) and CATEGORY (col C)
+  const brandFormula=`'_Lookups'!$A$2:$A$${brandList.length+1}`;
+  const catFormula=`'_Lookups'!$B$2:$B$${catList.length+1}`;
+  ws['!dataValidation']=[
+    {sqref:'B2:B9999',type:'list',formula1:brandFormula,showErrorMessage:true,errorTitle:'Invalid Brand',error:'Pick a brand from the dropdown list.'},
+    {sqref:'C2:C9999',type:'list',formula1:catFormula,showErrorMessage:true,errorTitle:'Invalid Category',error:'Pick a category from the dropdown list.'}
+  ];
+  XLSX.utils.book_append_sheet(wb,ws,'SKUs');
   XLSX.writeFile(wb,'PriceDesk_SKU_Template.xlsx');toast('✓ Template downloaded','green');
 }
 
@@ -3254,35 +3317,58 @@ function previewImport(input){
         rows=raw.map(r=>{const n={};Object.keys(r).forEach(k=>n[k.trim().toUpperCase()]=String(r[k]));return n;});
       }
       // Validate and map — supports new + update + multi-brand
+      // Helper: match brand by "Name — Marketplace" format or just name
+      const mpLabels={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
+      function matchBrand(raw){
+        if(!raw)return null;
+        const lower=raw.toLowerCase();
+        // Try exact "Name — Marketplace" match first
+        const found=brands.find(b=>{
+          const full=(b.name+' — '+(mpLabels[b.model]||b.model)).toLowerCase();
+          return full===lower;
+        });
+        if(found)return found;
+        // Fallback: match by name only
+        return brands.find(b=>b.name.toLowerCase()===lower)||null;
+      }
       importRows=[];importUpdates=[];const errors=[];const preview=[];const previewUpdates=[];
       rows.forEach((r,i)=>{
-        const sid=(r['STYLE_ID']||r['STYLE ID']||r['SKU_CODE']||'').trim();
-        const bnameRaw=(r['BRAND_NAME']||r['BRAND']||'').trim();
-        const cat=(r['CATEGORY']||'').trim();
-        const costRaw=r['COST_PRICE']||r['COST']||r['COST (₹)']||'';
-        const mkpRaw=r['MARKUP_PCT']||r['MARKUP']||r['MARKUP %']||'';
-        const discRaw=r['DISCOUNT']||r['DISCOUNT_PCT']||'';
+        const skuCode=(r['SKU']||r['SKU*']||r['SKU_CODE']||'').trim();
+        const sid=(r['STYLE_ID']||r['STYLE ID']||'').trim();
+        const bnameRaw=(r['BRAND_NAME']||r['BRAND_NAME*']||r['BRAND']||'').trim();
+        const cat=(r['CATEGORY']||r['CATEGORY*']||'').trim();
+        const costRaw=r['COST_PRICE']||r['COST_PRICE*']||r['COST']||r['COST (₹)']||'';
+        const mkpRaw=r['MARKUP_PCT']||r['MARKUP_PCT*']||r['MARKUP']||r['MARKUP %']||'';
+        const discRaw=r['DISCOUNT']||r['DISCOUNT*']||r['DISCOUNT_PCT']||'';
         const img=(r['IMAGE_URL']||r['IMAGE URL']||'').trim();
-        if(!sid){errors.push(`Row ${i+2}: Missing Style ID`);return;}
+        // SKU is mandatory
+        if(!skuCode){errors.push(`Row ${i+2}: Missing SKU (mandatory)`);return;}
+        // Brand is mandatory
+        if(!bnameRaw){errors.push(`Row ${i+2} (${skuCode}): Missing Brand Name`);return;}
+        // Category is mandatory
+        if(!cat){errors.push(`Row ${i+2} (${skuCode}): Missing Category`);return;}
+        if(!CATS.includes(cat)){errors.push(`Row ${i+2} (${skuCode}): Unknown category "${cat}"`);return;}
 
-        // Check if this is an update to existing SKU(s)
-        const existing=skuDB.filter(x=>x.styleId===sid);
+        // Check if this is an update to existing SKU(s) — match by SKU code
+        const existing=skuDB.filter(x=>x.sku===skuCode);
         if(existing.length>0){
           // UPDATE mode — only overwrite non-blank fields
           const changes={};
           if(bnameRaw){
-            const brand=brands.find(b=>b.name.toLowerCase()===bnameRaw.toLowerCase());
+            const brand=matchBrand(bnameRaw);
             if(brand) changes.brandId=brand.id;
+            else{errors.push(`Row ${i+2} (${skuCode}): Unknown brand "${bnameRaw}"`);return;}
           }
           if(cat && CATS.includes(cat)) changes.category=cat;
           if(costRaw && parseFloat(costRaw)>0) changes.cost=parseFloat(costRaw);
           if(mkpRaw && parseFloat(mkpRaw)>=0) changes.markup=parseFloat(mkpRaw);
           if(discRaw!=='' && !isNaN(parseFloat(discRaw))) changes.discount=parseFloat(discRaw);
           if(img) changes.img=img;
+          if(sid) changes.styleId=sid;
           if(Object.keys(changes).length>0){
             existing.forEach(ex=>{importUpdates.push({id:ex.id, changes});});
             const changedFields=Object.keys(changes).join(', ');
-            previewUpdates.push({sid, count:existing.length, fields:changedFields});
+            previewUpdates.push({sid:skuCode, count:existing.length, fields:changedFields});
           }
           return;
         }
@@ -3291,16 +3377,19 @@ function previewImport(input){
         const cost=parseFloat(costRaw)||0;
         const mkp=parseFloat(mkpRaw)||0;
         const disc=parseFloat(discRaw)||0;
-        if(!cost||cost<=0){errors.push(`Row ${i+2} (${sid}): Missing/invalid cost`);return;}
+        if(!cost||cost<=0){errors.push(`Row ${i+2} (${skuCode}): Missing/invalid cost`);return;}
+        if(mkp<0){errors.push(`Row ${i+2} (${skuCode}): Invalid markup`);return;}
 
         // Support multiple brands (comma-separated)
-        const brandNames=bnameRaw?bnameRaw.split(',').map(b=>b.trim()).filter(Boolean):[''];
+        const brandNames=bnameRaw?bnameRaw.split(',').map(b=>b.trim()).filter(Boolean):[];
+        if(!brandNames.length){errors.push(`Row ${i+2} (${skuCode}): No brand specified`);return;}
         brandNames.forEach((bname,bi)=>{
-          const brand=brands.find(b=>b.name.toLowerCase()===bname.toLowerCase())||brands[0];
+          const brand=matchBrand(bname);
+          if(!brand){errors.push(`Row ${i+2} (${skuCode}): Unknown brand "${bname}"`);return;}
           const validCat=CATS.includes(cat)?cat:CATS[0];
-          const level=(brand?.model==='myntra'&&CAT_LEVEL[validCat])?CAT_LEVEL[validCat]:'Level 2';
-          importRows.push({id:'s'+Date.now()+i+'_'+bi,styleId:sid,brandId:brand?.id||brands[0]?.id,category:validCat,level,cost,markup:mkp||0,discount:disc||0,img,ignoreThreshold:false});
-          preview.push({sid,brand:brand?.name||bname,cat:validCat,cost,mkp,disc});
+          const level=(brand.model==='myntra'&&CAT_LEVEL[validCat])?CAT_LEVEL[validCat]:'Level 2';
+          importRows.push({id:'s'+Date.now()+i+'_'+bi,sku:skuCode,styleId:sid||'',brandId:brand.id,category:validCat,level,cost,markup:mkp||0,discount:disc||0,img,ignoreThreshold:false});
+          preview.push({sku:skuCode,sid,brand:brand.name,cat:validCat,cost,mkp,disc});
         });
       });
       // Show preview
@@ -3308,8 +3397,8 @@ function previewImport(input){
       let html='';
       if(preview.length){
         html+=`<div class="success" style="margin-bottom:10px">✓ ${preview.length} new SKU${preview.length>1?'s':''} to add</div>`;
-        html+=`<div style="overflow-x:auto;max-height:150px;overflow-y:auto"><table class="dt" style="font-size:11px"><thead><tr><th>Style ID</th><th>Brand</th><th>Category</th><th>Cost</th><th>Markup%</th><th>Discount%</th></tr></thead><tbody>`;
-        html+=preview.slice(0,20).map(p=>`<tr><td class="mono">${p.sid}</td><td>${esc(p.brand)}</td><td>${p.cat}</td><td class="mono">₹${p.cost}</td><td class="mono">${p.mkp}%</td><td class="mono">${p.disc||0}%</td></tr>`).join('');
+        html+=`<div style="overflow-x:auto;max-height:150px;overflow-y:auto"><table class="dt" style="font-size:11px"><thead><tr><th>SKU</th><th>Brand</th><th>Category</th><th>Cost</th><th>Markup%</th><th>Discount%</th></tr></thead><tbody>`;
+        html+=preview.slice(0,20).map(p=>`<tr><td class="mono">${esc(p.sku)}</td><td>${esc(p.brand)}</td><td>${p.cat}</td><td class="mono">₹${p.cost}</td><td class="mono">${p.mkp}%</td><td class="mono">${p.disc||0}%</td></tr>`).join('');
         if(preview.length>20)html+=`<tr><td colspan="6" class="st" style="text-align:center">…and ${preview.length-20} more</td></tr>`;
         html+='</tbody></table></div>';
       }
@@ -4345,13 +4434,13 @@ function exportSKUsToExcel(){
     const wb = XLSX.utils.book_new();
 
     // Sheet 1: Full detail (read-only report)
-    const rows = [['Style ID','Brand','Marketplace','Model','Category','Cost (₹)','Markup %','Discount %','MRP (₹)','SP (₹)','GST %','Commission %','Commission (₹)','Net Payout (₹)','Net Profit (₹)','Net Profit %','Threshold (₹)','Threshold Status','Ignore Threshold','Image URL']];
+    const rows = [['SKU','Style ID','Brand','Marketplace','Model','Category','Cost (₹)','Markup %','Discount %','MRP (₹)','SP (₹)','GST %','Commission %','Commission (₹)','Net Payout (₹)','Net Profit (₹)','Net Profit %','Threshold (₹)','Threshold Status','Ignore Threshold','Image URL']];
     skuDB.forEach(s=>{
       const c = calcSKU(s);
       const brand = brands.find(b=>b.id===s.brandId)||{name:'—',marketplace:'—',model:'—'};
       const commAmt = c.sp&&c.comm ? (c.sp * c.comm / 100).toFixed(0) : '0';
       rows.push([
-        s.styleId||'', brand.name||'—', brand.marketplace||'—', modelLabels[brand.model]||brand.model||'—',
+        s.sku||'', s.styleId||'', brand.name||'—', brand.marketplace||'—', modelLabels[brand.model]||brand.model||'—',
         s.category||'', s.cost||0, s.markup||0, s.discount||0,
         c.mrp||0, c.sp||0, (autoGST(c.sp||0)*100).toFixed(0)+'%',
         (c.comm||0)+'%', commAmt,
@@ -4363,17 +4452,18 @@ function exportSKUsToExcel(){
       ]);
     });
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [14,22,12,12,16,10,10,10,10,10,8,12,14,14,14,12,12,16,12,50].map(w=>({wch:w}));
+    ws['!cols'] = [14,14,22,12,12,16,10,10,10,10,10,8,12,14,14,14,12,12,16,12,50].map(w=>({wch:w}));
     XLSX.utils.book_append_sheet(wb, ws, 'SKUs');
 
-    // Sheet 2: Editable sheet (re-importable) — only editable columns
-    const editRows = [['STYLE_ID','BRAND_NAME','CATEGORY','COST_PRICE','MARKUP_PCT','DISCOUNT','IMAGE_URL']];
+    // Sheet 2: Editable sheet (re-importable) — matches template format
+    const editRows = [['SKU','BRAND_NAME','CATEGORY','COST_PRICE','MARKUP_PCT','DISCOUNT','STYLE_ID','IMAGE_URL']];
     skuDB.forEach(s=>{
-      const brand = brands.find(b=>b.id===s.brandId)||{name:''};
-      editRows.push([s.styleId||'', brand.name||'', s.category||'', s.cost||0, s.markup||0, s.discount||0, s.img||'']);
+      const brand = brands.find(b=>b.id===s.brandId);
+      const brandLabel = brand ? brand.name+' — '+(modelLabels[brand.model]||brand.model) : '';
+      editRows.push([s.sku||'', brandLabel, s.category||'', s.cost||0, s.markup||0, s.discount||0, s.styleId||'', s.img||'']);
     });
     const wsEdit = XLSX.utils.aoa_to_sheet(editRows);
-    wsEdit['!cols'] = [{wch:18},{wch:30},{wch:16},{wch:12},{wch:12},{wch:12},{wch:50}];
+    wsEdit['!cols'] = [{wch:18},{wch:40},{wch:16},{wch:12},{wch:12},{wch:12},{wch:16},{wch:50}];
     XLSX.utils.book_append_sheet(wb, wsEdit, 'Edit & Re-Import');
 
     // Sheet 3: Brand Summary
