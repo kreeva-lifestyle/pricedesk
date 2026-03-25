@@ -4188,6 +4188,19 @@ function loadAlertSettingsUI(){
     const match=opts.find(o=>o.value===ALERT_SETTINGS.frequency);
     if(match) freqSelect.value=match.value;
   }
+  // Update EmailJS status box
+  const statusBox=document.getElementById('email-status-box');
+  if(statusBox){
+    if(emailReady()){
+      statusBox.textContent='✓ EmailJS connected — alerts will be sent';
+      statusBox.style.color='var(--gr)';
+      statusBox.style.borderColor='rgba(45,212,160,.3)';
+    } else if(ALERT_SETTINGS.email){
+      statusBox.textContent='⚠ EmailJS not configured — alerts will log to console. Set up EmailJS in Settings to enable email alerts.';
+      statusBox.style.color='var(--ac)';
+      statusBox.style.borderColor='rgba(245,166,35,.3)';
+    }
+  }
 }
 
 
