@@ -1098,7 +1098,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <tbody id="sku-body"></tbody>
     </table>
   </div>
-  <div id="sku-pagination" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding:8px"></div>
+  <div id="sku-pagination" style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:8px;flex-wrap:wrap"></div>
 </div>
 
 <!-- ═══ WIREFRAME ═══ -->
@@ -5646,18 +5646,23 @@ function getPageSize(){ return SKU_PAGE_SIZE_USER||25; }
 let _skuPage = 1;
 function renderSKUPagination(total){
   const pgEl=el('sku-pagination');if(!pgEl)return;
-  const pages=Math.ceil(total/getPageSize());
-  if(pages<=1){pgEl.innerHTML='';return;}
+  const ps=getPageSize();
+  const pages=Math.ceil(total/ps);
+  if(pages<=1&&total<=15){pgEl.innerHTML='';return;}
   if(_skuPage>pages)_skuPage=pages;
-  let h=`<button class="btn bg bxs" onclick="_skuPage=1;renderSKUs()" ${_skuPage===1?'disabled':''}>&laquo;</button>`;
-  h+=`<button class="btn bg bxs" onclick="_skuPage=Math.max(1,_skuPage-1);renderSKUs()" ${_skuPage===1?'disabled':''}>&lsaquo;</button>`;
-  const start=Math.max(1,_skuPage-2),end=Math.min(pages,_skuPage+2);
-  for(let p=start;p<=end;p++){
-    h+=`<button class="btn ${p===_skuPage?'bp':'bg'} bxs" onclick="_skuPage=${p};renderSKUs()">${p}</button>`;
+  let h='';
+  if(pages>1){
+    h+=`<button class="btn bg bxs" onclick="_skuPage=1;renderSKUs()" ${_skuPage===1?'disabled':''}>&laquo;</button>`;
+    h+=`<button class="btn bg bxs" onclick="_skuPage=Math.max(1,_skuPage-1);renderSKUs()" ${_skuPage===1?'disabled':''}>&lsaquo;</button>`;
+    const start=Math.max(1,_skuPage-2),end=Math.min(pages,_skuPage+2);
+    for(let p=start;p<=end;p++){
+      h+=`<button class="btn ${p===_skuPage?'bp':'bg'} bxs" onclick="_skuPage=${p};renderSKUs()">${p}</button>`;
+    }
+    h+=`<button class="btn bg bxs" onclick="_skuPage=Math.min(${pages},_skuPage+1);renderSKUs()" ${_skuPage===pages?'disabled':''}>&rsaquo;</button>`;
+    h+=`<button class="btn bg bxs" onclick="_skuPage=${pages};renderSKUs()" ${_skuPage===pages?'disabled':''}>&raquo;</button>`;
+    h+=`<span class="st" style="margin-left:8px">Page ${_skuPage} of ${pages}</span>`;
   }
-  h+=`<button class="btn bg bxs" onclick="_skuPage=Math.min(${pages},_skuPage+1);renderSKUs()" ${_skuPage===pages?'disabled':''}>&rsaquo;</button>`;
-  h+=`<button class="btn bg bxs" onclick="_skuPage=${pages};renderSKUs()" ${_skuPage===pages?'disabled':''}>&raquo;</button>`;
-  h+=`<span class="st" style="margin-left:8px">Page ${_skuPage} of ${pages}</span>`;
+  h+=`<span style="margin-left:auto;display:flex;align-items:center;gap:6px"><span class="st">Show</span><select class="filter-select" style="min-width:0;width:auto;padding:4px 8px;font-size:12px" onchange="SKU_PAGE_SIZE_USER=parseInt(this.value);_skuPage=1;saveUserPref('pageSize',this.value);renderSKUs()">${[15,25,50,100].map(n=>`<option value="${n}" ${ps===n?'selected':''}>${n}</option>`).join('')}</select><span class="st">per page</span></span>`;
   pgEl.innerHTML=h;
 }
 
