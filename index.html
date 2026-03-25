@@ -944,7 +944,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   </div>
   <div id="comm-myntra">
     <div class="success mb12">Myntra charges by <strong>category + selling price slab</strong>. Set the <strong>level</strong> per category for logistics, edit commission cells, and Save.</div>
-    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Commission % — Category × Price Slab × Level</div><button class="btn bp bsm" onclick="saveComm()">✓ Save & Apply</button></div>
+    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Commission % — Category × Price Slab × Level</div><div class="flex gap8"><button class="btn bg bsm" onclick="openAddCategoryModal()">+ Add Category</button><button class="btn bp bsm" onclick="saveComm()">✓ Save & Apply</button></div></div>
     <div style="padding:0;overflow-x:auto"><table class="comm-table" id="comm-myntra-table"></table></div></div>
   </div>
   <div id="comm-ajio" style="display:none">
@@ -1457,6 +1457,7 @@ const DB_KEYS = {
   comm_ppmp:      'pd_comm_ajio_ppmp',
   comm_cc:        'pd_comm_ajio_cc',
   comm_amazon:    'pd_comm_amazon',
+  categories:     'pd_categories',
   cat_levels:     'pd_cat_levels',
   logistics:      'pd_logistics',
   wireframe:      'pd_wireframe',
@@ -1586,6 +1587,7 @@ async function save(type){
     brands:      brands,
     users:       users,
     thresholds:  THRESHOLDS,
+    categories:  CATS,
     cat_levels:  CAT_LEVEL,
     comm_myntra: COMM_MYNTRA,
     comm_ppmp:   COMM_AJIO_PPMP,
@@ -1621,6 +1623,7 @@ async function loadFromStorage(){
     if(loaded.brands)      brands          = loaded.brands;
     if(loaded.thresholds)  THRESHOLDS      = loaded.thresholds;
     if(loaded.alert)       ALERT_SETTINGS  = loaded.alert;
+    if(loaded.categories)  CATS            = loaded.categories;
     if(loaded.cat_levels)  CAT_LEVEL       = loaded.cat_levels;
     if(loaded.comm_myntra) COMM_MYNTRA     = loaded.comm_myntra;
     if(loaded.comm_ppmp)   COMM_AJIO_PPMP  = loaded.comm_ppmp;
@@ -1767,7 +1770,7 @@ let CAT_LEVEL = {
   'Tops':           'Level 1',
   'Dresses':        'Level 1',
 };
-const CATS=['Kurta Sets','Lehenga Choli','Ethnic Dresses','Sarees','Co-Ords','Jumpsuit','Tops','Kurtas'];
+let CATS=['Kurta Sets','Lehenga Choli','Ethnic Dresses','Sarees','Co-Ords','Jumpsuit','Tops','Kurtas'];
 const LEVELS=['Level 1','Level 2','Level 3','Level 4'];
 const SLABS=[{label:'0–300',min:0,max:300},{label:'300–500',min:300,max:500},{label:'500–1000',min:500,max:1000},{label:'1000–2000',min:1000,max:2000},{label:'2000+',min:2000,max:Infinity}];
 
@@ -2075,7 +2078,9 @@ function buildCommMyntra(){
   CATS.forEach(cat=>{const sl=COMM_MYNTRA[cat]||[0,0,18.88,18.88,18.88];
     const curLvl=CAT_LEVEL[cat]||'Level 2';
     const lvlOpts=LEVELS.map(l=>`<option${l===curLvl?' selected':''}>${l}</option>`).join('');
-    h+=`<tr><td>${esc(cat)}</td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}" onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
+    const skuCount=skuDB.filter(s=>s.category===cat).length;
+    const delBtn=skuCount===0?`<button class="btn br bxs" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="padding:2px 6px;font-size:10px;min-height:0">✕</button>`:'';
+    h+=`<tr><td><div class="flex gap8">${esc(cat)} ${delBtn}</div></td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}" onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 function buildCommAjioPPMP(){
@@ -2110,6 +2115,51 @@ function buildCommAmazon(){
   t.innerHTML=h+'</tbody>';
 }
 async function saveComm(){triggerRecalc();renderSKUs();await Promise.all([save('cat_levels'),save('comm_myntra'),save('comm_ppmp'),save('comm_cc'),save('comm_amazon')]);audit('commission','Commission rates updated');toast('Commission saved','green');}
+
+// ── Category Management ──────────────────────────────
+function openAddCategoryModal(){
+  const lvlOpts=LEVELS.map(l=>`<option>${l}</option>`).join('');
+  setModal(`<div class="mhdr"><div class="mtl">+ Add Category</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="fg"><label class="fl">Category Name *</label><input class="fi" id="new-cat-name" placeholder="e.g. Palazzo Pants"></div>
+      <div class="fg"><label class="fl">Logistics Level *</label>
+        <select class="fi" id="new-cat-level">${lvlOpts}</select>
+        <div class="st" style="margin-top:4px">Level determines logistics & GT charges for Myntra</div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg" onclick="closeModal()">Cancel</button>
+      <button class="btn bp" onclick="addCategory()">Add Category</button>
+    </div>`);
+  setTimeout(()=>el('new-cat-name')?.focus(),50);
+}
+async function addCategory(){
+  const name=(el('new-cat-name')?.value||'').trim();
+  const level=el('new-cat-level')?.value||'Level 2';
+  if(!name){toast('Enter a category name','red');return;}
+  if(CATS.some(c=>c.toLowerCase()===name.toLowerCase())){toast(`"${name}" already exists`,'red');return;}
+  CATS.push(name);
+  CAT_LEVEL[name]=level;
+  THRESHOLDS[name]=THRESHOLDS[name]||0;
+  COMM_MYNTRA[name]=COMM_MYNTRA[name]||[0,0,18.88,18.88,18.88];
+  COMM_AMAZON[name]=COMM_AMAZON[name]||17;
+  await Promise.all([save('categories'),save('cat_levels'),save('comm_myntra'),save('comm_amazon')]);
+  buildCommMyntra();buildCommAmazon();populateFilters();
+  audit('category_add',`Category "${name}" added (${level})`);
+  toast(`✓ "${name}" added`,'green');
+  closeModal();
+}
+async function deleteCategory(cat){
+  const usedCount=skuDB.filter(s=>s.category===cat).length;
+  if(usedCount){toast(`Cannot delete "${cat}" — ${usedCount} SKU${usedCount>1?'s':''} use this category`,'red');return;}
+  if(!confirm(`Delete category "${cat}"?`))return;
+  CATS=CATS.filter(c=>c!==cat);
+  delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];
+  await Promise.all([save('categories'),save('cat_levels'),save('comm_myntra'),save('comm_amazon'),save('thresholds')]);
+  buildCommMyntra();buildCommAmazon();populateFilters();
+  audit('category_delete',`Category "${cat}" deleted`);
+  toast(`"${cat}" removed`,'red');
+}
 
 // ═══════════════════════════════════════════════════════
 // THRESHOLD (in ₹)
@@ -4122,7 +4172,7 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
 }
 
 function exportData(){
-  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,exportedAt:new Date().toISOString()},null,2);
+  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CATS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,exportedAt:new Date().toISOString()},null,2);
   const a=document.createElement('a');
   a.href='data:application/json,'+encodeURIComponent(data);
   a.download='pricedesk_backup_'+new Date().toISOString().slice(0,10)+'.json';
@@ -4144,6 +4194,7 @@ function importDataPrompt(){
         if(d.brands)     brands=d.brands;
         if(d.users)      users=d.users;
         if(d.THRESHOLDS) THRESHOLDS=d.THRESHOLDS;
+        if(d.CATS)       CATS=d.CATS;
         if(d.CAT_LEVEL)  CAT_LEVEL=d.CAT_LEVEL;
         if(d.COMM_MYNTRA)    COMM_MYNTRA=d.COMM_MYNTRA;
         if(d.COMM_AJIO_PPMP) COMM_AJIO_PPMP=d.COMM_AJIO_PPMP;
@@ -6375,6 +6426,7 @@ function applyRealtimeData(type, value){
       case 'brands': brands=value; return true;
       case 'users': users=value; applyDefaultUsers(); return true;
       case 'thresholds': THRESHOLDS=value; return true;
+      case 'categories': CATS=value; return true;
       case 'cat_levels': CAT_LEVEL=value; return true;
       case 'comm_myntra': COMM_MYNTRA=value; return true;
       case 'comm_ppmp': COMM_AJIO_PPMP=value; return true;
