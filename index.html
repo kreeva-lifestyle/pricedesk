@@ -813,7 +813,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
     <div class="card mb0">
       <div class="ch"><div style="font-size:13px;font-weight:600">Category Profit Summary</div></div>
-      <div class="cb" style="padding:0;overflow-x:auto"><table class="dt" style="font-size:12px;min-width:500px"><thead><tr><th>Category</th><th>SKUs</th><th>Avg Profit (₹)</th><th>Total Profit (₹)</th><th>Avg Margin %</th><th>Breaches</th><th>Health</th></tr></thead><tbody id="dash-cat-profit"></tbody></table></div>
+      <div class="cb" style="padding:0;overflow-x:auto"><table class="dt" style="font-size:12px"><thead><tr><th>Category</th><th>SKUs</th><th>Avg Profit (₹)</th><th>Avg Margin %</th><th>Breaches</th><th>Health</th></tr></thead><tbody id="dash-cat-profit"></tbody></table></div>
     </div>
   </div>
 
@@ -2534,7 +2534,6 @@ function renderDashboardWidgets(){
         <td style="font-weight:600">${esc(cat)}</td>
         <td class="mono">${d.count}</td>
         <td class="mono" style="color:${avg>=0?'var(--gr)':'var(--re)'}">₹${avg}</td>
-        <td class="mono">₹${Math.round(d.totalProfit).toLocaleString('en-IN')}</td>
         <td class="mono">${margin}%</td>
         <td class="mono" style="color:${d.breaches?'var(--re)':'var(--tx3)'}">${d.breaches}</td>
         <td><div style="display:flex;align-items:center;gap:6px">
@@ -2542,7 +2541,7 @@ function renderDashboardWidgets(){
           <span class="mono" style="font-size:10px;color:${barColor}">${healthPct}%</span>
         </div></td>
       </tr>`;
-    }).join('')||'<tr><td colspan="7" class="st" style="text-align:center;padding:12px">No SKUs yet</td></tr>';
+    }).join('')||'<tr><td colspan="6" class="st" style="text-align:center;padding:12px">No SKUs yet</td></tr>';
   }
 }
 
