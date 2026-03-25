@@ -5026,8 +5026,7 @@ function renderGTTable(){
   if(!tbody) return;
   tbody.innerHTML = LEVELS.map(lvl => {
     const vals = GT_DATA[lvl] || [0,1,0,0,0,0,0];
-    const usedCount=Object.values(CAT_LEVEL).filter(l=>l===lvl).length;
-    return `<tr>${['<td><div class="flex gap8"><strong>'+esc(lvl)+'</strong>'+(usedCount?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(78,142,247,.12);color:var(--bl)">${usedCount}</span>`:'')+`<button class="btn br bxs" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td>`,
+    return `<tr>${['<td><div class="flex gap8"><strong>'+esc(lvl)+`</strong><button class="btn br bxs" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td>`,
       ...vals.map((v,i) => `<td><input class="ci" style="width:58px;${i===6?'border-color:var(--ac)':''}"
         value="${v}" oninput="GT_DATA['${escAttr(lvl)}'][${i}]=+this.value">`+'</td>')
     ].join('')}</tr>`;
