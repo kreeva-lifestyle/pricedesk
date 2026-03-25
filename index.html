@@ -2143,7 +2143,7 @@ function renderBreachList(){
   h+=pageList.map(s=>{
     const c=calcSKU(s);
     const brand=brands.find(b=>b.id===s.brandId);
-    return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${s.styleId}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:3px 8px;white-space:nowrap">🔕 Ignore</button></td></tr>`;
+    return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${esc(s.sku||s.styleId||'—')}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:3px 8px;white-space:nowrap">🔕 Ignore</button></td></tr>`;
   }).join('');
   h+='</tbody></table>';
   if(totalPages>1){
@@ -4060,6 +4060,34 @@ async function deleteBackup(date){
     loadBackupList();
   }catch(e){ toast('Delete failed: '+e.message,'red'); }
 }
+
+// Auto-backup cron: runs daily at midnight IST (UTC+5:30)
+(function scheduleNightlyBackup(){
+  function msUntilMidnightIST(){
+    const now=new Date();
+    // Midnight IST = 18:30 UTC previous day
+    const istOffset=5.5*60*60*1000;
+    const nowIST=new Date(now.getTime()+istOffset);
+    const midnightIST=new Date(nowIST);
+    midnightIST.setHours(24,0,0,0);
+    return midnightIST.getTime()-nowIST.getTime();
+  }
+  function runAutoBackup(){
+    const lastAuto=localStorage.getItem('pd_last_auto_backup');
+    const today=new Date().toISOString().slice(0,10);
+    if(lastAuto===today) return; // already ran today
+    if(typeof db!=='undefined'&&db){
+      createManualBackup().then(()=>{
+        localStorage.setItem('pd_last_auto_backup',today);
+        console.log('✓ Auto-backup completed for',today);
+      }).catch(e=>console.warn('Auto-backup failed:',e));
+    }
+    setTimeout(()=>{runAutoBackup();},24*60*60*1000); // schedule next day
+  }
+  const ms=msUntilMidnightIST();
+  console.log(`Auto-backup scheduled in ${Math.round(ms/60000)} minutes (midnight IST)`);
+  setTimeout(runAutoBackup,ms);
+})();
 
 function showBackupSetupSQL(){
   const sql = `-- Run this in Supabase SQL Editor to enable backups
