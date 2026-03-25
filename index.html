@@ -895,7 +895,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     </div>
     <div>
       <div class="card mb16">
-        <div class="ch"><div style="font-size:13px;font-weight:600">⚠ Active Breaches</div></div>
+        <div class="ch"><div style="font-size:13px;font-weight:600">⚠ Active Breaches</div><button class="btn bg bsm" onclick="exportBreaches()">⬇ Export</button></div>
         <div id="thr-breach-list" style="padding:0"></div>
       </div>
       <div class="card">
@@ -1661,6 +1661,10 @@ async function loadFromStorage(){
     }
     // Users: always merge with DEFAULT_USERS
     if(loaded.users){ users = loaded.users; }
+    // Remove legacy demo "Admin User" entry and persist cleanup
+    const _preLen=loaded.users?.length||0;
+    users = users.filter(u=>!(u.name==='Admin User'&&u.email==='admin@yourcompany.com'));
+    if(users.length<_preLen) save('users');
     applyDefaultUsers();
 
     const anyData = Object.values(loaded).some(v=>v!==null);
@@ -2139,7 +2143,7 @@ function renderBreachList(){
   h+=pageList.map(s=>{
     const c=calcSKU(s);
     const brand=brands.find(b=>b.id===s.brandId);
-    return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${s.styleId}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:3px 8px;white-space:nowrap">🔕 Ignore</button></td></tr>`;
+    return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${esc(s.sku||s.styleId||'—')}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:3px 8px;white-space:nowrap">🔕 Ignore</button></td></tr>`;
   }).join('');
   h+='</tbody></table>';
   if(totalPages>1){
@@ -4057,6 +4061,34 @@ async function deleteBackup(date){
   }catch(e){ toast('Delete failed: '+e.message,'red'); }
 }
 
+// Auto-backup cron: runs daily at midnight IST (UTC+5:30)
+(function scheduleNightlyBackup(){
+  function msUntilMidnightIST(){
+    const now=new Date();
+    // Midnight IST = 18:30 UTC previous day
+    const istOffset=5.5*60*60*1000;
+    const nowIST=new Date(now.getTime()+istOffset);
+    const midnightIST=new Date(nowIST);
+    midnightIST.setHours(24,0,0,0);
+    return midnightIST.getTime()-nowIST.getTime();
+  }
+  function runAutoBackup(){
+    const lastAuto=localStorage.getItem('pd_last_auto_backup');
+    const today=new Date().toISOString().slice(0,10);
+    if(lastAuto===today) return; // already ran today
+    if(typeof db!=='undefined'&&db){
+      createManualBackup().then(()=>{
+        localStorage.setItem('pd_last_auto_backup',today);
+        console.log('✓ Auto-backup completed for',today);
+      }).catch(e=>console.warn('Auto-backup failed:',e));
+    }
+    setTimeout(()=>{runAutoBackup();},24*60*60*1000); // schedule next day
+  }
+  const ms=msUntilMidnightIST();
+  console.log(`Auto-backup scheduled in ${Math.round(ms/60000)} minutes (midnight IST)`);
+  setTimeout(runAutoBackup,ms);
+})();
+
 function showBackupSetupSQL(){
   const sql = `-- Run this in Supabase SQL Editor to enable backups
 CREATE TABLE IF NOT EXISTS pd_backups (
@@ -4790,6 +4822,25 @@ function exportSKUsToExcel(){
   }
 }
 
+function exportBreaches(){
+  if(typeof XLSX==='undefined'){toast('Loading Excel library…','red');return;}
+  const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+  if(!breached.length){toast('No active breaches to export','red');return;}
+  try{
+    const rows=[['SKU','Style ID','Category','Brand','Net Profit (₹)','Threshold (₹)']];
+    breached.forEach(s=>{
+      const c=calcSKU(s);
+      const brand=brands.find(b=>b.id===s.brandId);
+      rows.push([s.sku||'',s.styleId||'',s.category||'',brand?.name||'—',Math.round(c.profitRs),c.threshold]);
+    });
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:18},{wch:16},{wch:16},{wch:20},{wch:14},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,ws,'Breaches');
+    XLSX.writeFile(wb,'PriceDesk_Breaches_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    toast(`✓ Exported ${breached.length} breaches to Excel`,'green');
+  }catch(e){console.error('Export failed:',e);toast('Export failed: '+e.message,'red');}
+}
 
 // ═══════════════════════════════════════════════════════
 // GT CHARGES + REVERSE FEES — editable tables
