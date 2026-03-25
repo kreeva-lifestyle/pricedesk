@@ -895,7 +895,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
     </div>
     <div>
       <div class="card mb16">
-        <div class="ch"><div style="font-size:13px;font-weight:600">⚠ Active Breaches</div></div>
+        <div class="ch"><div style="font-size:13px;font-weight:600">⚠ Active Breaches</div><button class="btn bg bsm" onclick="exportBreaches()">⬇ Export</button></div>
         <div id="thr-breach-list" style="padding:0"></div>
       </div>
       <div class="card">
@@ -4790,6 +4790,25 @@ function exportSKUsToExcel(){
   }
 }
 
+function exportBreaches(){
+  if(typeof XLSX==='undefined'){toast('Loading Excel library…','red');return;}
+  const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+  if(!breached.length){toast('No active breaches to export','red');return;}
+  try{
+    const rows=[['SKU','Style ID','Category','Brand','Net Profit (₹)','Threshold (₹)']];
+    breached.forEach(s=>{
+      const c=calcSKU(s);
+      const brand=brands.find(b=>b.id===s.brandId);
+      rows.push([s.sku||'',s.styleId||'',s.category||'',brand?.name||'—',Math.round(c.profitRs),c.threshold]);
+    });
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:18},{wch:16},{wch:16},{wch:20},{wch:14},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,ws,'Breaches');
+    XLSX.writeFile(wb,'PriceDesk_Breaches_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    toast(`✓ Exported ${breached.length} breaches to Excel`,'green');
+  }catch(e){console.error('Export failed:',e);toast('Export failed: '+e.message,'red');}
+}
 
 // ═══════════════════════════════════════════════════════
 // GT CHARGES + REVERSE FEES — editable tables
