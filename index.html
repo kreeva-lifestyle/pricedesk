@@ -2125,16 +2125,35 @@ function renderThresholds(){
   renderBreachList();
 }
 
+let _breachPage=1;
+const BREACH_PAGE_SIZE=10;
 function renderBreachList(){
   const t=el('thr-breach-list');if(!t)return;
   const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
-  if(!breached.length){t.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:12px">✓ No active breaches</div>`;return;}
-  t.innerHTML=`<table class="dt"><thead><tr><th>SKU</th><th>Category</th><th>Brand</th><th>Net Profit (₹)</th><th>Threshold (₹)</th><th></th></tr></thead><tbody>`+
-    breached.map(s=>{
-      const c=calcSKU(s);
-      const brand=brands.find(b=>b.id===s.brandId);
-      return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${s.styleId}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:3px 8px;white-space:nowrap">🔕 Ignore</button></td></tr>`;
-    }).join('')+'</tbody></table>';
+  if(!breached.length){_breachPage=1;t.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:12px">✓ No active breaches</div>`;return;}
+  const totalPages=Math.ceil(breached.length/BREACH_PAGE_SIZE);
+  if(_breachPage>totalPages)_breachPage=totalPages;
+  const startIdx=(_breachPage-1)*BREACH_PAGE_SIZE;
+  const pageList=breached.slice(startIdx,startIdx+BREACH_PAGE_SIZE);
+  let h=`<table class="dt"><thead><tr><th>SKU</th><th>Category</th><th>Brand</th><th>Net Profit (₹)</th><th>Threshold (₹)</th><th></th></tr></thead><tbody>`;
+  h+=pageList.map(s=>{
+    const c=calcSKU(s);
+    const brand=brands.find(b=>b.id===s.brandId);
+    return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${s.styleId}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:3px 8px;white-space:nowrap">🔕 Ignore</button></td></tr>`;
+  }).join('');
+  h+='</tbody></table>';
+  if(totalPages>1){
+    h+=`<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px;flex-wrap:wrap">`;
+    h+=`<button class="btn bg bxs" onclick="_breachPage=1;renderBreachList()" ${_breachPage===1?'disabled':''}>&laquo;</button>`;
+    h+=`<button class="btn bg bxs" onclick="_breachPage=Math.max(1,_breachPage-1);renderBreachList()" ${_breachPage===1?'disabled':''}>&lsaquo;</button>`;
+    const ps=Math.max(1,_breachPage-2),pe=Math.min(totalPages,_breachPage+2);
+    for(let p=ps;p<=pe;p++) h+=`<button class="btn ${p===_breachPage?'bp':'bg'} bxs" onclick="_breachPage=${p};renderBreachList()">${p}</button>`;
+    h+=`<button class="btn bg bxs" onclick="_breachPage=Math.min(${totalPages},_breachPage+1);renderBreachList()" ${_breachPage===totalPages?'disabled':''}>&rsaquo;</button>`;
+    h+=`<button class="btn bg bxs" onclick="_breachPage=${totalPages};renderBreachList()" ${_breachPage===totalPages?'disabled':''}>&raquo;</button>`;
+    h+=`<span class="st" style="margin-left:8px">${startIdx+1}–${Math.min(startIdx+BREACH_PAGE_SIZE,breached.length)} of ${breached.length}</span>`;
+    h+=`</div>`;
+  }
+  t.innerHTML=h;
 }
 
 async function saveThr(){
