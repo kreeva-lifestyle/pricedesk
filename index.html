@@ -5081,24 +5081,15 @@ async function addLevel(){
 async function deleteLevel(lvl){
   if(LEVELS.length<=1){toast('Cannot delete the last level','red');return;}
   const usedCats=Object.entries(CAT_LEVEL).filter(([,l])=>l===lvl).map(([c])=>c);
-  const fallback=LEVELS.find(l=>l!==lvl)||LEVELS[0];
-  const msg=usedCats.length
-    ?`Delete "${lvl}"?\n\n⚠ ${usedCats.length} categor${usedCats.length>1?'ies':'y'} will be moved to "${fallback}".`
-    :`Delete level "${lvl}"?`;
-  if(!confirm(msg))return;
-  // Stash for reinstate
-  _deletedLevels.push({name:lvl,gt:GT_DATA[lvl],rev:REVERSE_FEES[lvl],cats:usedCats.slice()});
-  // Move categories to fallback
+  if(usedCats.length){toast(`Cannot delete "${lvl}" — ${usedCats.length} categor${usedCats.length>1?'ies':'y'} assigned: ${usedCats.join(', ')}`,'red');return;}
+  if(!confirm(`Delete level "${lvl}"?`))return;
+  _deletedLevels.push({name:lvl,gt:GT_DATA[lvl],rev:REVERSE_FEES[lvl]});
   LEVELS=LEVELS.filter(l=>l!==lvl);
-  if(usedCats.length){
-    usedCats.forEach(cat=>{CAT_LEVEL[cat]=fallback;});
-    await save('cat_levels');
-  }
   delete GT_DATA[lvl];
   delete REVERSE_FEES[lvl];
   await Promise.all([save('levels'),save('logistics')]);
   renderGTTable();renderRetTable();buildCommMyntra();triggerRecalc();renderSKUs();
-  audit('level_delete',`Level "${lvl}" deleted${usedCats.length?` (${usedCats.length} categories moved to ${fallback})`:''}`);
+  audit('level_delete',`Level "${lvl}" deleted`);
   toast(`"${lvl}" removed — `,'red');
   setTimeout(()=>{
     const t=document.querySelector('.toast:last-child');
@@ -5114,8 +5105,6 @@ async function _reinstateLevel(name){
   LEVELS.push(name);
   GT_DATA[name]=stashed.gt||[0,1,0,0,0,0,0];
   REVERSE_FEES[name]=stashed.rev||0;
-  // Restore category assignments
-  if(stashed.cats?.length){stashed.cats.forEach(cat=>{if(CATS.includes(cat))CAT_LEVEL[cat]=name;});await save('cat_levels');}
   _deletedLevels=_deletedLevels.filter(d=>d.name!==name);
   await Promise.all([save('levels'),save('logistics')]);
   renderGTTable();renderRetTable();buildCommMyntra();triggerRecalc();renderSKUs();
