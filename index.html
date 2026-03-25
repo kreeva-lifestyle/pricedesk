@@ -208,13 +208,43 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 .role-manager{background:rgba(78,142,247,.15);color:var(--bl)}
 .role-viewer{background:rgba(139,154,191,.1);color:var(--tx2)}
 /* ── LOGIN SCREEN ───────────────────────────────────── */
-#login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;align-items:center;justify-content:center}
-#app-loading{position:fixed;inset:0;background:var(--bg);z-index:9998;display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:14px;font-family:var(--sans)}
-.login-box{background:var(--s);border:1px solid var(--bd2);border-radius:16px;width:380px;max-width:calc(100vw - 32px);padding:36px 32px;text-align:center}
-.login-logo{font-size:22px;font-weight:700;color:var(--ac);font-family:var(--mono);margin-bottom:4px}
-.login-sub{font-size:12px;color:var(--tx3);letter-spacing:2px;text-transform:uppercase;margin-bottom:28px}
-.login-err{background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--re);margin-bottom:14px;display:none}
-.login-footer{font-size:11px;color:var(--tx3);margin-top:16px}
+#login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;align-items:center;justify-content:center;overflow:hidden}
+#login-screen.active{display:flex}
+#login-bg-canvas{position:absolute;inset:0;z-index:0}
+.login-glow{position:absolute;border-radius:50%;filter:blur(80px);opacity:.15;animation:loginGlowFloat 8s ease-in-out infinite alternate;z-index:0}
+.login-glow-1{width:400px;height:400px;background:var(--ac);top:-100px;left:-100px;animation-duration:8s}
+.login-glow-2{width:350px;height:350px;background:var(--pu);bottom:-80px;right:-80px;animation-duration:10s;animation-delay:-3s}
+.login-glow-3{width:250px;height:250px;background:var(--bl);top:50%;left:60%;animation-duration:12s;animation-delay:-5s}
+@keyframes loginGlowFloat{0%{transform:translate(0,0) scale(1)}50%{transform:translate(30px,-20px) scale(1.1)}100%{transform:translate(-20px,30px) scale(.95)}}
+.login-box{position:relative;z-index:1;background:rgba(24,28,38,.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(42,49,72,.6);border-radius:20px;width:400px;max-width:calc(100vw - 32px);padding:40px 36px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.03) inset;animation:loginBoxEnter .6s cubic-bezier(.16,1,.3,1) both}
+@keyframes loginBoxEnter{from{opacity:0;transform:translateY(30px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+.login-logo{font-size:28px;font-weight:700;color:var(--ac);font-family:var(--mono);margin-bottom:4px;letter-spacing:-0.5px;background:linear-gradient(135deg,var(--ac),#ffcc70);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:loginLogoShine 3s ease-in-out infinite alternate}
+@keyframes loginLogoShine{0%{filter:brightness(1)}50%{filter:brightness(1.2)}100%{filter:brightness(1)}}
+.login-sub{font-size:11px;color:var(--tx3);letter-spacing:3px;text-transform:uppercase;margin-bottom:32px;opacity:0;animation:loginFadeUp .5s .2s ease both}
+.login-divider{height:1px;background:linear-gradient(90deg,transparent,var(--bd2),transparent);margin-bottom:28px;opacity:0;animation:loginFadeUp .5s .25s ease both}
+.login-err{background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--re);margin-bottom:14px;display:none;animation:loginShake .4s ease}
+@keyframes loginShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.login-fg{margin-bottom:16px;text-align:left;opacity:0;animation:loginFadeUp .5s ease both}
+.login-fg:nth-child(1){animation-delay:.3s}.login-fg:nth-child(2){animation-delay:.4s}
+@keyframes loginFadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.login-fg .fl{font-size:11px;color:var(--tx3);margin-bottom:6px;text-transform:uppercase;letter-spacing:1.5px;display:block}
+.login-fi{width:100%;background:rgba(31,36,53,.8);border:1px solid var(--bd2);border-radius:10px;color:var(--tx);font-family:var(--sans);font-size:16px;padding:12px 14px;transition:all .2s;outline:none}
+.login-fi:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(245,166,35,.12)}
+.login-fi::placeholder{color:var(--tx3);opacity:.6}
+.login-btn{width:100%;padding:13px 20px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:700;font-family:var(--sans);color:#000;background:linear-gradient(135deg,var(--ac),#ffcc70);transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:.3px;opacity:0;animation:loginFadeUp .5s .5s ease both;position:relative;overflow:hidden}
+.login-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(245,166,35,.35)}
+.login-btn:active{transform:translateY(0);box-shadow:0 2px 8px rgba(245,166,35,.25)}
+.login-btn::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent);transform:translateX(-100%);transition:none}
+.login-btn:hover::after{transform:translateX(100%);transition:transform .5s}
+.login-btn.loading{pointer-events:none;opacity:.8}
+.login-btn.loading::before{content:'';width:16px;height:16px;border:2px solid rgba(0,0,0,.2);border-top-color:#000;border-radius:50%;animation:btnSpin .6s linear infinite}
+@keyframes btnSpin{to{transform:rotate(360deg)}}
+.login-footer{font-size:12px;color:var(--tx3);margin-top:20px;opacity:0;animation:loginFadeUp .5s .6s ease both}
+.login-footer a{color:var(--ac);text-decoration:none;transition:color .15s;font-weight:500}
+.login-footer a:hover{color:#ffcc70}
+/* Floating particles */
+.login-particle{position:absolute;border-radius:50%;background:var(--ac);opacity:0;z-index:0;pointer-events:none}
+@keyframes particleFloat{0%{opacity:0;transform:translateY(0)}10%{opacity:.4}90%{opacity:.4}100%{opacity:0;transform:translateY(-100vh)}}
 /* ── VISUAL FORMULA BUILDER ─────────────────────────── */
 .fb-shortcut{padding:5px 12px;border-radius:6px;border:1px solid rgba(245,166,35,.35);background:rgba(245,166,35,.07);color:var(--ac);font-size:11px;cursor:pointer;transition:all .12s}
 .fb-shortcut:hover{background:rgba(245,166,35,.18);border-color:var(--ac)}
@@ -454,7 +484,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
   .movl{align-items:stretch}
 
   /* Login box: fit narrow screens */
-  .login-box{padding:24px 16px;border-radius:10px;width:calc(100% - 24px)}
+  .login-box{padding:28px 20px;border-radius:14px;width:calc(100% - 24px)}
+  .login-fi{padding:11px 12px;font-size:16px}
+  .login-btn{padding:12px 16px;font-size:14px}
+  .login-logo{font-size:24px}
+  .login-glow{filter:blur(60px);opacity:.1}
+  .login-glow-1{width:250px;height:250px}
+  .login-glow-2{width:200px;height:200px}
+  .login-glow-3{display:none}
 
   /* Session warning: bottom center */
   #session-warn{right:8px;left:8px;bottom:8px}
@@ -509,16 +546,48 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 <div id="app-loading"><div style="text-align:center"><div style="font-size:22px;font-weight:700;color:var(--ac);margin-bottom:8px">PriceDesk</div><div>Loading...</div></div></div>
 <!-- ═══ LOGIN SCREEN ═══ -->
 <div id="login-screen">
+  <!-- Ambient glow orbs -->
+  <div class="login-glow login-glow-1"></div>
+  <div class="login-glow login-glow-2"></div>
+  <div class="login-glow login-glow-3"></div>
+
   <div class="login-box">
     <div class="login-logo">PriceDesk</div>
     <div class="login-sub">Marketplace Pricing</div>
+    <div class="login-divider"></div>
     <div class="login-err" id="login-err"></div>
-    <div class="fg"><label class="fl" style="text-align:left">Email</label><input class="fi" id="login-email" type="email" placeholder="you@company.com" autocomplete="email" inputmode="email" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <div class="fg" style="margin-bottom:20px"><label class="fl" style="text-align:left">Password</label><input class="fi" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <button class="btn bp" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button>
-    <div class="login-footer"><a href="#" onclick="openForgotPassword();return false" style="color:var(--ac);text-decoration:none">Forgot password?</a></div>
+    <div class="login-fg">
+      <label class="fl">Email</label>
+      <input class="login-fi" id="login-email" type="email" placeholder="you@company.com" autocomplete="email" inputmode="email" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
+    </div>
+    <div class="login-fg" style="margin-bottom:24px">
+      <label class="fl">Password</label>
+      <input class="login-fi" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In</button>
+    <div class="login-footer"><a href="#" onclick="openForgotPassword();return false">Forgot password?</a></div>
   </div>
 </div>
+<script>
+// Floating particles for login screen
+(function(){
+  const screen=document.getElementById('login-screen');
+  if(!screen)return;
+  function spawnParticle(){
+    if(screen.style.display==='none'||!screen.classList.contains('active'))return;
+    const p=document.createElement('div');
+    p.className='login-particle';
+    const size=Math.random()*3+1;
+    const x=Math.random()*100;
+    const dur=Math.random()*6+4;
+    const colors=['var(--ac)','var(--pu)','var(--bl)','var(--gr)'];
+    p.style.cssText=`width:${size}px;height:${size}px;left:${x}%;bottom:-10px;background:${colors[Math.floor(Math.random()*colors.length)]};animation:particleFloat ${dur}s linear forwards`;
+    screen.appendChild(p);
+    setTimeout(()=>p.remove(),(dur*1000));
+  }
+  setInterval(spawnParticle,400);
+})();
+</script>
 
 <!-- ═══ VISUAL FORMULA BUILDER ═══ -->
 <div id="fb-overlay">
@@ -4590,7 +4659,10 @@ function startSessionCheck(){
 async function doLogin(){
   const email = document.getElementById('login-email')?.value.trim().toLowerCase();
   const pass  = document.getElementById('login-pass')?.value;
+  const btn = document.getElementById('login-btn');
   if(!email||!pass){ showLoginErr('Please fill in both fields.'); return; }
+  if(btn){btn.classList.add('loading');btn.textContent='Signing in...';}
+  try{
   // Rate limiting — block after 5 failed attempts
   const rateCheck = checkLoginRate(email);
   if(!rateCheck.allowed){ showLoginErr(`Too many attempts. Try again in ${rateCheck.waitSec}s.`); return; }
@@ -4616,7 +4688,7 @@ async function doLogin(){
   const sessionToken = generateSessionToken();
   sessionStorage.setItem(SESSION_KEY, JSON.stringify({userId:user.id, loginTime:Date.now(), sessionToken}));
   await registerSessionToken(user.id, sessionToken);
-  document.getElementById('login-screen').style.display='none';
+  document.getElementById('login-screen').classList.remove('active');
   updateSidebarUser(user);
   startSessionTimer();
   startSessionCheck();
@@ -4627,9 +4699,12 @@ async function doLogin(){
   const defaultPage=getUserPref('defaultPage','dashboard');
   if(defaultPage&&defaultPage!=='dashboard') nav(defaultPage);
   toast(`Welcome back, ${esc(user.name.split(' ')[0])}!`,'green');
+  }finally{ _resetLoginBtn(); }
 }
 
+function _resetLoginBtn(){const b=document.getElementById('login-btn');if(b){b.classList.remove('loading');b.textContent='Sign In';}}
 function showLoginErr(msg){
+  _resetLoginBtn();
   const e = document.getElementById('login-err');
   if(e){ e.textContent=msg; e.style.display='block'; }
 }
@@ -4700,7 +4775,7 @@ async function doForgotPassword(){
 
 // ── Password Reset Page (shown when ?reset=TOKEN is in URL) ──
 function showResetPasswordPage(token){
-  document.getElementById('login-screen').style.display='none';
+  document.getElementById('login-screen').classList.remove('active');
   const overlay = document.createElement('div');
   overlay.id = 'reset-page';
   overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:10001;display:flex;align-items:center;justify-content:center';
@@ -4779,7 +4854,7 @@ function _forceLogout(){
   clearInterval(_countdownInterval);
   clearInterval(_sessionCheckTimer);
   document.getElementById('session-warn').style.display='none';
-  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-screen').classList.add('active');
   document.getElementById('login-email').value='';
   document.getElementById('login-pass').value='';
   document.getElementById('login-err').style.display='none';
@@ -4877,7 +4952,7 @@ async function checkSession(){
           }
         }
         currentUser = user;
-        document.getElementById('login-screen').style.display='none';
+        document.getElementById('login-screen').classList.remove('active');
         const loadEl=document.getElementById('app-loading');if(loadEl)loadEl.style.display='none';
         updateSidebarUser(user);
         startSessionTimer();
@@ -6611,12 +6686,12 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   if(resetToken){
     // Hide login screen and show reset password form
     console.log('Reset token detected:', resetToken.slice(0,8)+'…');
-    document.getElementById('login-screen').style.display='none';
+    document.getElementById('login-screen').classList.remove('active');
     showResetPasswordPage(resetToken);
   } else if(!(await checkSession())){
     // Session invalid — show login screen
     document.getElementById('app-loading').style.display='none';
-    document.getElementById('login-screen').style.display='flex';
+    document.getElementById('login-screen').classList.add('active');
   } else {
     // Session valid — hide loading overlay
     document.getElementById('app-loading').style.display='none';
