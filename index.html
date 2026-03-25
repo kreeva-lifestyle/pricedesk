@@ -2079,8 +2079,8 @@ function buildCommMyntra(){
     const curLvl=CAT_LEVEL[cat]||'Level 2';
     const lvlOpts=LEVELS.map(l=>`<option${l===curLvl?' selected':''}>${l}</option>`).join('');
     const skuCount=skuDB.filter(s=>s.category===cat).length;
-    const delBtn=skuCount===0?`<button class="btn br bxs" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="padding:2px 6px;font-size:10px;min-height:0">✕</button>`:'';
-    h+=`<tr><td><div class="flex gap8">${esc(cat)} ${delBtn}</div></td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}" onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
+    const skuBadge=skuCount?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(78,142,247,.12);color:var(--bl)">${skuCount}</span>`:'';
+    h+=`<tr><td><div class="flex gap8">${esc(cat)} ${skuBadge} <button class="btn br bxs" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}" onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 function buildCommAjioPPMP(){
@@ -2149,16 +2149,49 @@ async function addCategory(){
   toast(`✓ "${name}" added`,'green');
   closeModal();
 }
+let _deletedCategories=[];
 async function deleteCategory(cat){
   const usedCount=skuDB.filter(s=>s.category===cat).length;
-  if(usedCount){toast(`Cannot delete "${cat}" — ${usedCount} SKU${usedCount>1?'s':''} use this category`,'red');return;}
-  if(!confirm(`Delete category "${cat}"?`))return;
+  const msg=usedCount
+    ?`Delete "${cat}"?\n\n⚠ ${usedCount} SKU${usedCount>1?'s':''} will be moved to the first available category.`
+    :`Delete category "${cat}"?`;
+  if(!confirm(msg))return;
+  // Stash for reinstate
+  _deletedCategories.push({name:cat,level:CAT_LEVEL[cat],threshold:THRESHOLDS[cat],commMyntra:COMM_MYNTRA[cat],commAmazon:COMM_AMAZON[cat]});
+  // Move SKUs to first remaining category
   CATS=CATS.filter(c=>c!==cat);
+  if(usedCount&&CATS.length){
+    const fallback=CATS[0];
+    skuDB.filter(s=>s.category===cat).forEach(s=>{s.category=fallback;s.level=CAT_LEVEL[fallback]||'Level 2';});
+    await save('skus');
+  }
   delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];
   await Promise.all([save('categories'),save('cat_levels'),save('comm_myntra'),save('comm_amazon'),save('thresholds')]);
+  buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
+  audit('category_delete',`Category "${cat}" deleted${usedCount?` (${usedCount} SKUs moved to ${CATS[0]})`:''}`);
+  toast(`"${cat}" removed — `,`red`);
+  // Show reinstate toast
+  setTimeout(()=>{
+    const t=document.querySelector('.toast:last-child');
+    if(t&&t.textContent.includes(cat)){
+      t.innerHTML+=` <button onclick="_reinstateCategory('${escAttr(cat)}')" style="background:var(--ac);color:#000;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px">↩ Undo</button>`;
+    }
+  },50);
+}
+async function _reinstateCategory(name){
+  const stashed=_deletedCategories.find(d=>d.name===name);
+  if(!stashed){toast('Cannot reinstate — data expired','red');return;}
+  if(CATS.includes(name)){toast(`"${name}" already exists`,'red');return;}
+  CATS.push(name);
+  CAT_LEVEL[name]=stashed.level||'Level 2';
+  THRESHOLDS[name]=stashed.threshold||0;
+  COMM_MYNTRA[name]=stashed.commMyntra||[0,0,18.88,18.88,18.88];
+  COMM_AMAZON[name]=stashed.commAmazon||17;
+  _deletedCategories=_deletedCategories.filter(d=>d.name!==name);
+  await Promise.all([save('categories'),save('cat_levels'),save('comm_myntra'),save('comm_amazon'),save('thresholds')]);
   buildCommMyntra();buildCommAmazon();populateFilters();
-  audit('category_delete',`Category "${cat}" deleted`);
-  toast(`"${cat}" removed`,'red');
+  audit('category_reinstate',`Category "${name}" reinstated`);
+  toast(`✓ "${name}" reinstated`,'green');
 }
 
 // ═══════════════════════════════════════════════════════
