@@ -1661,6 +1661,10 @@ async function loadFromStorage(){
     }
     // Users: always merge with DEFAULT_USERS
     if(loaded.users){ users = loaded.users; }
+    // Remove legacy demo "Admin User" entry and persist cleanup
+    const _preLen=loaded.users?.length||0;
+    users = users.filter(u=>!(u.name==='Admin User'&&u.email==='admin@yourcompany.com'));
+    if(users.length<_preLen) save('users');
     applyDefaultUsers();
 
     const anyData = Object.values(loaded).some(v=>v!==null);
