@@ -1015,10 +1015,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         <tbody id="ret-table-body"></tbody>
       </table></div>
       <div id="mret-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Return Rate (₹)</label><input class="fi" type="number" id="mret-fix" value="218"></div></div>
-      <div class="flex gap8" style="margin-top:12px">
-        <button class="btn bp bsm" onclick="saveLogisticsAll()">✓ Save All Logistics</button>
-        <button class="btn bg bsm" onclick="openAddLevelModal()">+ Add Level</button>
-      </div>
+      <button class="btn bp bsm" style="margin-top:12px" onclick="saveLogisticsAll()">✓ Save All Logistics</button>
     </div></div>
   </div></div>
   <div id="log-ajio" style="display:none">
@@ -5042,7 +5039,7 @@ function renderRetTable(){
   if(!tbody) return;
   tbody.innerHTML = LEVELS.map(lvl => {
     const v = REVERSE_FEES[lvl] || 0;
-    return `<tr><td><div class="flex gap8"><strong>${esc(lvl)}</strong><button class="btn br bxs" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td>
+    return `<tr><td><strong>${esc(lvl)}</strong></td>
       <td><input class="ci" style="width:80px" value="${v}"
         oninput="REVERSE_FEES['${escAttr(lvl)}']=+this.value"></td>
       <td class="st">Half: ₹${(v/2).toFixed(1)}</td></tr>`;
