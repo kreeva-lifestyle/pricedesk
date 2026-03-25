@@ -2884,6 +2884,12 @@ function saveNew(){
   if(sid && sid===skuCode){toast('SKU and Style ID cannot be the same','red');return;}
   // Check style ID uniqueness
   if(sid && skuDB.find(x=>x.styleId===sid)){toast('This Style ID already exists','red');return;}
+  // Check for duplicate SKU + brand combinations
+  const dupBrands=selectedBrands.filter(bid=>skuDB.some(x=>x.sku===skuCode&&x.brandId===bid));
+  if(dupBrands.length){
+    const dupNames=dupBrands.map(bid=>{const b=brands.find(x=>x.id===bid);return b?.name||bid;}).join(', ');
+    toast(`SKU "${skuCode}" already exists for: ${dupNames}`,'red');return;
+  }
   // Create one SKU per selected brand
   let count=0;
   selectedBrands.forEach((brandId,i)=>{
@@ -2922,11 +2928,12 @@ function saveEdit(id){
 }
 
 async function delSKU(id){
-  const s=skuDB.find(x=>x.id===id);if(!s||!confirm(`Delete "${esc(s.styleId)}"?`))return;
-  const label=s.styleId||s.sku||id;
+  const s=skuDB.find(x=>x.id===id);if(!s)return;
+  const label=s.sku||s.styleId||id;
+  if(!confirm(`Delete SKU "${label}"?`))return;
   skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();await save('skus');
   audit('sku_delete',`${label} deleted`);
-  toast(`${esc(s.styleId)} deleted`,'red');
+  toast(`${esc(label)} deleted`,'red');
 }
 
 // ── Show Calculation Modal ─────────────────────────────
