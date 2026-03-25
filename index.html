@@ -901,7 +901,12 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600">Alert Settings</div></div>
         <div class="cb">
-          <div class="fg"><label class="fl">Alert Email Address</label><input class="fi" id="alert-email-input" type="email" value="" placeholder="admin@company.com"></div>
+          <div class="fg"><label class="fl">Alert Email Addresses</label>
+            <div class="tag-input-wrap" id="alert-email-wrap">
+              <input id="alert-email-input" type="email" placeholder="Type email and press Enter" onkeydown="if(event.key==='Enter'||event.key===','){event.preventDefault();addAlertEmail(this.value);this.value='';}" onpaste="setTimeout(()=>{addAlertEmail(this.value);this.value=''},0)">
+            </div>
+            <div class="st" style="margin-top:4px">Press Enter or comma to add multiple emails</div>
+          </div>
           <div class="fg"><label class="fl">Alert Frequency</label>
             <select class="fi" id="alert-freq-select" style="appearance:none">
               <option>Immediately on breach</option>
@@ -2884,6 +2889,12 @@ function saveNew(){
   if(sid && sid===skuCode){toast('SKU and Style ID cannot be the same','red');return;}
   // Check style ID uniqueness
   if(sid && skuDB.find(x=>x.styleId===sid)){toast('This Style ID already exists','red');return;}
+  // Check for duplicate SKU + brand combinations
+  const dupBrands=selectedBrands.filter(bid=>skuDB.some(x=>x.sku===skuCode&&x.brandId===bid));
+  if(dupBrands.length){
+    const dupNames=dupBrands.map(bid=>{const b=brands.find(x=>x.id===bid);return b?.name||bid;}).join(', ');
+    toast(`SKU "${skuCode}" already exists for: ${dupNames}`,'red');return;
+  }
   // Create one SKU per selected brand
   let count=0;
   selectedBrands.forEach((brandId,i)=>{
@@ -2922,11 +2933,12 @@ function saveEdit(id){
 }
 
 async function delSKU(id){
-  const s=skuDB.find(x=>x.id===id);if(!s||!confirm(`Delete "${esc(s.styleId)}"?`))return;
-  const label=s.styleId||s.sku||id;
+  const s=skuDB.find(x=>x.id===id);if(!s)return;
+  const label=s.sku||s.styleId||id;
+  if(!confirm(`Delete SKU "${label}"?`))return;
   skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();await save('skus');
   audit('sku_delete',`${label} deleted`);
-  toast(`${esc(s.styleId)} deleted`,'red');
+  toast(`${esc(label)} deleted`,'red');
 }
 
 // ── Show Calculation Modal ─────────────────────────────
@@ -4148,10 +4160,47 @@ function importDataPrompt(){
 
 
 
+// Multi-email helpers for alert settings
+function getAlertEmails(){
+  const chips=[...document.querySelectorAll('#alert-email-wrap .tag-chip')];
+  return chips.map(c=>c.dataset.email).filter(Boolean);
+}
+function addAlertEmail(raw){
+  // Support comma-separated input
+  const emails=raw.split(',').map(e=>e.trim()).filter(Boolean);
+  emails.forEach(email=>{
+    if(!email.includes('@')){toast(`"${email}" is not a valid email`,'red');return;}
+    const existing=getAlertEmails();
+    if(existing.includes(email)){toast(`${email} already added`,'red');return;}
+    const chip=document.createElement('span');
+    chip.className='tag-chip';
+    chip.dataset.email=email;
+    chip.innerHTML=`${email}<span class="tc-x" onclick="this.parentElement.remove()">×</span>`;
+    const input=document.getElementById('alert-email-input');
+    input.parentElement.insertBefore(chip,input);
+  });
+}
+function renderAlertEmailChips(emailStr){
+  const wrap=document.getElementById('alert-email-wrap');if(!wrap)return;
+  wrap.querySelectorAll('.tag-chip').forEach(c=>c.remove());
+  const input=document.getElementById('alert-email-input');
+  (emailStr||'').split(',').map(e=>e.trim()).filter(Boolean).forEach(email=>{
+    const chip=document.createElement('span');
+    chip.className='tag-chip';
+    chip.dataset.email=email;
+    chip.innerHTML=`${email}<span class="tc-x" onclick="this.parentElement.remove()">×</span>`;
+    wrap.insertBefore(chip,input);
+  });
+}
+
 function saveAlertSettings(){
-  const email = document.getElementById('alert-email-input')?.value||'';
+  const emails=getAlertEmails();
+  // Also grab anything left in the input field
+  const pending=document.getElementById('alert-email-input')?.value.trim()||'';
+  if(pending){pending.split(',').map(e=>e.trim()).filter(e=>e.includes('@')).forEach(e=>{if(!emails.includes(e))emails.push(e);});document.getElementById('alert-email-input').value='';}
+  const email=emails.join(',');
   const freq = document.getElementById('alert-freq-select')?.value||'Immediately on breach';
-  if(email && !email.includes('@')){ toast('Enter a valid email','red'); return; }
+  if(!emails.length){ toast('Add at least one email address','red'); return; }
   // Persist to DB
   ALERT_SETTINGS.email=email;
   ALERT_SETTINGS.frequency=freq;
@@ -4173,13 +4222,26 @@ function saveAlertSettings(){
 }
 
 function loadAlertSettingsUI(){
-  const emailInput=document.getElementById('alert-email-input');
+  renderAlertEmailChips(ALERT_SETTINGS.email||'');
   const freqSelect=document.getElementById('alert-freq-select');
-  if(emailInput) emailInput.value=ALERT_SETTINGS.email||'';
   if(freqSelect){
     const opts=[...freqSelect.options];
     const match=opts.find(o=>o.value===ALERT_SETTINGS.frequency);
     if(match) freqSelect.value=match.value;
+  }
+  // Update EmailJS status box
+  const statusBox=document.getElementById('email-status-box');
+  if(statusBox){
+    const emailCount=(ALERT_SETTINGS.email||'').split(',').filter(e=>e.trim()).length;
+    if(emailReady()){
+      statusBox.textContent=`✓ EmailJS connected — alerts will be sent to ${emailCount} recipient${emailCount!==1?'s':''}`;
+      statusBox.style.color='var(--gr)';
+      statusBox.style.borderColor='rgba(45,212,160,.3)';
+    } else if(ALERT_SETTINGS.email){
+      statusBox.textContent=`⚠ EmailJS not configured — ${emailCount} email${emailCount!==1?'s':''} saved but alerts will log to console. Set up EmailJS in Settings.`;
+      statusBox.style.color='var(--ac)';
+      statusBox.style.borderColor='rgba(245,166,35,.3)';
+    }
   }
 }
 
@@ -4775,11 +4837,15 @@ function sendThresholdAlertEmail(breachedList, alertEmail){
     const c=calcSKU(s), brand=brands.find(b=>b.id===s.brandId);
     return `${s.styleId} (${brand?.name||''}, ${s.category}): ₹${c.profitRs.toFixed(0)} < ₹${c.threshold}`;
   }).join('\n');
-  sendEmail(EMAIL_CONFIG.templateAlert,{
-    to_email: alertEmail,
-    breach_count: breachedList.length,
-    breach_list: body,
-    date: new Date().toLocaleDateString('en-IN'),
+  // Send to all comma-separated emails
+  const emails=alertEmail.split(',').map(e=>e.trim()).filter(Boolean);
+  emails.forEach(email=>{
+    sendEmail(EMAIL_CONFIG.templateAlert,{
+      to_email: email,
+      breach_count: breachedList.length,
+      breach_list: body,
+      date: new Date().toLocaleDateString('en-IN'),
+    });
   });
 }
 
