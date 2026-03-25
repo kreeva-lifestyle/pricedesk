@@ -980,7 +980,10 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
           <tbody id="gt-table-body"></tbody>
         </table></div>
         <div class="st" style="margin-top:6px">★ Most common column (SP &gt; ₹2000). All values editable — changes auto-save to database.</div>
-        <button class="btn bp bsm" style="margin-top:12px" onclick="saveGTCharges()">✓ Save GT Charges</button>
+        <div class="flex gap8" style="margin-top:12px">
+          <button class="btn bp bsm" onclick="saveGTCharges()">✓ Save GT Charges</button>
+          <button class="btn bg bsm" onclick="openAddLevelModal()">+ Add Level</button>
+        </div>
       </div>
       <div id="mfwd-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Rate (₹)</label><input class="fi" type="number" id="mfwd-fix" value="230"></div></div>
       <div style="margin-top:14px">
@@ -998,7 +1001,10 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
         <tbody id="ret-table-body"></tbody>
       </table></div>
       <div id="mret-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Return Rate (₹)</label><input class="fi" type="number" id="mret-fix" value="218"></div></div>
-      <button class="btn bp bsm" style="margin-top:12px" onclick="saveLogisticsAll()">✓ Save All Logistics</button>
+      <div class="flex gap8" style="margin-top:12px">
+        <button class="btn bp bsm" onclick="saveLogisticsAll()">✓ Save All Logistics</button>
+        <button class="btn bg bsm" onclick="openAddLevelModal()">+ Add Level</button>
+      </div>
     </div></div>
   </div></div>
   <div id="log-ajio" style="display:none">
@@ -1458,6 +1464,7 @@ const DB_KEYS = {
   comm_cc:        'pd_comm_ajio_cc',
   comm_amazon:    'pd_comm_amazon',
   categories:     'pd_categories',
+  levels:         'pd_levels',
   cat_levels:     'pd_cat_levels',
   logistics:      'pd_logistics',
   wireframe:      'pd_wireframe',
@@ -1588,6 +1595,7 @@ async function save(type){
     users:       users,
     thresholds:  THRESHOLDS,
     categories:  CATS,
+    levels:      LEVELS,
     cat_levels:  CAT_LEVEL,
     comm_myntra: COMM_MYNTRA,
     comm_ppmp:   COMM_AJIO_PPMP,
@@ -1624,6 +1632,7 @@ async function loadFromStorage(){
     if(loaded.thresholds)  THRESHOLDS      = loaded.thresholds;
     if(loaded.alert)       ALERT_SETTINGS  = loaded.alert;
     if(loaded.categories)  CATS            = loaded.categories;
+    if(loaded.levels)      LEVELS          = loaded.levels;
     if(loaded.cat_levels)  CAT_LEVEL       = loaded.cat_levels;
     if(loaded.comm_myntra) COMM_MYNTRA     = loaded.comm_myntra;
     if(loaded.comm_ppmp)   COMM_AJIO_PPMP  = loaded.comm_ppmp;
@@ -1771,7 +1780,7 @@ let CAT_LEVEL = {
   'Dresses':        'Level 1',
 };
 let CATS=['Kurta Sets','Lehenga Choli','Ethnic Dresses','Sarees','Co-Ords','Jumpsuit','Tops','Kurtas'];
-const LEVELS=['Level 1','Level 2','Level 3','Level 4'];
+let LEVELS=['Level 1','Level 2','Level 3','Level 4'];
 const SLABS=[{label:'0–300',min:0,max:300},{label:'300–500',min:300,max:500},{label:'500–1000',min:500,max:1000},{label:'1000–2000',min:1000,max:2000},{label:'2000+',min:2000,max:Infinity}];
 
 // ═══════════════════════════════════════════════════════
@@ -4204,7 +4213,7 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
 }
 
 function exportData(){
-  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CATS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,exportedAt:new Date().toISOString()},null,2);
+  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CATS,LEVELS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,GT_DATA,REVERSE_FEES,exportedAt:new Date().toISOString()},null,2);
   const a=document.createElement('a');
   a.href='data:application/json,'+encodeURIComponent(data);
   a.download='pricedesk_backup_'+new Date().toISOString().slice(0,10)+'.json';
@@ -4227,7 +4236,10 @@ function importDataPrompt(){
         if(d.users)      users=d.users;
         if(d.THRESHOLDS) THRESHOLDS=d.THRESHOLDS;
         if(d.CATS)       CATS=d.CATS;
+        if(d.LEVELS)     LEVELS=d.LEVELS;
         if(d.CAT_LEVEL)  CAT_LEVEL=d.CAT_LEVEL;
+        if(d.GT_DATA)    GT_DATA=d.GT_DATA;
+        if(d.REVERSE_FEES) REVERSE_FEES=d.REVERSE_FEES;
         if(d.COMM_MYNTRA)    COMM_MYNTRA=d.COMM_MYNTRA;
         if(d.COMM_AJIO_PPMP) COMM_AJIO_PPMP=d.COMM_AJIO_PPMP;
         if(d.COMM_AJIO_CC)   COMM_AJIO_CC=d.COMM_AJIO_CC;
@@ -4994,15 +5006,15 @@ function exportBreaches(){
 // ═══════════════════════════════════════════════════════
 // GT CHARGES + REVERSE FEES — editable tables
 // ═══════════════════════════════════════════════════════
-const GT_LEVELS = ['Level 1','Level 2','Level 3','Level 4'];
 const GT_BANDS  = ['0–1','2–99','100–300','300–500','500–1000','1000–2000','>2000'];
 
 function renderGTTable(){
   const tbody = el('gt-table-body');
   if(!tbody) return;
-  tbody.innerHTML = GT_LEVELS.map(lvl => {
+  tbody.innerHTML = LEVELS.map(lvl => {
     const vals = GT_DATA[lvl] || [0,1,0,0,0,0,0];
-    return `<tr>${['<td><strong>'+esc(lvl)+'</strong></td>',
+    const usedCount=Object.values(CAT_LEVEL).filter(l=>l===lvl).length;
+    return `<tr>${['<td><div class="flex gap8"><strong>'+esc(lvl)+'</strong>'+(usedCount?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(78,142,247,.12);color:var(--bl)">${usedCount}</span>`:'')+`<button class="btn br bxs" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td>`,
       ...vals.map((v,i) => `<td><input class="ci" style="width:58px;${i===6?'border-color:var(--ac)':''}"
         value="${v}" oninput="GT_DATA['${escAttr(lvl)}'][${i}]=+this.value">`+'</td>')
     ].join('')}</tr>`;
@@ -5012,13 +5024,91 @@ function renderGTTable(){
 function renderRetTable(){
   const tbody = el('ret-table-body');
   if(!tbody) return;
-  tbody.innerHTML = GT_LEVELS.map(lvl => {
+  tbody.innerHTML = LEVELS.map(lvl => {
     const v = REVERSE_FEES[lvl] || 0;
-    return `<tr><td><strong>${esc(lvl)}</strong></td>
+    return `<tr><td><div class="flex gap8"><strong>${esc(lvl)}</strong><button class="btn br bxs" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td>
       <td><input class="ci" style="width:80px" value="${v}"
         oninput="REVERSE_FEES['${escAttr(lvl)}']=+this.value"></td>
       <td class="st">Half: ₹${(v/2).toFixed(1)}</td></tr>`;
   }).join('');
+}
+
+// ── Level Management ────────────────────────────────
+let _deletedLevels=[];
+function openAddLevelModal(){
+  const nextNum=LEVELS.length+1;
+  setModal(`<div class="mhdr"><div class="mtl">+ Add Level</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="fg"><label class="fl">Level Name *</label><input class="fi" id="new-level-name" placeholder="e.g. Level ${nextNum}" value="Level ${nextNum}"></div>
+      <div class="frow">
+        <div class="fg"><label class="fl">Forward GT Default (₹)</label><input class="fi" type="number" id="new-level-gt" value="0" placeholder="e.g. 230"></div>
+        <div class="fg"><label class="fl">Reverse Fee Default (₹)</label><input class="fi" type="number" id="new-level-rev" value="0" placeholder="e.g. 218"></div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg" onclick="closeModal()">Cancel</button>
+      <button class="btn bp" onclick="addLevel()">Add Level</button>
+    </div>`);
+  setTimeout(()=>el('new-level-name')?.focus(),50);
+}
+async function addLevel(){
+  const name=(el('new-level-name')?.value||'').trim();
+  const gtVal=parseFloat(el('new-level-gt')?.value)||0;
+  const revVal=parseFloat(el('new-level-rev')?.value)||0;
+  if(!name){toast('Enter a level name','red');return;}
+  if(LEVELS.includes(name)){toast(`"${name}" already exists`,'red');return;}
+  LEVELS.push(name);
+  GT_DATA[name]=[0,1,gtVal,gtVal,gtVal,gtVal,gtVal];
+  REVERSE_FEES[name]=revVal;
+  await Promise.all([save('levels'),save('logistics')]);
+  renderGTTable();renderRetTable();buildCommMyntra();
+  audit('level_add',`Level "${name}" added (GT:₹${gtVal}, Rev:₹${revVal})`);
+  toast(`✓ "${name}" added`,'green');
+  closeModal();
+}
+async function deleteLevel(lvl){
+  if(LEVELS.length<=1){toast('Cannot delete the last level','red');return;}
+  const usedCats=Object.entries(CAT_LEVEL).filter(([,l])=>l===lvl).map(([c])=>c);
+  const fallback=LEVELS.find(l=>l!==lvl)||LEVELS[0];
+  const msg=usedCats.length
+    ?`Delete "${lvl}"?\n\n⚠ ${usedCats.length} categor${usedCats.length>1?'ies':'y'} will be moved to "${fallback}".`
+    :`Delete level "${lvl}"?`;
+  if(!confirm(msg))return;
+  // Stash for reinstate
+  _deletedLevels.push({name:lvl,gt:GT_DATA[lvl],rev:REVERSE_FEES[lvl],cats:usedCats.slice()});
+  // Move categories to fallback
+  LEVELS=LEVELS.filter(l=>l!==lvl);
+  if(usedCats.length){
+    usedCats.forEach(cat=>{CAT_LEVEL[cat]=fallback;});
+    await save('cat_levels');
+  }
+  delete GT_DATA[lvl];
+  delete REVERSE_FEES[lvl];
+  await Promise.all([save('levels'),save('logistics')]);
+  renderGTTable();renderRetTable();buildCommMyntra();triggerRecalc();renderSKUs();
+  audit('level_delete',`Level "${lvl}" deleted${usedCats.length?` (${usedCats.length} categories moved to ${fallback})`:''}`);
+  toast(`"${lvl}" removed — `,'red');
+  setTimeout(()=>{
+    const t=document.querySelector('.toast:last-child');
+    if(t&&t.textContent.includes(lvl)){
+      t.innerHTML+=` <button onclick="_reinstateLevel('${escAttr(lvl)}')" style="background:var(--ac);color:#000;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px">↩ Undo</button>`;
+    }
+  },50);
+}
+async function _reinstateLevel(name){
+  const stashed=_deletedLevels.find(d=>d.name===name);
+  if(!stashed){toast('Cannot reinstate — data expired','red');return;}
+  if(LEVELS.includes(name)){toast(`"${name}" already exists`,'red');return;}
+  LEVELS.push(name);
+  GT_DATA[name]=stashed.gt||[0,1,0,0,0,0,0];
+  REVERSE_FEES[name]=stashed.rev||0;
+  // Restore category assignments
+  if(stashed.cats?.length){stashed.cats.forEach(cat=>{if(CATS.includes(cat))CAT_LEVEL[cat]=name;});await save('cat_levels');}
+  _deletedLevels=_deletedLevels.filter(d=>d.name!==name);
+  await Promise.all([save('levels'),save('logistics')]);
+  renderGTTable();renderRetTable();buildCommMyntra();triggerRecalc();renderSKUs();
+  audit('level_reinstate',`Level "${name}" reinstated`);
+  toast(`✓ "${name}" reinstated`,'green');
 }
 
 function saveGTCharges(){
@@ -6459,6 +6549,7 @@ function applyRealtimeData(type, value){
       case 'users': users=value; applyDefaultUsers(); return true;
       case 'thresholds': THRESHOLDS=value; return true;
       case 'categories': CATS=value; return true;
+      case 'levels': LEVELS=value; return true;
       case 'cat_levels': CAT_LEVEL=value; return true;
       case 'comm_myntra': COMM_MYNTRA=value; return true;
       case 'comm_ppmp': COMM_AJIO_PPMP=value; return true;
