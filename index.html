@@ -210,8 +210,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100
 /* ── LOGIN SCREEN ───────────────────────────────────── */
 #login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;align-items:center;justify-content:center;overflow:hidden}
 #login-screen.active{display:flex}
+body:has(#login-screen.active){overflow:hidden}
 #login-bg-canvas{position:absolute;inset:0;z-index:0}
-.login-glow{position:absolute;border-radius:50%;filter:blur(80px);opacity:.15;animation:loginGlowFloat 8s ease-in-out infinite alternate;z-index:0}
+.login-glow{position:absolute;border-radius:50%;filter:blur(80px);opacity:.15;animation:loginGlowFloat 8s ease-in-out infinite alternate;z-index:0;pointer-events:none}
 .login-glow-1{width:400px;height:400px;background:var(--ac);top:-100px;left:-100px;animation-duration:8s}
 .login-glow-2{width:350px;height:350px;background:var(--pu);bottom:-80px;right:-80px;animation-duration:10s;animation-delay:-3s}
 .login-glow-3{width:250px;height:250px;background:var(--bl);top:50%;left:60%;animation-duration:12s;animation-delay:-5s}
