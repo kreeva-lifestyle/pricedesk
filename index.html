@@ -1727,7 +1727,7 @@ async function loadFromStorage(){
       if(loaded.logistics.settings) LOGISTICS_SETTINGS  = loaded.logistics.settings;
     }
     if(loaded.wireframe){
-      const WF_VERSION = 6; // Increment when wireframe structure changes
+      const WF_VERSION = 7; // Increment when wireframe structure changes
       const PPMP_CC_VERSION = 6; // v6: new Ajio PPMP/CC formulas
       if(loaded.wireframe._v === WF_VERSION){
         // Same version — load all from saved data
@@ -1749,6 +1749,10 @@ async function loadFromStorage(){
         // Version mismatch — preserve Myntra & Amazon from saved data, reset PPMP & CC to new code defaults
         if(loaded.wireframe.myntra && Array.isArray(loaded.wireframe.myntra)) WF.myntra = loaded.wireframe.myntra;
         if(loaded.wireframe.amazon && Array.isArray(loaded.wireframe.amazon)) WF.amazon = loaded.wireframe.amazon;
+        // v7: ensure Gross Settlement row exists in Myntra wireframe
+        if(Array.isArray(WF.myntra) && !WF.myntra.find(r=>r.var==='grossSettlement')){
+          WF.myntra.push({id:10.2,t:'output',l:'GROSS SETTLEMENT',expr:'sellerPrice - commAmt - (collFee * 1.18)',var:'grossSettlement',desc:'Seller Price - Commission(AMT) - (Fix Fees + 18%)'});
+        }
         // PPMP and CC stay as code defaults (new formula)
         WF._v = WF_VERSION;
         save('wireframe');
