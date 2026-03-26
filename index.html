@@ -6504,7 +6504,59 @@ function renderSkuHistory(skuId){
     }).join('')}</tbody></table></div>`;
 }
 
+let _historyShowCount=5;
+function _buildHistoryCard(g,isMyntra,fieldLabels,fmtDelta,fmtDate){
+  const when=fmtDate(g.tsISO);
+  let fieldsHtml=g.fields.map(f=>{
+    const label=fieldLabels[f.field]||f.field;
+    return`<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+      <span style="font-weight:500;min-width:90px;font-size:12px">${esc(label)}</span>
+      <span class="mono" style="color:var(--re);font-size:12px;text-decoration:line-through;opacity:.7">${f.oldVal}</span>
+      <span style="color:var(--tx3);font-size:10px">→</span>
+      <span class="mono" style="color:var(--gr);font-size:12px;font-weight:600">${f.newVal}</span>
+    </div>`;
+  }).join('');
+  let impactHtml='';
+  if(g.snapshot){
+    const sn=g.snapshot;
+    impactHtml=`<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:100px;background:var(--s2);border-radius:6px;padding:8px 10px;border-left:3px solid ${sn.profitDelta>=0?'var(--gr)':'var(--re)'}">
+        <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Profit</div>
+        <div class="mono" style="font-size:13px;font-weight:700;color:${sn.after.profit>=0?'var(--gr)':'var(--re)'}">₹${Math.round(sn.after.profit)}</div>
+        <div style="font-size:10px;margin-top:2px">${fmtDelta(sn.profitDelta)}</div>
+      </div>
+      <div style="flex:1;min-width:100px;background:var(--s2);border-radius:6px;padding:8px 10px;border-left:3px solid ${sn.ifdDelta>=0?'var(--gr)':'var(--re)'}">
+        <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">If Delivered</div>
+        <div class="mono" style="font-size:13px;font-weight:700;color:${sn.after.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${Math.round(sn.after.ifDelivered)}</div>
+        <div style="font-size:10px;margin-top:2px">${fmtDelta(sn.ifdDelta)}</div>
+      </div>
+      ${isMyntra?`<div style="flex:1;min-width:100px;background:var(--s2);border-radius:6px;padding:8px 10px;border-left:3px solid ${sn.gsDelta>=0?'var(--gr)':'var(--re)'}">
+        <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Gross Settlement</div>
+        <div class="mono" style="font-size:13px;font-weight:700;color:${sn.after.grossSettlement>=0?'var(--gr)':'var(--re)'}">₹${Math.round(sn.after.grossSettlement)}</div>
+        <div style="font-size:10px;margin-top:2px">${fmtDelta(sn.gsDelta)}</div>
+      </div>`:''}
+    </div>`;
+  }
+  const borderColor=g.snapshot?(g.snapshot.profitDelta>=0?'rgba(45,212,160,.3)':'rgba(245,87,92,.3)'):'var(--bd)';
+  return`<div style="border:1px solid ${borderColor};border-radius:8px;padding:14px;margin-bottom:10px;background:var(--s)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <span class="mono st" style="font-size:11px">${when}</span>
+      <span style="font-size:11px;color:var(--tx3)">${esc(g.user)}</span>
+    </div>
+    ${fieldsHtml}
+    ${impactHtml}
+  </div>`;
+}
+
 function showSkuHistoryModal(skuId){
+  _historyShowCount=5;
+  _renderSkuHistoryModal(skuId);
+}
+function _loadMoreHistory(skuId){
+  _historyShowCount+=5;
+  _renderSkuHistoryModal(skuId);
+}
+function _renderSkuHistoryModal(skuId){
   const s=skuDB.find(x=>x.id===skuId);if(!s)return;
   const brand=brands.find(b=>b.id===s.brandId);
   const isMyntra=brand&&brand.model==='myntra';
@@ -6517,7 +6569,6 @@ function showSkuHistoryModal(skuId){
   if(!history||!history.length){
     contentHtml='<div style="padding:32px;text-align:center;color:var(--tx3)">No price changes recorded yet.<br><span style="font-size:11px">Changes will appear here when you edit this SKU.</span></div>';
   } else {
-    // Group field changes and snapshots by timestamp (within 2 seconds = same edit)
     const groups=[];
     let curGroup=null;
     history.forEach(h=>{
@@ -6529,52 +6580,18 @@ function showSkuHistoryModal(skuId){
       if(h.field==='_snapshot') curGroup.snapshot=h;
       else curGroup.fields.push(h);
     });
-
-    contentHtml=groups.slice().reverse().map((g,gi)=>{
-      const when=fmtDate(g.tsISO);
-      let fieldsHtml=g.fields.map(f=>{
-        const label=fieldLabels[f.field]||f.field;
-        return`<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
-          <span style="font-weight:500;min-width:90px;font-size:12px">${esc(label)}</span>
-          <span class="mono" style="color:var(--re);font-size:12px;text-decoration:line-through;opacity:.7">${f.oldVal}</span>
-          <span style="color:var(--tx3);font-size:10px">→</span>
-          <span class="mono" style="color:var(--gr);font-size:12px;font-weight:600">${f.newVal}</span>
-        </div>`;
-      }).join('');
-      let impactHtml='';
-      if(g.snapshot){
-        const sn=g.snapshot;
-        impactHtml=`<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-          <div style="flex:1;min-width:100px;background:var(--s2);border-radius:6px;padding:8px 10px;border-left:3px solid ${sn.profitDelta>=0?'var(--gr)':'var(--re)'}">
-            <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Profit</div>
-            <div class="mono" style="font-size:13px;font-weight:700;color:${sn.after.profit>=0?'var(--gr)':'var(--re)'}">₹${Math.round(sn.after.profit)}</div>
-            <div style="font-size:10px;margin-top:2px">${fmtDelta(sn.profitDelta)}</div>
-          </div>
-          <div style="flex:1;min-width:100px;background:var(--s2);border-radius:6px;padding:8px 10px;border-left:3px solid ${sn.ifdDelta>=0?'var(--gr)':'var(--re)'}">
-            <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">If Delivered</div>
-            <div class="mono" style="font-size:13px;font-weight:700;color:${sn.after.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${Math.round(sn.after.ifDelivered)}</div>
-            <div style="font-size:10px;margin-top:2px">${fmtDelta(sn.ifdDelta)}</div>
-          </div>
-          ${isMyntra?`<div style="flex:1;min-width:100px;background:var(--s2);border-radius:6px;padding:8px 10px;border-left:3px solid ${sn.gsDelta>=0?'var(--gr)':'var(--re)'}">
-            <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Gross Settlement</div>
-            <div class="mono" style="font-size:13px;font-weight:700;color:${sn.after.grossSettlement>=0?'var(--gr)':'var(--re)'}">₹${Math.round(sn.after.grossSettlement)}</div>
-            <div style="font-size:10px;margin-top:2px">${fmtDelta(sn.gsDelta)}</div>
-          </div>`:''}
-        </div>`;
-      }
-      const borderColor=g.snapshot?(g.snapshot.profitDelta>=0?'rgba(45,212,160,.3)':'rgba(245,87,92,.3)'):'var(--bd)';
-      return`<div style="border:1px solid ${borderColor};border-radius:8px;padding:14px;margin-bottom:10px;background:var(--s)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <span class="mono st" style="font-size:11px">${when}</span>
-          <span style="font-size:11px;color:var(--tx3)">${esc(g.user)}</span>
-        </div>
-        ${fieldsHtml}
-        ${impactHtml}
+    const reversed=groups.slice().reverse();
+    const visible=reversed.slice(0,_historyShowCount);
+    const remaining=reversed.length-visible.length;
+    contentHtml=visible.map(g=>_buildHistoryCard(g,isMyntra,fieldLabels,fmtDelta,fmtDate)).join('');
+    if(remaining>0){
+      contentHtml+=`<div style="text-align:center;padding:8px">
+        <button class="btn bg bsm" onclick="_loadMoreHistory('${escAttr(skuId)}')" style="width:100%;justify-content:center">Show ${Math.min(remaining,5)} more of ${remaining} older changes</button>
       </div>`;
-    }).join('');
+    }
+    contentHtml=`<div style="font-size:11px;color:var(--tx3);margin-bottom:6px">${reversed.length} change${reversed.length!==1?'s':''} recorded</div>`+contentHtml;
   }
 
-  // Current snapshot
   const curCalc=calcSKU(s);
   const curCards=`<div style="display:flex;gap:8px;flex-wrap:wrap">
     <div style="flex:1;min-width:80px;background:var(--s2);border-radius:6px;padding:8px 10px;text-align:center">
@@ -6606,7 +6623,7 @@ function showSkuHistoryModal(skuId){
         <div style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Current Values</div>
         ${curCards}
       </div>
-      <div style="padding:14px 16px;max-height:400px;overflow-y:auto">
+      <div style="padding:14px 16px;max-height:400px;overflow-y:auto" id="history-scroll-area">
         <div style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Change History</div>
         ${contentHtml}
       </div>
