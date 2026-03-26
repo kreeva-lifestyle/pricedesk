@@ -857,7 +857,7 @@ body:has(#login-screen.active){overflow:hidden}
       <div class="sc"><div class="sl">Total SKUs</div><div class="sv" style="color:var(--bl)" id="dash-sku">0</div><div class="ss">Across all brands</div></div>
       <div class="sc"><div class="sl">Active Brands</div><div class="sv" style="color:var(--pu)" id="dash-brands">0</div></div>
       <div class="sc"><div class="sl">Threshold Breaches</div><div class="sv" style="color:var(--re)" id="dash-breaches">0</div><div class="ss">Not ignored</div></div>
-      <div class="sc"><div class="sl">Commission Models</div><div class="sv" style="color:var(--ac)">3</div><div class="ss">Myntra · PPMP · CC</div></div>
+      <div class="sc"><div class="sl">Ignored Breaches</div><div class="sv" style="color:var(--ac)" id="dash-ignored">0</div><div class="ss">Threshold ignored</div></div>
     </div>
   </div>
 
@@ -2369,6 +2369,11 @@ function updateAlerts(){
     }
   }
   if(dashBreaches)dashBreaches.textContent=breached.length;
+  const dashIgnored=el('dash-ignored');
+  if(dashIgnored){
+    const ignored=skuDB.filter(s=>s.ignoreThreshold&&calcSKU(s).profitRs<(THRESHOLDS[s.category]||0));
+    dashIgnored.textContent=ignored.length;
+  }
   if(dashAlerts){
     dashAlerts.innerHTML=breached.slice(0,5).map(s=>{
       const c=calcSKU(s);const brand=brands.find(b=>b.id===s.brandId);
