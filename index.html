@@ -24,7 +24,7 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .nav-item{display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;color:var(--tx2);font-size:13px;font-weight:500;transition:all .12s;border-left:3px solid transparent}
 .nav-item:hover{background:var(--s2);color:var(--tx)}
 .nav-item.active{background:var(--s2);color:var(--ac);border-left-color:var(--ac)}
-.ni{width:16px;text-align:center;font-size:13px}
+.ni{width:16px;text-align:center;font-size:13px;line-height:1;display:inline-block}
 .sb-btm{padding:14px 16px;border-top:1px solid var(--bd);margin-top:auto}
 .ava{width:28px;height:28px;border-radius:50%;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000;flex-shrink:0}
 .main{margin-left:230px;flex:1;display:flex;flex-direction:column;min-width:0}
@@ -157,6 +157,10 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .ico-breach{font-size:15px;cursor:help;filter:drop-shadow(0 0 4px rgba(245,87,92,.6))}
 .ico-ignore{font-size:15px;cursor:pointer;opacity:.6}.ico-ignore:hover{opacity:1}
 .ico-healthy{font-size:14px;opacity:.5}
+/* SKU ACTION BUTTONS — uniform sizing */
+.sku-act{font-size:10px!important;padding:4px 8px!important;line-height:1.2!important;white-space:nowrap!important;min-height:0!important;height:24px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important}
+.sku-menu-item{padding:7px 14px;font-size:12px;cursor:pointer;color:var(--tx2);transition:background .1s}
+.sku-menu-item:hover{background:var(--s2);color:var(--tx)}
 /* THRESHOLD */
 .thr-row{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--bd)}
 .thr-row:last-child{border-bottom:none}
@@ -805,7 +809,7 @@ body:has(#login-screen.active){overflow:hidden}
     <div class="nav-item" data-page="logistics" onclick="nav('logistics')"><span class="ni">⇅</span> Logistics</div>
     <div class="nav-sec">Products</div>
     <div class="nav-item" data-page="skus" onclick="nav('skus')"><span class="ni">⊟</span> SKUs</div>
-    <div class="nav-item" data-page="archive" onclick="nav('archive')"><span class="ni">📦</span> Archive <span id="nav-archive-count" style="font-size:10px;color:var(--tx3);margin-left:auto"></span></div>
+    <div class="nav-item" data-page="archive" onclick="nav('archive')"><span class="ni">▣</span> Archive <span id="nav-archive-count" style="font-size:10px;color:var(--tx3);margin-left:auto"></span></div>
     <div class="nav-sec">Admin</div>
     <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni">☰</span> Wireframe Builder</div>
     <div class="nav-item" data-page="activity" onclick="nav('activity')"><span class="ni">▤</span> Activity Log</div>
@@ -1184,7 +1188,7 @@ body:has(#login-screen.active){overflow:hidden}
         <col style="width:88px"><!-- Net Profit -->
         <col style="width:88px"><!-- If Delivered -->
         <col style="width:100px"><!-- Gross Settlement -->
-        <col style="width:195px"><!-- Actions -->
+        <col style="width:170px"><!-- Actions -->
       </colgroup>
       <thead><tr>
         <th>Img</th>
@@ -1452,9 +1456,9 @@ body:has(#login-screen.active){overflow:hidden}
         <div class="cb">
           <div class="fg"><label class="fl">Send test to this email</label><input class="fi" id="cfg-test-email" type="email" placeholder="test@example.com"></div>
           <div style="display:flex;flex-direction:column;gap:9px">
-            <div class="flex gap12"><button class="btn bg bsm" style="width:170px" onclick="testEmail('welcome')">📨 Test Welcome Email</button><span class="st">Sent when a new user is added</span></div>
-            <div class="flex gap12"><button class="btn bg bsm" style="width:170px" onclick="testEmail('reset')">🔑 Test Reset Email</button><span class="st">Sent on password reset</span></div>
-            <div class="flex gap12"><button class="btn bg bsm" style="width:170px" onclick="testEmail('alert')">⚠️ Test Alert Email</button><span class="st">Sent on threshold breach</span></div>
+            <div class="flex gap12"><button class="btn bg bsm" style="min-width:170px" onclick="testEmail('welcome')">→ Test Welcome Email</button><span class="st">Sent when a new user is added</span></div>
+            <div class="flex gap12"><button class="btn bg bsm" style="min-width:170px" onclick="testEmail('reset')">→ Test Reset Email</button><span class="st">Sent on password reset</span></div>
+            <div class="flex gap12"><button class="btn bg bsm" style="min-width:170px" onclick="testEmail('alert')">→ Test Alert Email</button><span class="st">Sent on threshold breach</span></div>
           </div>
         </div>
       </div>
@@ -2384,7 +2388,7 @@ function renderBreachList(){
   h+=pageList.map(s=>{
     const c=calcSKU(s);
     const brand=brands.find(b=>b.id===s.brandId);
-    return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${esc(s.sku||s.styleId||'—')}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:3px 8px;white-space:nowrap">🔕 Ignore</button></td></tr>`;
+    return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${esc(s.sku||s.styleId||'—')}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:4px 8px;white-space:nowrap">⊘ Ignore</button></td></tr>`;
   }).join('');
   h+='</tbody></table>';
   if(totalPages>1){
@@ -2992,9 +2996,10 @@ function renderSKUs(){
     const profColor=c.profitRs<0?'var(--re)':c.isBreach?'var(--ac)':'var(--gr)';
     const ifDelColor=c.ifDelivered>=0?'var(--gr)':'var(--re)';
     let statusIcon='';
-    if(s.ignoreThreshold) statusIcon=`<span title="Threshold ignored — click to re-enable" onclick="toggleIgnore('${escAttr(s.id)}')" style="cursor:pointer">🔕</span>`;
-    else if(c.isBreach) statusIcon=`<span title="Below threshold: ₹${c.profitRs.toFixed(0)} < ₹${c.threshold} — click to ignore" onclick="toggleIgnore('${escAttr(s.id)}')" style="cursor:pointer">⚠️</span>`;
-    else statusIcon=`<span title="Healthy — click to ignore threshold" onclick="toggleIgnore('${escAttr(s.id)}')" style="cursor:pointer">✅</span>`;
+    const _icoStyle='cursor:pointer;font-size:14px;line-height:1;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center';
+    if(s.ignoreThreshold) statusIcon=`<span title="Threshold ignored — click to re-enable" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle}">🔕</span>`;
+    else if(c.isBreach) statusIcon=`<span title="Below threshold: ₹${c.profitRs.toFixed(0)} < ₹${c.threshold} — click to ignore" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle}">⚠️</span>`;
+    else statusIcon=`<span title="Healthy — click to ignore threshold" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle}">✅</span>`;
     return`<tr>
       <td><div data-sku-img="${escAttr(s.id)}" onclick="openImgModal('${escAttr(s.id)}')" style="cursor:pointer" title="Set product image">${s.img?`<img src="${esc(fixImg(s.img))}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">+</div>`}</div></td>
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
@@ -3011,12 +3016,17 @@ function renderSKUs(){
       <td>
         <div style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
           ${statusIcon}
-          <button class="btn bg bxs" onclick="showCalcModal('${escAttr(s.id)}')" title="View full calculation breakdown" style="font-size:10px;padding:3px 8px">Calc</button>
-          <button class="btn bg bxs" onclick="showSkuHistoryModal('${escAttr(s.id)}')" title="View price change history" style="font-size:10px;padding:3px 8px">History</button>
-          <button class="btn bg bxs" onclick="openTagsModal('${escAttr(s.id)}')" title="Notes & Tags" style="font-size:10px;padding:3px 8px">Tags</button>
-          <button class="btn bg bxs" onclick="startEdit('${escAttr(s.id)}')" title="Edit this SKU">✎</button>
-          <button class="btn bg bxs" onclick="archiveSKU('${escAttr(s.id)}')" title="Archive — Out of Stock" style="font-size:10px;padding:3px 8px">📦</button>
-          <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Delete this SKU">✕</button>
+          <button class="btn bg bxs sku-act" onclick="showCalcModal('${escAttr(s.id)}')" title="View full calculation breakdown">Calc</button>
+          <button class="btn bg bxs sku-act" onclick="showSkuHistoryModal('${escAttr(s.id)}')" title="View price change history">History</button>
+          <button class="btn bg bxs sku-act" onclick="openTagsModal('${escAttr(s.id)}')" title="Notes & Tags">Tags</button>
+          <div style="position:relative;display:inline-block" class="sku-more-wrap">
+            <button class="btn bg bxs sku-act" onclick="toggleSkuMenu(event,'${escAttr(s.id)}')" title="More actions">⋮</button>
+            <div class="sku-menu" id="sku-menu-${escAttr(s.id)}" style="display:none;position:absolute;right:0;top:100%;margin-top:2px;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:50;min-width:140px;overflow:hidden">
+              <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${escAttr(s.id)}')">✎ Edit SKU</div>
+              <div class="sku-menu-item" onclick="hideSkuMenus();archiveSKU('${escAttr(s.id)}')">▣ Archive</div>
+              <div class="sku-menu-item" style="color:var(--re);border-top:1px solid var(--bd)" onclick="hideSkuMenus();delSKU('${escAttr(s.id)}')">✕ Delete</div>
+            </div>
+          </div>
         </div>
       </td>
     </tr>`;
@@ -3143,6 +3153,16 @@ function liveCalcRow(row){
 }
 
 function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sku')?.focus(),50);}
+function toggleSkuMenu(event,id){
+  event.stopPropagation();
+  const menu=document.getElementById('sku-menu-'+id);
+  const wasOpen=menu&&menu.style.display!=='none';
+  hideSkuMenus();
+  if(!wasOpen&&menu) menu.style.display='block';
+}
+function hideSkuMenus(){document.querySelectorAll('.sku-menu').forEach(m=>m.style.display='none');}
+document.addEventListener('click',hideSkuMenus);
+
 function startEdit(id){editId=id;renderSKUs();setTimeout(()=>el('e-sid')?.focus(),50);}
 function cancelEdit(){editId=null;newImg='';renderSKUs();}
 // promptImg / promptImgNew now replaced by openImgModal — see IMAGE MANAGEMENT section
@@ -3288,8 +3308,8 @@ function renderArchivedSKUs(){
         <td class="mono">${s.discount||0}%</td>
         <td class="mono" style="color:${c.profitRs>=0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</td>
         <td><div class="flex gap8">
-          <button class="btn bp bxs" onclick="unarchiveSKU('${escAttr(s.id)}')" title="Restore to active">↩ Restore</button>
-          <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Permanently delete">✕</button>
+          <button class="btn bp bxs sku-act" onclick="unarchiveSKU('${escAttr(s.id)}')" title="Restore to active">↩ Restore</button>
+          <button class="btn br bxs sku-act" onclick="delSKU('${escAttr(s.id)}')" title="Permanently delete">✕</button>
         </div></td>
       </tr>`;
     }).join('');
@@ -3407,7 +3427,7 @@ function renderUsers(){
     <td class="st">${esc(u.added)}</td>
     <td><div class="flex gap8">
       <button class="btn bg bxs" onclick="openUserModal('${escAttr(u.id)}')" aria-label="Edit user">✎ Edit</button>
-      <button class="btn bg bxs" onclick="resetUserPassword('${escAttr(u.id)}')" title="Reset password">🔑</button>
+      <button class="btn bg bxs" onclick="resetUserPassword('${escAttr(u.id)}')" title="Reset password" style="font-size:11px">Reset PW</button>
       ${u.id!=='u0'?(isRevoked
         ?`<button class="btn bg bxs" style="color:var(--gr);border-color:var(--gr)" onclick="reinstateUser('${escAttr(u.id)}')">↩ Restore</button>`
         :`<button class="btn br bxs" onclick="revokeUser('${escAttr(u.id)}')" title="Revoke access">⊘ Revoke</button>`):''}
