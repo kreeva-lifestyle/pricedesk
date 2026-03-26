@@ -850,6 +850,7 @@ body:has(#login-screen.active){overflow:hidden}
     <div style="text-align:center;color:var(--tx3);font-size:12px;padding:10px;animation:pulse 1.5s infinite">Loading dashboard...</div>
   </div>
 
+  <div id="dash-content" style="display:none">
   <div class="dash-block" data-dash-id="stats" draggable="true">
     <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
     <div class="g4 mb0">
@@ -918,10 +919,9 @@ body:has(#login-screen.active){overflow:hidden}
       <table class="dt" style="min-width:600px"><thead><tr><th>Brand</th><th>Marketplace</th><th>Model</th><th>SKUs</th><th>Avg Commission</th><th>Avg Net Profit (₹)</th><th>Status</th></tr></thead><tbody id="brand-summary-body"></tbody></table>
     </div>
   </div>
+  </div><!-- /dash-content -->
 
 </div>
-
-<!-- ═══ PRICING TABLES ═══ -->
 <div class="page" id="page-pricing">
   <div class="info" style="font-size:12px;line-height:1.6"><strong>How it works:</strong> Enter Cost, Markup % and Discount % to see your profit. GST is auto-applied (5% below ₹2,500 · 18% above). Commission and logistics are deducted per marketplace rules.</div>
   <div class="tabs">
@@ -2456,7 +2456,7 @@ let _dashDragEl=null;
 let _dashHandleActive=false;
 
 function initDashDrag(){
-  const container=document.getElementById('page-dashboard');
+  const container=document.getElementById('dash-content')||document.getElementById('page-dashboard');
   if(!container)return;
   // Disable drag-and-drop entirely on mobile
   if(window.innerWidth<=768){container.querySelectorAll('.dash-block').forEach(b=>b.setAttribute('draggable','false'));return;}
@@ -2565,7 +2565,7 @@ function initDashDrag(){
 }
 
 function saveDashOrder(){
-  const container=document.getElementById('page-dashboard');
+  const container=document.getElementById('dash-content')||document.getElementById('page-dashboard');
   const order=[...container.querySelectorAll('.dash-block')].map(b=>b.dataset.dashId);
   localStorage.setItem(DASH_ORDER_KEY,JSON.stringify(order));
 }
@@ -2575,7 +2575,9 @@ document.addEventListener('DOMContentLoaded',()=>setTimeout(initDashDrag,100));
 
 function renderDashboardWidgets(){
   const loader=el('dash-loader');
+  const dashContent=el('dash-content');
   if(loader) loader.style.display='none';
+  if(dashContent) dashContent.style.display='';
   if(!skuDB.length) return;
   const allCalcs=skuDB.map(s=>({s,c:calcSKU(s),b:brands.find(b=>b.id===s.brandId)||{name:'?',model:'?'}}));
 
