@@ -366,7 +366,7 @@ body:has(#login-screen.active){overflow:hidden}
 
   /* SKU sheet: horizontal scroll */
   .ss-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:0 12px;scrollbar-width:thin}
-  .ss{min-width:1100px}
+  .ss{min-width:1200px}
   .ss th,.ss td{padding:5px 6px;font-size:11px}
 
   /* Hide Style ID & Tags columns to save space */
@@ -529,7 +529,7 @@ body:has(#login-screen.active){overflow:hidden}
 
   /* SKU table: hide more columns for very small screens */
   .ss th:nth-child(8),.ss td:nth-child(8){display:none}
-  .ss{min-width:900px}
+  .ss{min-width:1000px}
 
   /* Page title */
   .pt{font-size:13px}
@@ -1158,7 +1158,7 @@ body:has(#login-screen.active){overflow:hidden}
     <div class="st" id="sku-count"></div>
   </div>
   <div class="ss-wrap">
-    <table class="ss" style="width:100%;min-width:1150px">
+    <table class="ss" style="width:100%;min-width:1250px">
       <colgroup>
         <col style="width:36px"><!-- Img -->
         <col style="width:100px"><!-- SKU -->
@@ -1171,6 +1171,7 @@ body:has(#login-screen.active){overflow:hidden}
         <col style="width:95px"><!-- Selling Price -->
         <col style="width:88px"><!-- Net Profit -->
         <col style="width:88px"><!-- If Delivered -->
+        <col style="width:100px"><!-- Gross Settlement -->
         <col style="width:195px"><!-- Actions -->
       </colgroup>
       <thead><tr>
@@ -1185,6 +1186,7 @@ body:has(#login-screen.active){overflow:hidden}
         <th class="sortable" onclick="sortSKUs('sp')" data-sort="sp">Selling Price <span class="sort-arrow" id="sort-sp"></span></th>
         <th class="sortable" onclick="sortSKUs('profit')" data-sort="profit">Net Profit <span class="sort-arrow" id="sort-profit"></span></th>
         <th class="sortable" onclick="sortSKUs('ifDelivered')" data-sort="ifDelivered">If Delivered <span class="sort-arrow" id="sort-ifDelivered"></span></th>
+        <th class="sortable" onclick="sortSKUs('grossSettlement')" data-sort="grossSettlement">Gross Sett. <span class="sort-arrow" id="sort-grossSettlement"></span></th>
         <th>Actions</th>
       </tr></thead>
       <tbody id="sku-body"></tbody>
@@ -1956,7 +1958,7 @@ function calcSKU(s){
   // Auto-derive level from category
   const level = CAT_LEVEL[s.category] || s.level || 'Level 2';
 
-  let mrp, sp, comm, payout, profitRs, ifDelivered=0;
+  let mrp, sp, comm, payout, profitRs, ifDelivered=0, grossSettlement=0;
 
   if(mp==='myntra'){
     // Use WF engine for full Myntra calculation
@@ -1969,6 +1971,7 @@ function calcSKU(s){
     // If Delivered = profit + reverse fees (saved when order completes)
     const retFee=v2.retFee??v2.ret??0;
     ifDelivered=v2.ifDelivered??(profitRs + retFee);
+    grossSettlement=v2.grossSettlement??0;
   } else if(mp==='ajio-ppmp'||mp==='ajio-cc'){
     // Ajio PPMP / CC formula from actual model
     const profitInclCost=Math.round(s.cost + s.cost * s.markup / 100);
@@ -2013,7 +2016,7 @@ function calcSKU(s){
   const profitPct=sp>0?(profitRs/sp*100).toFixed(1):'0';
   const threshold=THRESHOLDS[s.category]||0;
   const isBreach=!s.ignoreThreshold&&profitRs<threshold;
-  const result={mrp,sp,comm,payout,profitRs,profitPct,isBreach,threshold,ifDelivered};
+  const result={mrp,sp,comm,payout,profitRs,profitPct,isBreach,threshold,ifDelivered,grossSettlement};
   _calcCache.set(cacheKey, result);
   return result;
 }
@@ -2771,6 +2774,7 @@ function applySKUSort(list){
     if(_skuSortCol==='sp'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.sp;vb=cb.sp;}
     else if(_skuSortCol==='profit'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.profitRs;vb=cb.profitRs;}
     else if(_skuSortCol==='ifDelivered'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.ifDelivered;vb=cb.ifDelivered;}
+    else if(_skuSortCol==='grossSettlement'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.grossSettlement;vb=cb.grossSettlement;}
     else{va=a[_skuSortCol];vb=b[_skuSortCol];}
     if(typeof va==='string'&&typeof vb==='string') return va.localeCompare(vb)*dir;
     return ((va||0)-(vb||0))*dir;
@@ -2910,6 +2914,7 @@ function renderSKUs(){
       <td class="mono" style="color:var(--bl)">₹${Math.round(c.sp).toLocaleString('en-IN')}</td>
       <td class="mono" style="color:${profColor};font-weight:600">₹${c.profitRs.toFixed(0)}</td>
       <td class="mono" style="color:${ifDelColor}">₹${c.ifDelivered.toFixed(0)}</td>
+      <td class="mono" style="color:${brand&&brand.model==='myntra'?(c.grossSettlement>=0?'var(--gr)':'var(--re)'):'var(--tx3)'}">${brand&&brand.model==='myntra'?'₹'+c.grossSettlement.toFixed(0):'—'}</td>
       <td>
         <div style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
           ${statusIcon}
@@ -2950,6 +2955,7 @@ function renderEditRow(s){
     <td><div class="av" id="e-sp" style="color:var(--bl)">₹${Math.round(c.sp).toLocaleString('en-IN')}</div></td>
     <td><div class="av" id="e-pp" style="color:${c.profitRs>0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</div></td>
     <td><div class="av" id="e-ifd" style="color:${c.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${c.ifDelivered.toFixed(0)}</div></td>
+    <td><div class="av na">—</div></td>
     <td><div style="display:flex;gap:5px"><button class="btn bp bxs" onclick="saveEdit('${s.id}')" title="Save changes">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()" title="Cancel editing">✕</button></div></td>
   </tr>`;
 }
@@ -2990,6 +2996,7 @@ function renderNewRow(){
     <td><div class="av na" id="n-sp">—</div></td>
     <td><div class="av na" id="n-pp">—</div></td>
     <td><div class="av na" id="n-ifd">—</div></td>
+    <td><div class="av na">—</div></td>
     <td><div style="display:flex;gap:5px"><button class="btn bp bxs" onclick="saveNew()" title="Save new SKU">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()" title="Cancel">✕</button></div></td>
   </tr>`;
 }
@@ -3280,7 +3287,8 @@ const WF={myntra:[
   {id:9.1, t:'formula', l:'EXPECTED PAYMENT',                          expr:'sellerPrice - tcs - tds - commAmt - totalLogistic', var:'expectedPayment', desc:'SP - TCS - TDS - Commission - Total Logistic'},
   {id:8.5, t:'input',   l:'PACKAGING COST',                             var:'packagingCost', defaultVal:60, desc:'Packaging cost per unit'},
   {id:10,  t:'output',  l:'PROFIT',                                    expr:'expectedPayment - cost - (packagingCost||0)', var:'profit', desc:'Expected Payment - Cost - Packaging'},
-  {id:10.1,t:'output',  l:'IF DELIVERED',                               expr:'(expectedPayment - cost - (packagingCost||0)) + retFee', var:'ifDelivered', desc:'Profit + Reverse Fees (saved if delivered)'}
+  {id:10.1,t:'output',  l:'IF DELIVERED',                               expr:'(expectedPayment - cost - (packagingCost||0)) + retFee', var:'ifDelivered', desc:'Profit + Reverse Fees (saved if delivered)'},
+  {id:10.2,t:'output',  l:'GROSS SETTLEMENT',                           expr:'sellerPrice - commAmt - (collFee * 1.18)', var:'grossSettlement', desc:'Seller Price - Commission(AMT) - (Fix Fees + 18%)'}
 ],'ajio-ppmp':[
   {id:1,    t:'section', l:'Pricing'},
   {id:2,    t:'input',   l:'Cost',                                      var:'cost', desc:'Input By User'},
@@ -4273,6 +4281,48 @@ async function deleteBackup(date){
   const ms=msUntilMidnightIST();
   console.log(`Auto-backup scheduled in ${Math.round(ms/60000)} minutes (midnight IST)`);
   setTimeout(runAutoBackup,ms);
+})();
+
+// Daily/Weekly alert cron: fires at 9:00 AM IST
+(function scheduleDailyAlert(){
+  function msUntil9amIST(){
+    const now=new Date();
+    const istOffset=5.5*60*60*1000;
+    const nowIST=new Date(now.getTime()+istOffset);
+    const target=new Date(nowIST);
+    target.setHours(9,0,0,0);
+    if(nowIST>=target) target.setDate(target.getDate()+1);
+    return target.getTime()-nowIST.getTime();
+  }
+  function runDailyAlert(){
+    const freq=ALERT_SETTINGS.frequency||'';
+    const alertEmail=ALERT_SETTINGS.email||'';
+    if(!alertEmail||!emailReady()){scheduleNext();return;}
+    const lastRun=localStorage.getItem('pd_last_daily_alert');
+    const today=new Date().toISOString().slice(0,10);
+    if(lastRun===today){scheduleNext();return;}
+    if(freq.includes('Daily')){
+      const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+      if(breached.length){
+        sendThresholdAlertEmail(breached,alertEmail);
+        console.log('✓ Daily alert sent for',breached.length,'breaches to',alertEmail);
+      }
+      localStorage.setItem('pd_last_daily_alert',today);
+    } else if(freq.includes('Weekly')){
+      const dayOfWeek=new Date().getDay();
+      if(dayOfWeek===1){
+        const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+        if(breached.length) sendThresholdAlertEmail(breached,alertEmail);
+        localStorage.setItem('pd_last_daily_alert',today);
+        console.log('✓ Weekly alert sent');
+      }
+    }
+    scheduleNext();
+  }
+  function scheduleNext(){setTimeout(runDailyAlert,24*60*60*1000);}
+  const ms=msUntil9amIST();
+  console.log(`Alert cron scheduled in ${Math.round(ms/60000)} min (9 AM IST). Requires browser tab open.`);
+  setTimeout(runDailyAlert,ms);
 })();
 
 function showBackupSetupSQL(){
@@ -5360,10 +5410,11 @@ function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){
   const payout   = result.expectedPayment ?? result.payout ?? (sellerPrice-commAmt-gstAmt-ret-coll-pg-retProv-tcs-tds);
   const profit   = result.profit   ?? (payout-cost);
   const ifDelivered = result.ifDelivered ?? (profit + ret);
+  const grossSettlement = result.grossSettlement ?? (sellerPrice - commAmt - (coll * 1.18));
   const profitPct= custPaid>0 ? (profit/custPaid*100).toFixed(1) : '0';
   return {mrp,mrpRnd,custPaid,gtCharge,sellerPrice,gst,gstRate:gst,rawComm,
           commAmt,gstAmt,gstOnComm:gstAmt,taxableAmt,tcs,tds,ret,retFee:ret,coll,collFee:coll,
-          pg,pgFee:pg,retProv,payout,profit,ifDelivered,profitPct};
+          pg,pgFee:pg,retProv,payout,profit,ifDelivered,grossSettlement,profitPct};
 }
 
 
