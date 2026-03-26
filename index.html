@@ -2381,9 +2381,10 @@ function updateAlerts(){
 function toggleIgnore(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   s.ignoreThreshold=!s.ignoreThreshold;
+  invalidateCalcCache();
   renderSKUs();updateAlerts();renderBreachList();renderBrands();save('skus');
   if(el('page-thresholds')?.classList.contains('active')) renderThresholds();
-  toast(s.ignoreThreshold?`🔕 ${s.styleId} threshold ignored`:`⚠️ ${s.styleId} threshold re-enabled`,'green');
+  toast(s.ignoreThreshold?`🔕 ${s.styleId||s.sku} threshold ignored`:`⚠️ ${s.styleId||s.sku} threshold re-enabled`,'green');
 }
 
 // ═══════════════════════════════════════════════════════
