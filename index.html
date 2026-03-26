@@ -4858,7 +4858,7 @@ async function confirmClearData(){
 const SESSION_KEY = 'pricedesk_session';
 const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour
 const WARN_BEFORE    = 5  * 60 * 1000;  // warn 5 min before
-const SESSION_CHECK_INTERVAL = 15000;   // check every 15 seconds
+const SESSION_CHECK_INTERVAL = 60000;   // check every 60 seconds (reduced from 15s to lower DB load)
 let _sessionTimer = null, _warnTimer = null, _countdownInterval = null;
 let _sessionCheckTimer = null;
 let currentUser = null;
@@ -7033,7 +7033,10 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   const tableOk = await ensureTable();
   if(!tableOk){ console.warn('app_data table missing — showing setup guide'); }
   await loadFromStorage();
-  await Promise.all([loadTasks(), loadAuditLog(), loadSkuHistory(), loadImportLog(), loadUserPrefs()]);
+  // Load auxiliary data sequentially to avoid overwhelming Supabase
+  await loadSkuHistory();
+  await loadUserPrefs();
+  await Promise.all([loadTasks(), loadAuditLog(), loadImportLog()]);
   _dataReady=true;
   applyUserPrefs();
   populateFilters();
