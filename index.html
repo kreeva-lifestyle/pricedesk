@@ -1156,6 +1156,11 @@ body:has(#login-screen.active){overflow:hidden}
       <option value="healthy">Healthy</option>
     </select>
     <select id="f-tag" class="filter-select" onchange="renderSKUs()"><option value="">All Tags</option></select>
+    <div class="filter-sep"></div>
+    <span class="filter-label">Profit ₹</span>
+    <input id="f-profit-min" class="filter-select" type="number" placeholder="Min" style="width:70px;min-width:0" oninput="renderSKUs()">
+    <span style="color:var(--tx3);font-size:11px">to</span>
+    <input id="f-profit-max" class="filter-select" type="number" placeholder="Max" style="width:70px;min-width:0" oninput="renderSKUs()">
     <button class="filter-clear" onclick="clearFilters()" style="display:none" id="f-clear-btn">✕ Clear Filters</button>
   </div>
   <div id="active-filter-chips" class="active-filters" style="margin-bottom:8px"></div>
@@ -2806,6 +2811,9 @@ function filteredSKUs(){
   const fCat=el('f-cat')?.value||'';
   const fStatus=el('f-status')?.value||'';
   const fTag=el('f-tag')?.value||'';
+  const fProfitMin=el('f-profit-min')?.value;
+  const fProfitMax=el('f-profit-max')?.value;
+  const hasProfitFilter=fProfitMin!==''||fProfitMax!=='';
   let result=skuDB.filter(s=>{
     if(q&&!s.styleId.toLowerCase().includes(q)&&!(s.sku||'').toLowerCase().includes(q))return false;
     if(fBrand&&s.brandId!==fBrand)return false;
@@ -2819,11 +2827,13 @@ function filteredSKUs(){
       const brand=brands.find(b=>b.id===s.brandId);
       if(brand?.model!==_skuMPTab)return false;
     }
-    if(fStatus){
+    if(fStatus||hasProfitFilter){
       const c=calcSKU(s);
       if(fStatus==='breached'&&(!c.isBreach||s.ignoreThreshold))return false;
       if(fStatus==='ignored'&&!s.ignoreThreshold)return false;
       if(fStatus==='healthy'&&(c.isBreach||s.ignoreThreshold))return false;
+      if(fProfitMin!==''&&c.profitRs<parseFloat(fProfitMin))return false;
+      if(fProfitMax!==''&&c.profitRs>parseFloat(fProfitMax))return false;
     }
     return true;
   });
@@ -2850,6 +2860,12 @@ function renderActiveFilterChips(){
       chips.push(`<span class="af-chip" onclick="el('${escAttr(fid)}').value='';renderSKUs()">${esc(labels[fid])}: ${esc(text)} ✕</span>`);
     }
   });
+  // Profit range chips
+  const pMin=el('f-profit-min')?.value||'';
+  const pMax=el('f-profit-max')?.value||'';
+  if(pMin&&pMax) chips.push(`<span class="af-chip" onclick="el('f-profit-min').value='';el('f-profit-max').value='';renderSKUs()">Profit: ₹${pMin} – ₹${pMax} ✕</span>`);
+  else if(pMin) chips.push(`<span class="af-chip" onclick="el('f-profit-min').value='';renderSKUs()">Profit: ≥ ₹${pMin} ✕</span>`);
+  else if(pMax) chips.push(`<span class="af-chip" onclick="el('f-profit-max').value='';renderSKUs()">Profit: ≤ ₹${pMax} ✕</span>`);
   const sc=el('active-filter-chips');
   if(sc) sc.innerHTML=chips.length ? chips.join('') : '';
   // Show/hide clear button
@@ -2858,7 +2874,7 @@ function renderActiveFilterChips(){
 }
 
 function clearFilters(){
-  ['f-search','f-brand','f-cat','f-status','f-tag'].forEach(fid=>{const e=el(fid);if(e)e.value='';});
+  ['f-search','f-brand','f-cat','f-status','f-tag','f-profit-min','f-profit-max'].forEach(fid=>{const e=el(fid);if(e)e.value='';});
   // Reset marketplace tab to All
   _skuMPTab='';
   document.querySelectorAll('.sku-mp-tab').forEach(t=>t.classList.remove('active'));
