@@ -159,6 +159,8 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .ico-healthy{font-size:14px;opacity:.5}
 /* SKU ACTION BUTTONS — uniform sizing */
 .sku-act{font-size:10px!important;padding:4px 8px!important;line-height:1.2!important;white-space:nowrap!important;min-height:0!important;height:24px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important}
+.sku-menu-item{padding:7px 14px;font-size:12px;cursor:pointer;color:var(--tx2);transition:background .1s}
+.sku-menu-item:hover{background:var(--s2);color:var(--tx)}
 /* THRESHOLD */
 .thr-row{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--bd)}
 .thr-row:last-child{border-bottom:none}
@@ -1186,7 +1188,7 @@ body:has(#login-screen.active){overflow:hidden}
         <col style="width:88px"><!-- Net Profit -->
         <col style="width:88px"><!-- If Delivered -->
         <col style="width:100px"><!-- Gross Settlement -->
-        <col style="width:195px"><!-- Actions -->
+        <col style="width:170px"><!-- Actions -->
       </colgroup>
       <thead><tr>
         <th>Img</th>
@@ -3017,9 +3019,14 @@ function renderSKUs(){
           <button class="btn bg bxs sku-act" onclick="showCalcModal('${escAttr(s.id)}')" title="View full calculation breakdown">Calc</button>
           <button class="btn bg bxs sku-act" onclick="showSkuHistoryModal('${escAttr(s.id)}')" title="View price change history">History</button>
           <button class="btn bg bxs sku-act" onclick="openTagsModal('${escAttr(s.id)}')" title="Notes & Tags">Tags</button>
-          <button class="btn bg bxs sku-act" onclick="startEdit('${escAttr(s.id)}')" title="Edit this SKU">✎ Edit</button>
-          <button class="btn bg bxs sku-act" onclick="archiveSKU('${escAttr(s.id)}')" title="Archive — Out of Stock">▣</button>
-          <button class="btn br bxs sku-act" onclick="delSKU('${escAttr(s.id)}')" title="Delete this SKU">✕</button>
+          <div style="position:relative;display:inline-block" class="sku-more-wrap">
+            <button class="btn bg bxs sku-act" onclick="toggleSkuMenu(event,'${escAttr(s.id)}')" title="More actions">⋮</button>
+            <div class="sku-menu" id="sku-menu-${escAttr(s.id)}" style="display:none;position:absolute;right:0;top:100%;margin-top:2px;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:50;min-width:140px;overflow:hidden">
+              <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${escAttr(s.id)}')">✎ Edit SKU</div>
+              <div class="sku-menu-item" onclick="hideSkuMenus();archiveSKU('${escAttr(s.id)}')">▣ Archive</div>
+              <div class="sku-menu-item" style="color:var(--re);border-top:1px solid var(--bd)" onclick="hideSkuMenus();delSKU('${escAttr(s.id)}')">✕ Delete</div>
+            </div>
+          </div>
         </div>
       </td>
     </tr>`;
@@ -3146,6 +3153,16 @@ function liveCalcRow(row){
 }
 
 function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sku')?.focus(),50);}
+function toggleSkuMenu(event,id){
+  event.stopPropagation();
+  const menu=document.getElementById('sku-menu-'+id);
+  const wasOpen=menu&&menu.style.display!=='none';
+  hideSkuMenus();
+  if(!wasOpen&&menu) menu.style.display='block';
+}
+function hideSkuMenus(){document.querySelectorAll('.sku-menu').forEach(m=>m.style.display='none');}
+document.addEventListener('click',hideSkuMenus);
+
 function startEdit(id){editId=id;renderSKUs();setTimeout(()=>el('e-sid')?.focus(),50);}
 function cancelEdit(){editId=null;newImg='';renderSKUs();}
 // promptImg / promptImgNew now replaced by openImgModal — see IMAGE MANAGEMENT section
