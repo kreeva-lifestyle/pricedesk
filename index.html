@@ -3019,14 +3019,12 @@ function renderSKUs(){
           <button class="btn bg bxs sku-act" onclick="showCalcModal('${escAttr(s.id)}')" title="View full calculation breakdown">Calc</button>
           <button class="btn bg bxs sku-act" onclick="showSkuHistoryModal('${escAttr(s.id)}')" title="View price change history">History</button>
           <button class="btn bg bxs sku-act" onclick="openTagsModal('${escAttr(s.id)}')" title="Notes & Tags">Tags</button>
-          <div style="position:relative;display:inline-block" class="sku-more-wrap">
-            <button class="btn bg bxs sku-act" onclick="toggleSkuMenu(event,'${escAttr(s.id)}')" title="More actions">⋮</button>
-            <div class="sku-menu" id="sku-menu-${escAttr(s.id)}" style="display:none;position:absolute;right:0;top:100%;margin-top:2px;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:50;min-width:140px;overflow:hidden">
-              <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${escAttr(s.id)}')">✎ Edit SKU</div>
-              <div class="sku-menu-item" onclick="hideSkuMenus();archiveSKU('${escAttr(s.id)}')">▣ Archive</div>
-              <div class="sku-menu-item" style="color:var(--re);border-top:1px solid var(--bd)" onclick="hideSkuMenus();delSKU('${escAttr(s.id)}')">✕ Delete</div>
-            </div>
-          </div>
+          <button class="btn bg bxs sku-act" onclick="toggleSkuMenu(event,'${escAttr(s.id)}')" title="More actions" style="font-weight:700;letter-spacing:1px">⋮</button>
+        </div>
+        <div class="sku-menu" id="sku-menu-${escAttr(s.id)}" style="display:none;position:absolute;right:10px;margin-top:-2px;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:50;min-width:140px;overflow:hidden">
+          <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${escAttr(s.id)}')">✎ Edit SKU</div>
+          <div class="sku-menu-item" onclick="hideSkuMenus();archiveSKU('${escAttr(s.id)}')">▣ Archive</div>
+          <div class="sku-menu-item" style="color:var(--re);border-top:1px solid var(--bd)" onclick="hideSkuMenus();delSKU('${escAttr(s.id)}')">✕ Delete</div>
         </div>
       </td>
     </tr>`;
@@ -3158,7 +3156,15 @@ function toggleSkuMenu(event,id){
   const menu=document.getElementById('sku-menu-'+id);
   const wasOpen=menu&&menu.style.display!=='none';
   hideSkuMenus();
-  if(!wasOpen&&menu) menu.style.display='block';
+  if(!wasOpen&&menu){
+    const btn=event.currentTarget;
+    const rect=btn.getBoundingClientRect();
+    menu.style.position='fixed';
+    menu.style.top=(rect.bottom+2)+'px';
+    menu.style.left=Math.max(8,rect.right-140)+'px';
+    menu.style.right='auto';
+    menu.style.display='block';
+  }
 }
 function hideSkuMenus(){document.querySelectorAll('.sku-menu').forEach(m=>m.style.display='none');}
 document.addEventListener('click',hideSkuMenus);
