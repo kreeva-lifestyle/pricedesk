@@ -3102,7 +3102,11 @@ function saveEdit(id){
   // Check style ID uniqueness (exclude current SKU)
   if(sid && skuDB.find(x=>x.styleId===sid && x.id!==id)){toast('This Style ID already exists','red');return;}
   const cat=el('e-cat')?.value;
+  // Snapshot BEFORE changes
+  const beforeCalc=calcSKU(s);
+  const beforeSnap={cost:s.cost,markup:s.markup,discount:s.discount||0,profit:beforeCalc.profitRs,ifDelivered:beforeCalc.ifDelivered,grossSettlement:beforeCalc.grossSettlement||0,sp:beforeCalc.sp};
   // Track price history
+  const hasChange=s.cost!==cost||s.markup!==mkp||(s.discount||0)!==disc||s.category!==cat;
   if(s.cost!==cost) trackSkuChange(id,'cost',s.cost,cost);
   if(s.markup!==mkp) trackSkuChange(id,'markup',s.markup,mkp);
   if(s.discount!==disc) trackSkuChange(id,'discount',s.discount,disc);
@@ -3112,6 +3116,13 @@ function saveEdit(id){
   if(s.markup!==mkp)changed.push(`markup ${s.markup}→${mkp}%`);
   if(s.discount!==disc)changed.push(`disc ${s.discount}→${disc}%`);
   Object.assign(s,{sku:skuCode,styleId:sid||'',brandId:el('e-brand')?.value,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc});
+  // Snapshot AFTER changes and record impact
+  if(hasChange){
+    invalidateCalcCache();
+    const afterCalc=calcSKU(s);
+    const afterSnap={cost,markup:mkp,discount:disc,profit:afterCalc.profitRs,ifDelivered:afterCalc.ifDelivered,grossSettlement:afterCalc.grossSettlement||0,sp:afterCalc.sp};
+    trackSkuSnapshot(id,beforeSnap,afterSnap);
+  }
   editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');saveSkuHistory();
   if(changed.length) audit('sku_edit',`${skuCode||sid||'SKU'}: ${changed.join(', ')}`);
   toast(`✓ ${skuCode||sid||'SKU'} updated`,'green');
@@ -6448,6 +6459,20 @@ function trackSkuChange(skuId, field, oldVal, newVal){
   // Keep max 50 entries per SKU
   if(skuHistoryData[skuId].length>50) skuHistoryData[skuId]=skuHistoryData[skuId].slice(-50);
 }
+// Record profit/ifDelivered/grossSettlement snapshots alongside field changes
+function trackSkuSnapshot(skuId, before, after){
+  if(!skuHistoryData[skuId]) skuHistoryData[skuId]=[];
+  skuHistoryData[skuId].push({
+    ts: new Date().toISOString(),
+    field: '_snapshot',
+    user: currentUser?.name||'Unknown',
+    before, after,
+    profitDelta: (after.profit||0)-(before.profit||0),
+    ifdDelta: (after.ifDelivered||0)-(before.ifDelivered||0),
+    gsDelta: (after.grossSettlement||0)-(before.grossSettlement||0)
+  });
+  if(skuHistoryData[skuId].length>50) skuHistoryData[skuId]=skuHistoryData[skuId].slice(-50);
+}
 
 function populateSkuHistorySelect(){
   const sel=el('history-sku-sel');if(!sel)return;
@@ -6480,37 +6505,108 @@ function renderSkuHistory(skuId){
 function showSkuHistoryModal(skuId){
   const s=skuDB.find(x=>x.id===skuId);if(!s)return;
   const brand=brands.find(b=>b.id===s.brandId);
+  const isMyntra=brand&&brand.model==='myntra';
   const history=skuHistoryData[skuId];
   const fieldLabels={cost:'Cost (₹)',markup:'Markup %',discount:'Discount %',category:'Category',brandId:'Brand',img:'Image'};
-  let tableHtml='';
+  function fmtDelta(v){return v>0?`<span style="color:var(--gr)">+₹${Math.round(v)}</span>`:`<span style="color:var(--re)">₹${Math.round(v)}</span>`;}
+  function fmtDate(ts){const d=new Date(ts);return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});}
+
+  let contentHtml='';
   if(!history||!history.length){
-    tableHtml='<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--tx3)">No price changes recorded for this SKU yet</td></tr>';
+    contentHtml='<div style="padding:32px;text-align:center;color:var(--tx3)">No price changes recorded yet.<br><span style="font-size:11px">Changes will appear here when you edit this SKU.</span></div>';
   } else {
-    tableHtml=history.slice().reverse().map(h=>{
-      const d=new Date(h.ts);
-      const when=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-      const label=fieldLabels[h.field]||h.field;
-      return`<tr>
-        <td class="mono st" style="white-space:nowrap">${when}</td>
-        <td style="font-weight:500">${esc(label)}</td>
-        <td class="mono" style="color:var(--re)">${h.oldVal}</td>
-        <td class="mono" style="color:var(--gr)">${h.newVal}</td>
-        <td class="st">${esc(h.user)}</td>
-      </tr>`;
+    // Group field changes and snapshots by timestamp (within 2 seconds = same edit)
+    const groups=[];
+    let curGroup=null;
+    history.forEach(h=>{
+      const t=new Date(h.ts).getTime();
+      if(!curGroup||Math.abs(t-curGroup.ts)>2000){
+        curGroup={ts:t,tsISO:h.ts,user:h.user,fields:[],snapshot:null};
+        groups.push(curGroup);
+      }
+      if(h.field==='_snapshot') curGroup.snapshot=h;
+      else curGroup.fields.push(h);
+    });
+
+    contentHtml=groups.slice().reverse().map((g,gi)=>{
+      const when=fmtDate(g.tsISO);
+      let fieldsHtml=g.fields.map(f=>{
+        const label=fieldLabels[f.field]||f.field;
+        return`<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+          <span style="font-weight:500;min-width:90px;font-size:12px">${esc(label)}</span>
+          <span class="mono" style="color:var(--re);font-size:12px;text-decoration:line-through;opacity:.7">${f.oldVal}</span>
+          <span style="color:var(--tx3);font-size:10px">→</span>
+          <span class="mono" style="color:var(--gr);font-size:12px;font-weight:600">${f.newVal}</span>
+        </div>`;
+      }).join('');
+      let impactHtml='';
+      if(g.snapshot){
+        const sn=g.snapshot;
+        impactHtml=`<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <div style="flex:1;min-width:100px;background:var(--s2);border-radius:6px;padding:8px 10px;border-left:3px solid ${sn.profitDelta>=0?'var(--gr)':'var(--re)'}">
+            <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Profit</div>
+            <div class="mono" style="font-size:13px;font-weight:700;color:${sn.after.profit>=0?'var(--gr)':'var(--re)'}">₹${Math.round(sn.after.profit)}</div>
+            <div style="font-size:10px;margin-top:2px">${fmtDelta(sn.profitDelta)}</div>
+          </div>
+          <div style="flex:1;min-width:100px;background:var(--s2);border-radius:6px;padding:8px 10px;border-left:3px solid ${sn.ifdDelta>=0?'var(--gr)':'var(--re)'}">
+            <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">If Delivered</div>
+            <div class="mono" style="font-size:13px;font-weight:700;color:${sn.after.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${Math.round(sn.after.ifDelivered)}</div>
+            <div style="font-size:10px;margin-top:2px">${fmtDelta(sn.ifdDelta)}</div>
+          </div>
+          ${isMyntra?`<div style="flex:1;min-width:100px;background:var(--s2);border-radius:6px;padding:8px 10px;border-left:3px solid ${sn.gsDelta>=0?'var(--gr)':'var(--re)'}">
+            <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Gross Settlement</div>
+            <div class="mono" style="font-size:13px;font-weight:700;color:${sn.after.grossSettlement>=0?'var(--gr)':'var(--re)'}">₹${Math.round(sn.after.grossSettlement)}</div>
+            <div style="font-size:10px;margin-top:2px">${fmtDelta(sn.gsDelta)}</div>
+          </div>`:''}
+        </div>`;
+      }
+      const borderColor=g.snapshot?(g.snapshot.profitDelta>=0?'rgba(45,212,160,.3)':'rgba(245,87,92,.3)'):'var(--bd)';
+      return`<div style="border:1px solid ${borderColor};border-radius:8px;padding:14px;margin-bottom:10px;background:var(--s)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span class="mono st" style="font-size:11px">${when}</span>
+          <span style="font-size:11px;color:var(--tx3)">${esc(g.user)}</span>
+        </div>
+        ${fieldsHtml}
+        ${impactHtml}
+      </div>`;
     }).join('');
   }
+
+  // Current snapshot
+  const curCalc=calcSKU(s);
+  const curCards=`<div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div style="flex:1;min-width:80px;background:var(--s2);border-radius:6px;padding:8px 10px;text-align:center">
+      <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Discount</div>
+      <div class="mono" style="font-size:14px;font-weight:700;color:var(--ac)">${s.discount||0}%</div>
+    </div>
+    <div style="flex:1;min-width:80px;background:var(--s2);border-radius:6px;padding:8px 10px;text-align:center">
+      <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Profit</div>
+      <div class="mono" style="font-size:14px;font-weight:700;color:${curCalc.profitRs>=0?'var(--gr)':'var(--re)'}">₹${Math.round(curCalc.profitRs)}</div>
+    </div>
+    <div style="flex:1;min-width:80px;background:var(--s2);border-radius:6px;padding:8px 10px;text-align:center">
+      <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">If Delivered</div>
+      <div class="mono" style="font-size:14px;font-weight:700;color:${curCalc.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${Math.round(curCalc.ifDelivered)}</div>
+    </div>
+    ${isMyntra?`<div style="flex:1;min-width:80px;background:var(--s2);border-radius:6px;padding:8px 10px;text-align:center">
+      <div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Gross Sett.</div>
+      <div class="mono" style="font-size:14px;font-weight:700;color:${(curCalc.grossSettlement||0)>=0?'var(--gr)':'var(--re)'}">₹${Math.round(curCalc.grossSettlement||0)}</div>
+    </div>`:''}
+  </div>`;
+
   setModal(`<div class="mhdr"><div class="mtl">Price History — ${esc(s.styleId||s.sku||s.id)}</div><span class="mclose" onclick="closeModal()">×</span></div>
     <div class="mbody" style="padding:0">
-      <div style="padding:10px 16px;background:var(--s2);border-bottom:1px solid var(--bd);display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
+      <div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--bd);display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
         <span><strong>Brand:</strong> ${esc(brand?brand.name:'Unknown')}</span>
         <span><strong>Category:</strong> ${esc(s.category)}</span>
         <span><strong>Style ID:</strong> ${esc(s.styleId)}</span>
       </div>
-      <div style="max-height:400px;overflow-y:auto">
-        <table class="dt" style="font-size:11px">
-          <thead><tr><th>Date</th><th>Field</th><th>Old Value</th><th>New Value</th><th>Changed By</th></tr></thead>
-          <tbody>${tableHtml}</tbody>
-        </table>
+      <div style="padding:14px 16px;border-bottom:1px solid var(--bd)">
+        <div style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Current Values</div>
+        ${curCards}
+      </div>
+      <div style="padding:14px 16px;max-height:400px;overflow-y:auto">
+        <div style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Change History</div>
+        ${contentHtml}
       </div>
     </div>`);
 }
