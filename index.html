@@ -1559,8 +1559,11 @@ function checkLoginRate(email){
 
 let _db = null;
 function getDB(){
-  // Keys are hardcoded — always connects regardless of cache or localStorage
   if(!_db){
+    if(typeof window.supabase==='undefined'||!window.supabase.createClient){
+      console.warn('Supabase JS library not loaded yet. Retrying...');
+      return null;
+    }
     try{ _db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
     catch(e){ console.warn('Supabase init failed:', e); }
   }
@@ -7018,7 +7021,11 @@ function updateRealtimeBadge(connected){
 // INIT
 // ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',async ()=>{
-  // Init Supabase immediately — keys are hardcoded, always available
+  // Wait for Supabase CDN to load (up to 10s)
+  for(let i=0;i<20&&(typeof window.supabase==='undefined'||!window.supabase.createClient);i++){
+    await new Promise(r=>setTimeout(r,500));
+    if(i===19) console.error('Supabase JS library failed to load from CDN');
+  }
   try{ _db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
   catch(e){ console.warn('Supabase init failed:', e); }
   loadConfig();
