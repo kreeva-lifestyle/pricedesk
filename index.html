@@ -804,6 +804,7 @@ body:has(#login-screen.active){overflow:hidden}
     <div class="nav-item" data-page="logistics" onclick="nav('logistics')"><span class="ni">⇅</span> Logistics</div>
     <div class="nav-sec">Products</div>
     <div class="nav-item" data-page="skus" onclick="nav('skus')"><span class="ni">⊟</span> SKUs</div>
+    <div class="nav-item" data-page="archive" onclick="nav('archive')"><span class="ni">📦</span> Archive <span id="nav-archive-count" style="font-size:10px;color:var(--tx3);margin-left:auto"></span></div>
     <div class="nav-sec">Admin</div>
     <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni">☰</span> Wireframe Builder</div>
     <div class="nav-item" data-page="activity" onclick="nav('activity')"><span class="ni">▤</span> Activity Log</div>
@@ -1203,6 +1204,27 @@ body:has(#login-screen.active){overflow:hidden}
     </table>
   </div>
   <div id="sku-pagination" style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:8px;flex-wrap:wrap"></div>
+</div>
+
+<!-- ═══ ARCHIVE (Out of Stock) ═══ -->
+<div class="page" id="page-archive">
+  <div class="info mb12" style="font-size:11px;line-height:1.6"><strong>Out of Stock / Archived SKUs</strong> — These SKUs are excluded from the dashboard, threshold alerts, and the main SKU table. Click <strong>Restore</strong> to bring a SKU back to active.</div>
+  <div class="flexb mb12">
+    <div class="st" id="archive-count"></div>
+    <div class="flex gap8">
+      <input id="archive-search" class="filter-select" placeholder="Search archived SKUs..." style="min-width:180px" oninput="renderArchivedSKUs()">
+      <button class="btn bg bsm" onclick="exportArchivedSKUs()">⬇ Export</button>
+    </div>
+  </div>
+  <div class="ss-wrap">
+    <table class="ss" style="width:100%;min-width:800px">
+      <thead><tr>
+        <th>Img</th><th>SKU</th><th>Style ID</th><th>Category</th><th>Brand</th><th>Cost ₹</th><th>Markup %</th><th>Discount %</th><th>Last Profit</th><th>Actions</th>
+      </tr></thead>
+      <tbody id="archive-body"></tbody>
+    </table>
+  </div>
+  <div id="archive-pagination" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding:8px"></div>
 </div>
 
 <!-- ═══ WIREFRAME ═══ -->
@@ -2308,7 +2330,7 @@ async function _reinstateCategory(name){
 function renderThresholds(){
   const tl=el('thr-list');if(!tl)return;
   tl.innerHTML=CATS.map(cat=>{
-    const breachedSKUs=skuDB.filter(s=>s.category===cat&&!s.ignoreThreshold&&calcSKU(s).isBreach);
+    const breachedSKUs=skuDB.filter(s=>!s.archived&&s.category===cat&&!s.ignoreThreshold&&calcSKU(s).isBreach);
     const status=breachedSKUs.length?`<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(245,87,92,.12);color:var(--re)">${breachedSKUs.length} breach${breachedSKUs.length>1?'es':''}</span>`:`<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(45,212,160,.12);color:var(--gr)">✓ OK</span>`;
     return`<div class="thr-row">
       <div style="flex:1">
@@ -2329,7 +2351,7 @@ let _breachPage=1;
 const BREACH_PAGE_SIZE=10;
 function renderBreachList(){
   const t=el('thr-breach-list');if(!t)return;
-  const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+  const breached=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
   if(!breached.length){_breachPage=1;t.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:12px">✓ No active breaches</div>`;return;}
   const totalPages=Math.ceil(breached.length/BREACH_PAGE_SIZE);
   if(_breachPage>totalPages)_breachPage=totalPages;
@@ -2369,7 +2391,7 @@ async function saveThr(){
 }
 
 function updateAlerts(){
-  const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+  const breached=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
   const badge=el('alert-badge');const dashBreaches=el('dash-breaches');const dashAlerts=el('dash-alerts');
   if(badge){
     if(breached.length===0){badge.style.display='none';_lastSeenBreachCount=0;}
@@ -2382,7 +2404,7 @@ function updateAlerts(){
   if(dashBreaches)dashBreaches.textContent=breached.length;
   const dashIgnored=el('dash-ignored');
   if(dashIgnored){
-    const ignored=skuDB.filter(s=>s.ignoreThreshold&&calcSKU(s).profitRs<(THRESHOLDS[s.category]||0));
+    const ignored=skuDB.filter(s=>!s.archived&&s.ignoreThreshold&&calcSKU(s).profitRs<(THRESHOLDS[s.category]||0));
     dashIgnored.textContent=ignored.length;
   }
   if(dashAlerts){
@@ -2596,7 +2618,9 @@ function renderDashboardWidgets(){
   if(loader) loader.style.display='none';
   if(dashContent) dashContent.style.display='';
   if(!skuDB.length) return;
-  const allCalcs=skuDB.map(s=>({s,c:calcSKU(s),b:brands.find(b=>b.id===s.brandId)||{name:'?',model:'?'}}));
+  const activeSKUs=skuDB.filter(s=>!s.archived);
+  if(!activeSKUs.length) return;
+  const allCalcs=activeSKUs.map(s=>({s,c:calcSKU(s),b:brands.find(b=>b.id===s.brandId)||{name:'?',model:'?'}}));
 
   // ── GST bracket split ──
   const gstEl=el('dash-gst-split');
@@ -2817,6 +2841,7 @@ function filteredSKUs(){
   let profitLo=parseFloat(fProfitMin),profitHi=parseFloat(fProfitMax);
   if(hasProfitFilter&&!isNaN(profitLo)&&!isNaN(profitHi)&&profitLo>profitHi){const tmp=profitLo;profitLo=profitHi;profitHi=tmp;}
   let result=skuDB.filter(s=>{
+    if(s.archived)return false;// Exclude archived/out-of-stock SKUs
     if(q&&!s.styleId.toLowerCase().includes(q)&&!(s.sku||'').toLowerCase().includes(q))return false;
     if(fBrand&&s.brandId!==fBrand)return false;
     if(fCat&&s.category!==fCat)return false;
@@ -2931,8 +2956,10 @@ function renderSKUs(){
   if(_skuPage>totalPages&&totalPages>0)_skuPage=totalPages;
   const startIdx=(_skuPage-1)*getPageSize();
   const pageList=list.slice(startIdx, startIdx+getPageSize());
-  el('sku-count').textContent=`Showing ${Math.min(startIdx+1,totalFiltered)}–${Math.min(startIdx+getPageSize(),totalFiltered)} of ${totalFiltered} SKUs (${skuDB.length} total)`;
-  el('dash-sku').textContent=skuDB.length;
+  const activeCount=skuDB.filter(s=>!s.archived).length;
+  const archivedCount=skuDB.length-activeCount;
+  el('sku-count').textContent=`Showing ${Math.min(startIdx+1,totalFiltered)}–${Math.min(startIdx+getPageSize(),totalFiltered)} of ${totalFiltered} SKUs (${activeCount} active${archivedCount?', '+archivedCount+' archived':''})`;
+  el('dash-sku').textContent=activeCount;
   renderSKUPagination(totalFiltered);
   const t=el('sku-body');if(!t)return;
   let html=pageList.map(s=>{
@@ -2965,6 +2992,7 @@ function renderSKUs(){
           <button class="btn bg bxs" onclick="showSkuHistoryModal('${escAttr(s.id)}')" title="View price change history" style="font-size:10px;padding:3px 8px">History</button>
           <button class="btn bg bxs" onclick="openTagsModal('${escAttr(s.id)}')" title="Notes & Tags" style="font-size:10px;padding:3px 8px">Tags</button>
           <button class="btn bg bxs" onclick="startEdit('${escAttr(s.id)}')" title="Edit this SKU">✎</button>
+          <button class="btn bg bxs" onclick="archiveSKU('${escAttr(s.id)}')" title="Archive — Out of Stock" style="font-size:10px;padding:3px 8px">📦</button>
           <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Delete this SKU">✕</button>
         </div>
       </td>
@@ -2977,6 +3005,9 @@ function renderSKUs(){
     :`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs yet. Click <a href="#" onclick="addRow();return false" style="color:var(--ac)">+ Add SKU</a> to get started.</td></tr>`;
   t.innerHTML=html||emptyMsg;
   t.querySelectorAll('[data-lc]').forEach(e=>e.addEventListener('input',()=>liveCalcRow(e.closest('tr'))));
+  // Update archive nav badge
+  const navCount=el('nav-archive-count');
+  if(navCount){const archCount=skuDB.filter(s=>s.archived).length;navCount.textContent=archCount||'';}
 }
 
 // ── Category change triggers recalc (level auto-derived from CAT_LEVEL) ──
@@ -3127,7 +3158,7 @@ function saveNew(){
   let count=0;
   selectedBrands.forEach((brandId,i)=>{
     const ts=Date.now()+i;
-    skuDB.push({id:'s'+ts,sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,img:newImg||'',ignoreThreshold:false});
+    skuDB.push({id:'s'+ts,sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,img:newImg||'',ignoreThreshold:false,archived:false});
     count++;
   });
   newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');
@@ -3178,6 +3209,99 @@ async function delSKU(id){
   skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();await save('skus');
   audit('sku_delete',`${label} deleted`);
   toast(`${esc(label)} deleted`,'red');
+}
+
+async function archiveSKU(id){
+  const s=skuDB.find(x=>x.id===id);if(!s)return;
+  const label=s.sku||s.styleId||id;
+  s.archived=true;
+  invalidateCalcCache();
+  renderSKUs();renderBrands();updateAlerts();await save('skus');
+  if(el('page-archive')?.classList.contains('active')) renderArchivedSKUs();
+  audit('sku_archive',`${label} archived (out of stock)`);
+  toast(`📦 ${esc(label)} archived`,'green');
+}
+async function unarchiveSKU(id){
+  const s=skuDB.find(x=>x.id===id);if(!s)return;
+  const label=s.sku||s.styleId||id;
+  s.archived=false;
+  invalidateCalcCache();
+  renderSKUs();renderBrands();updateAlerts();await save('skus');
+  if(el('page-archive')?.classList.contains('active')) renderArchivedSKUs();
+  audit('sku_unarchive',`${label} restored from archive`);
+  toast(`✓ ${esc(label)} restored`,'green');
+}
+
+let _archivePage=1;
+function renderArchivedSKUs(){
+  const q=(el('archive-search')?.value||'').toLowerCase();
+  const archived=skuDB.filter(s=>s.archived&&(!q||s.styleId?.toLowerCase().includes(q)||(s.sku||'').toLowerCase().includes(q)));
+  const countEl=el('archive-count');
+  if(countEl) countEl.textContent=`${archived.length} archived SKU${archived.length!==1?'s':''}`;
+  // Update nav badge
+  const navCount=el('nav-archive-count');
+  if(navCount){const total=skuDB.filter(s=>s.archived).length;navCount.textContent=total?total:'';}
+  const pageSize=25;
+  const totalPages=Math.ceil(archived.length/pageSize);
+  if(_archivePage>totalPages&&totalPages>0) _archivePage=totalPages;
+  const startIdx=(_archivePage-1)*pageSize;
+  const pageList=archived.slice(startIdx,startIdx+pageSize);
+  const body=el('archive-body');
+  if(!body) return;
+  if(!archived.length){
+    body.innerHTML=`<tr><td colspan="10" style="text-align:center;padding:28px;color:var(--tx3)">No archived SKUs. Archive a SKU from the SKU table using the 📦 button.</td></tr>`;
+  } else {
+    body.innerHTML=pageList.map(s=>{
+      const brand=brands.find(b=>b.id===s.brandId);
+      const c=calcSKU(s);
+      return`<tr style="opacity:.8">
+        <td>${s.img?`<img src="${esc(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)">`:'<div style="width:32px;height:32px;border-radius:4px;background:var(--s2)"></div>'}</td>
+        <td class="mono" style="font-size:11px;font-weight:600">${esc(s.sku||'—')}</td>
+        <td class="mono" style="font-size:11px">${esc(s.styleId||'—')}</td>
+        <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
+        <td class="st">${esc(brand?.name||'—')}</td>
+        <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
+        <td class="mono">${s.markup}%</td>
+        <td class="mono">${s.discount||0}%</td>
+        <td class="mono" style="color:${c.profitRs>=0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</td>
+        <td><div class="flex gap8">
+          <button class="btn bp bxs" onclick="unarchiveSKU('${escAttr(s.id)}')" title="Restore to active">↩ Restore</button>
+          <button class="btn br bxs" onclick="delSKU('${escAttr(s.id)}')" title="Permanently delete">✕</button>
+        </div></td>
+      </tr>`;
+    }).join('');
+  }
+  // Pagination
+  const pgEl=el('archive-pagination');
+  if(pgEl){
+    if(totalPages<=1){pgEl.innerHTML='';} else {
+      let h=`<button class="btn bg bxs" onclick="_archivePage=1;renderArchivedSKUs()" ${_archivePage===1?'disabled':''}>&laquo;</button>`;
+      h+=`<button class="btn bg bxs" onclick="_archivePage=Math.max(1,_archivePage-1);renderArchivedSKUs()" ${_archivePage===1?'disabled':''}>&lsaquo;</button>`;
+      const ps=Math.max(1,_archivePage-2),pe=Math.min(totalPages,_archivePage+2);
+      for(let p=ps;p<=pe;p++) h+=`<button class="btn ${p===_archivePage?'bp':'bg'} bxs" onclick="_archivePage=${p};renderArchivedSKUs()">${p}</button>`;
+      h+=`<button class="btn bg bxs" onclick="_archivePage=Math.min(${totalPages},_archivePage+1);renderArchivedSKUs()" ${_archivePage===totalPages?'disabled':''}>&rsaquo;</button>`;
+      h+=`<button class="btn bg bxs" onclick="_archivePage=${totalPages};renderArchivedSKUs()" ${_archivePage===totalPages?'disabled':''}>&raquo;</button>`;
+      h+=`<span class="st" style="margin-left:8px">${startIdx+1}–${Math.min(startIdx+pageSize,archived.length)} of ${archived.length}</span>`;
+      pgEl.innerHTML=h;
+    }
+  }
+}
+function exportArchivedSKUs(){
+  if(typeof XLSX==='undefined'){toast('Loading Excel library…','red');return;}
+  const archived=skuDB.filter(s=>s.archived);
+  if(!archived.length){toast('No archived SKUs to export','red');return;}
+  try{
+    const rows=[['SKU','Style ID','Category','Brand','Cost','Markup %','Discount %','Last Profit']];
+    archived.forEach(s=>{
+      const brand=brands.find(b=>b.id===s.brandId);const c=calcSKU(s);
+      rows.push([s.sku||'',s.styleId||'',s.category||'',brand?.name||'',s.cost,s.markup,s.discount||0,Math.round(c.profitRs)]);
+    });
+    const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:18},{wch:16},{wch:16},{wch:20},{wch:10},{wch:10},{wch:10},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws,'Archived');
+    XLSX.writeFile(wb,'PriceDesk_Archived_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    toast(`✓ Exported ${archived.length} archived SKUs`,'green');
+  }catch(e){toast('Export failed: '+e.message,'red');}
 }
 
 // ── Show Calculation Modal ─────────────────────────────
@@ -3654,7 +3778,7 @@ function addWFPreset(preset){
 // ═══════════════════════════════════════════════════════
 // NAV & TABS
 // ═══════════════════════════════════════════════════════
-const TITLES={dashboard:'Dashboard',pricing:'Pricing Tables',thresholds:'Thresholds',brands:'Brands',commission:'Commission Settings',logistics:'Logistics Settings',skus:'SKUs',categories:'Categories',wireframe:'Wireframe Builder',activity:'Activity Log',users:'User Access',settings:'App Settings'};
+const TITLES={dashboard:'Dashboard',pricing:'Pricing Tables',thresholds:'Thresholds',brands:'Brands',commission:'Commission Settings',logistics:'Logistics Settings',skus:'SKUs',archive:'Archive',categories:'Categories',wireframe:'Wireframe Builder',activity:'Activity Log',users:'User Access',settings:'App Settings'};
 function nav(p){
   document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
@@ -3680,6 +3804,7 @@ function nav(p){
   if(p==='wireframe')renderWFBuilder();
   if(p==='brands')renderBrands();
   if(p==='skus'){populateFilters();populateTagFilter();renderSKUs();}
+  if(p==='archive') renderArchivedSKUs();
   if(p==='thresholds'){renderThresholds();loadAlertSettingsUI();}
   if(p==='users')renderUsers();
   if(p==='activity'){ renderAuditLog(); renderImportLog(); populateAuditFilters(); populateSkuHistorySelect(); loadUserPrefsUI(); }
@@ -3971,7 +4096,7 @@ function previewImport(input){
           if(!brand){errors.push(`Row ${i+2} (${skuCode}): Unknown brand "${bname}"`);return;}
           const validCat=CATS.includes(cat)?cat:CATS[0];
           const level=(brand.model==='myntra'&&CAT_LEVEL[validCat])?CAT_LEVEL[validCat]:'Level 2';
-          importRows.push({id:'s'+Date.now()+i+'_'+bi,sku:skuCode,styleId:sid||'',brandId:brand.id,category:validCat,level,cost,markup:mkp||0,discount:disc||0,img,ignoreThreshold:false});
+          importRows.push({id:'s'+Date.now()+i+'_'+bi,sku:skuCode,styleId:sid||'',brandId:brand.id,category:validCat,level,cost,markup:mkp||0,discount:disc||0,img,ignoreThreshold:false,archived:false});
           preview.push({sku:skuCode,sid,brand:brand.name,cat:validCat,cost,mkp,disc});
         });
       });
@@ -4360,7 +4485,7 @@ async function deleteBackup(date){
     const today=new Date().toISOString().slice(0,10);
     if(lastRun===today){scheduleNext();return;}
     if(freq.includes('Daily')){
-      const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+      const breached=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
       if(breached.length){
         sendThresholdAlertEmail(breached,alertEmail);
         console.log('✓ Daily alert sent for',breached.length,'breaches to',alertEmail);
@@ -4369,7 +4494,7 @@ async function deleteBackup(date){
     } else if(freq.includes('Weekly')){
       const dayOfWeek=new Date().getDay();
       if(dayOfWeek===1){
-        const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+        const breached=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
         if(breached.length) sendThresholdAlertEmail(breached,alertEmail);
         localStorage.setItem('pd_last_daily_alert',today);
         console.log('✓ Weekly alert sent');
@@ -5166,7 +5291,7 @@ function exportSKUsToExcel(){
   try{
     const wb = XLSX.utils.book_new();
     const rows = [['SKU','STYLE_ID','CATEGORY*','COST_PRICE*','MARKUP_PCT*','DISCOUNT']];
-    skuDB.forEach(s=>{
+    skuDB.filter(s=>!s.archived).forEach(s=>{
       rows.push([s.sku||'', s.styleId||'', s.category||'', s.cost||0, s.markup||0, s.discount||0]);
     });
     const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -5182,7 +5307,7 @@ function exportSKUsToExcel(){
 
 function exportBreaches(){
   if(typeof XLSX==='undefined'){toast('Loading Excel library…','red');return;}
-  const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+  const breached=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
   if(!breached.length){toast('No active breaches to export','red');return;}
   try{
     const rows=[['SKU','Style ID','Category','Brand','Net Profit (₹)','Threshold (₹)']];
@@ -6352,7 +6477,7 @@ function clearCompletedTasks(){
 // ═══════════════════════════════════════════════════════
 let _lastSeenBreachCount = -1;
 function dismissAlertBadge(){
-  const breached=skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+  const breached=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
   _lastSeenBreachCount=breached.length;
   const badge=el('alert-badge');if(badge)badge.style.display='none';
   nav('thresholds');
