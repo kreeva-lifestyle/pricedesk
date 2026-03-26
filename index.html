@@ -2462,7 +2462,7 @@ function renderBrands(){
   const mpTags={'myntra':'tm','ajio-ppmp':'taj','ajio-cc':'tg','amazon':'tamz'};
   const modelLabels={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
   grid.innerHTML=brands.map(b=>{
-    const skus=skuDB.filter(s=>s.brandId===b.id);
+    const skus=skuDB.filter(s=>s.brandId===b.id&&!s.archived);
     const profits=skus.map(s=>calcSKU(s).profitRs);
     const avgProfit=profits.length?(profits.reduce((a,v)=>a+v,0)/profits.length).toFixed(0):'—';
     const breached=skus.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach).length;
@@ -2496,7 +2496,7 @@ function renderBrandSummary(){
   const mpTags={'myntra':'tm','ajio-ppmp':'taj','ajio-cc':'tg','amazon':'tamz'};
   const modelLabels={'myntra':'Standard','ajio-ppmp':'PPMP','ajio-cc':'CC','amazon':'Fixed'};
   t.innerHTML=brands.map(b=>{
-    const skus=skuDB.filter(s=>s.brandId===b.id);
+    const skus=skuDB.filter(s=>s.brandId===b.id&&!s.archived);
     if(!skus.length)return`<tr><td><strong>${esc(b.name)}</strong></td><td><span class="tag ${mpTags[b.model]||'ta'}">${esc(b.marketplace)}</span></td><td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${esc(modelLabels[b.model])}</span></td><td class="mono st">0</td><td>—</td><td>—</td><td><span class="tag bs">No SKUs</span></td></tr>`;
     const calcs=skus.map(s=>calcSKU(s));
     const avgComm=(calcs.reduce((a,c)=>a+c.comm,0)/calcs.length).toFixed(1);
