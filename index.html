@@ -2814,6 +2814,8 @@ function filteredSKUs(){
   const fProfitMin=el('f-profit-min')?.value;
   const fProfitMax=el('f-profit-max')?.value;
   const hasProfitFilter=fProfitMin!==''||fProfitMax!=='';
+  let profitLo=parseFloat(fProfitMin),profitHi=parseFloat(fProfitMax);
+  if(hasProfitFilter&&!isNaN(profitLo)&&!isNaN(profitHi)&&profitLo>profitHi){const tmp=profitLo;profitLo=profitHi;profitHi=tmp;}
   let result=skuDB.filter(s=>{
     if(q&&!s.styleId.toLowerCase().includes(q)&&!(s.sku||'').toLowerCase().includes(q))return false;
     if(fBrand&&s.brandId!==fBrand)return false;
@@ -2832,8 +2834,8 @@ function filteredSKUs(){
       if(fStatus==='breached'&&(!c.isBreach||s.ignoreThreshold))return false;
       if(fStatus==='ignored'&&!s.ignoreThreshold)return false;
       if(fStatus==='healthy'&&(c.isBreach||s.ignoreThreshold))return false;
-      if(fProfitMin!==''&&c.profitRs<parseFloat(fProfitMin))return false;
-      if(fProfitMax!==''&&c.profitRs>parseFloat(fProfitMax))return false;
+      if(fProfitMin!==''&&!isNaN(profitLo)&&c.profitRs<profitLo)return false;
+      if(fProfitMax!==''&&!isNaN(profitHi)&&c.profitRs>profitHi)return false;
     }
     return true;
   });
@@ -2969,7 +2971,11 @@ function renderSKUs(){
     </tr>`;
   }).join('');
   if(editId==='new')html+=renderNewRow();
-  t.innerHTML=html||`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs yet. Click <a href="#" onclick="addRow();return false" style="color:var(--ac)">+ Add SKU</a> to get started.</td></tr>`;
+  const hasFilters=!!(el('f-search')?.value||el('f-brand')?.value||el('f-cat')?.value||el('f-status')?.value||el('f-tag')?.value||el('f-profit-min')?.value||el('f-profit-max')?.value||_skuMPTab);
+  const emptyMsg=hasFilters
+    ?`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs match your filters. <a href="#" onclick="clearFilters();return false" style="color:var(--ac)">Clear all filters</a></td></tr>`
+    :`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs yet. Click <a href="#" onclick="addRow();return false" style="color:var(--ac)">+ Add SKU</a> to get started.</td></tr>`;
+  t.innerHTML=html||emptyMsg;
   t.querySelectorAll('[data-lc]').forEach(e=>e.addEventListener('input',()=>liveCalcRow(e.closest('tr'))));
 }
 
