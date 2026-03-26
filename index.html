@@ -1610,14 +1610,22 @@ async function dbSet(key, value){
 }
 
 // ── Load a single key from DB ──────────────────────────
-async function dbGet(key){
+async function dbGet(key, retries=2){
   const db = getDB(); if(!db) return null;
-  try{
-    const {data, error} = await db.from('app_data').select('value').eq('key',key).single();
-    if(!error && data?.value) return data.value;
-    if(error?.code === 'PGRST116') return null; // not found
-    if(error) console.warn('dbGet error:', key, error.message);
-  } catch(e){ console.warn('dbGet exception:', key, e); }
+  for(let attempt=0;attempt<=retries;attempt++){
+    try{
+      const {data, error} = await db.from('app_data').select('value').eq('key',key).single();
+      if(!error && data?.value) return data.value;
+      if(error?.code === 'PGRST116') return null; // not found
+      if(error){
+        console.warn(`dbGet error (attempt ${attempt+1}):`, key, error.message);
+        if(attempt<retries){await new Promise(r=>setTimeout(r,1000*(attempt+1)));continue;}
+      }
+    } catch(e){
+      console.warn(`dbGet exception (attempt ${attempt+1}):`, key, e);
+      if(attempt<retries){await new Promise(r=>setTimeout(r,1000*(attempt+1)));continue;}
+    }
+  }
   return null;
 }
 
@@ -1735,13 +1743,23 @@ async function loadFromStorage(){
 
   updateSyncBadge(false);
   try{
-    // Load all keys in parallel for speed
-    const keys = Object.values(DB_KEYS);
-    const results = await Promise.all(
-      keys.map(k => dbGet(k))
-    );
+    // Load in batches to avoid overwhelming Supabase with parallel queries
+    const allTypes = Object.keys(DB_KEYS);
     const loaded = {};
-    Object.keys(DB_KEYS).forEach((type, i) => { loaded[type] = results[i]; });
+    // Batch 1: Critical data (SKUs, brands, config)
+    const batch1 = ['skus','brands','users','thresholds','categories','levels','cat_levels','alert'];
+    const r1 = await Promise.all(batch1.map(t => dbGet(DB_KEYS[t])));
+    batch1.forEach((t,i) => { loaded[t] = r1[i]; });
+    // Batch 2: Commission + logistics
+    const batch2 = ['comm_myntra','comm_ppmp','comm_cc','comm_amazon','logistics','wireframe','email_cfg'];
+    const r2 = await Promise.all(batch2.map(t => dbGet(DB_KEYS[t])));
+    batch2.forEach((t,i) => { loaded[t] = r2[i]; });
+    // Batch 3: Remaining keys (sessions, tokens, etc.)
+    const remaining = allTypes.filter(t => !batch1.includes(t) && !batch2.includes(t));
+    if(remaining.length){
+      const r3 = await Promise.all(remaining.map(t => dbGet(DB_KEYS[t])));
+      remaining.forEach((t,i) => { loaded[t] = r3[i]; });
+    }
 
     // Apply each type if data exists
     if(loaded.skus)        skuDB           = loaded.skus;
@@ -4379,9 +4397,16 @@ async function createManualBackup(){
   const statusEl = el('backup-status');
   if(statusEl){ statusEl.style.display='block'; statusEl.innerHTML='<span style="color:var(--ac)">Creating backup...</span>'; }
   try{
-    // Read all current data
-    const {data:allData, error:readErr} = await db.from('app_data').select('*');
-    if(readErr) throw new Error('Failed to read data: '+readErr.message);
+    // Read all current data in batches to avoid timeout
+    let allData=[];
+    const {data:keys, error:keyErr} = await db.from('app_data').select('key');
+    if(keyErr) throw new Error('Failed to read keys: '+keyErr.message);
+    for(let i=0;i<keys.length;i+=5){
+      const batch=keys.slice(i,i+5).map(r=>r.key);
+      const {data:rows, error:batchErr} = await db.from('app_data').select('*').in('key',batch);
+      if(batchErr) throw new Error('Failed to read batch: '+batchErr.message);
+      allData.push(...(rows||[]));
+    }
     const backupDate = new Date().toISOString().slice(0,10);
     // Upsert into pd_backups
     const {error:writeErr} = await db.from('pd_backups').upsert(
