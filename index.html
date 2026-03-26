@@ -2885,7 +2885,14 @@ function switchSKUTab(tab, mp){
   renderSKUs();
 }
 
+let _dataReady=false;
 function renderSKUs(){
+  if(!_dataReady){
+    const t=el('sku-body');if(t)t.innerHTML=`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)"><div style="animation:pulse 1.5s infinite">Loading SKUs...</div></td></tr>`;
+    el('sku-count')&&(el('sku-count').textContent='');
+    const pgEl=el('sku-pagination');if(pgEl)pgEl.innerHTML='';
+    return;
+  }
   invalidateCalcCache();
   const list=filteredSKUs();
   renderActiveFilterChips();
@@ -2934,7 +2941,7 @@ function renderSKUs(){
     </tr>`;
   }).join('');
   if(editId==='new')html+=renderNewRow();
-  t.innerHTML=html||`<tr><td colspan="11" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs yet. Click <a href="#" onclick="addRow();return false" style="color:var(--ac)">+ Add SKU</a> to get started.</td></tr>`;
+  t.innerHTML=html||`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs yet. Click <a href="#" onclick="addRow();return false" style="color:var(--ac)">+ Add SKU</a> to get started.</td></tr>`;
   t.querySelectorAll('[data-lc]').forEach(e=>e.addEventListener('input',()=>liveCalcRow(e.closest('tr'))));
 }
 
@@ -6835,6 +6842,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   if(!tableOk){ console.warn('app_data table missing — showing setup guide'); }
   await loadFromStorage();
   await Promise.all([loadTasks(), loadAuditLog(), loadSkuHistory(), loadImportLog(), loadUserPrefs()]);
+  _dataReady=true;
   applyUserPrefs();
   populateFilters();
   populateTagFilter();
