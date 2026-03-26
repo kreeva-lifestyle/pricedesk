@@ -1746,20 +1746,21 @@ async function loadFromStorage(){
 
   updateSyncBadge(false);
   try{
-    // Load in batches to avoid overwhelming Supabase with parallel queries
-    const allTypes = Object.keys(DB_KEYS);
+    // Load in batches — heaviest data first, then config
     const loaded = {};
-    // Batch 1: Critical data (SKUs, brands, config)
-    const batch1 = ['skus','brands','users','thresholds','categories','levels','cat_levels','alert'];
-    const r1 = await Promise.all(batch1.map(t => dbGet(DB_KEYS[t])));
-    batch1.forEach((t,i) => { loaded[t] = r1[i]; });
-    // Batch 2: Commission + logistics
-    const batch2 = ['comm_myntra','comm_ppmp','comm_cc','comm_amazon','logistics','wireframe','email_cfg'];
+    // Batch 1: SKUs alone (largest payload ~1-2MB)
+    loaded.skus = await dbGet(DB_KEYS.skus);
+    // Batch 2: Core config (small payloads, safe to parallelize)
+    const batch2 = ['brands','users','thresholds','categories','levels','cat_levels','alert'];
     const r2 = await Promise.all(batch2.map(t => dbGet(DB_KEYS[t])));
     batch2.forEach((t,i) => { loaded[t] = r2[i]; });
-    // Batch 3: Remaining keys (sessions, tokens, etc.)
-    const remaining = allTypes.filter(t => !batch1.includes(t) && !batch2.includes(t));
-    if(remaining.length){
+    // Batch 3: Commission + logistics + wireframe
+    const batch3 = ['comm_myntra','comm_ppmp','comm_cc','comm_amazon','logistics','wireframe','email_cfg'];
+    const r3 = await Promise.all(batch3.map(t => dbGet(DB_KEYS[t])));
+    batch3.forEach((t,i) => { loaded[t] = r3[i]; });
+    // Skip loading sessions/tokens/audit/history here — loaded on demand
+    const remaining = [];
+    if(0&&remaining.length){
       const r3 = await Promise.all(remaining.map(t => dbGet(DB_KEYS[t])));
       remaining.forEach((t,i) => { loaded[t] = r3[i]; });
     }
@@ -4858,7 +4859,7 @@ async function confirmClearData(){
 const SESSION_KEY = 'pricedesk_session';
 const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour
 const WARN_BEFORE    = 5  * 60 * 1000;  // warn 5 min before
-const SESSION_CHECK_INTERVAL = 60000;   // check every 60 seconds (reduced from 15s to lower DB load)
+const SESSION_CHECK_INTERVAL = 180000;  // check every 3 minutes (reduced DB load)
 let _sessionTimer = null, _warnTimer = null, _countdownInterval = null;
 let _sessionCheckTimer = null;
 let currentUser = null;
@@ -4871,8 +4872,10 @@ function generateSessionToken(){
 async function registerSessionToken(userId, token){
   const db = getDB(); if(!db) return;
   try{
-    // Load existing sessions map
     const sessions = await dbGet(DB_KEYS.sessions) || {};
+    // Cleanup: remove sessions older than 24 hours
+    const cutoff=Date.now()-86400000;
+    for(const uid of Object.keys(sessions)){if(sessions[uid].ts&&sessions[uid].ts<cutoff)delete sessions[uid];}
     sessions[userId] = { token, ts: Date.now(), ua: navigator.userAgent.slice(0,80) };
     await dbSet(DB_KEYS.sessions, sessions);
   } catch(e){ console.warn('registerSessionToken error:', e); }
@@ -4887,14 +4890,19 @@ async function clearSessionToken(userId){
   } catch(e){ console.warn('clearSessionToken error:', e); }
 }
 
+let _sessionCache={val:null,ts:0};
 async function validateSessionToken(userId, localToken){
-  const db = getDB(); if(!db) return true; // allow offline usage
+  const db = getDB(); if(!db) return true;
+  // Use cached result if less than 2 minutes old
+  if(_sessionCache.val!==null&&Date.now()-_sessionCache.ts<120000) return _sessionCache.val;
   try{
     const sessions = await dbGet(DB_KEYS.sessions) || {};
     const remote = sessions[userId];
-    if(!remote) return true; // no remote session = OK
-    return remote.token === localToken;
-  } catch(e){ return true; } // allow on network error
+    if(!remote){_sessionCache={val:true,ts:Date.now()};return true;}
+    const valid=remote.token === localToken;
+    _sessionCache={val:valid,ts:Date.now()};
+    return valid;
+  } catch(e){ return true; }
 }
 
 function startSessionCheck(){
@@ -6837,6 +6845,8 @@ async function loadImportLog(){
 async function saveImportLog(){ await dbSet(DB_KEYS.bulk_imports, importLogData); }
 
 function logBulkImport(fileName, addedCount, updatedCount, errorCount){
+  // Cap import log at 50 entries
+  if(importLogData.length>=50) importLogData=importLogData.slice(0,49);
   importLogData.unshift({
     ts: new Date().toISOString(),
     user: currentUser?.name||'Unknown',
@@ -6921,8 +6931,8 @@ function setupRealtime(){
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'app_data' },
       (payload) => {
-        // Ignore our own writes (within last 2 seconds)
-        if(Date.now() - _lastWriteTs < 2000) return;
+        // Ignore our own writes (within last 5 seconds)
+        if(Date.now() - _lastWriteTs < 5000) return;
 
         const key = payload.new?.key || payload.old?.key;
         if(!key) return;
@@ -7033,12 +7043,17 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   const tableOk = await ensureTable();
   if(!tableOk){ console.warn('app_data table missing — showing setup guide'); }
   await loadFromStorage();
-  // Load auxiliary data sequentially to avoid overwhelming Supabase
-  await loadSkuHistory();
+  // Load user prefs first (needed for page size), then mark data ready
   await loadUserPrefs();
-  await Promise.all([loadTasks(), loadAuditLog(), loadImportLog()]);
   _dataReady=true;
   applyUserPrefs();
+  // Defer non-critical data load (audit log, import log, history) to after UI renders
+  setTimeout(async()=>{
+    await loadSkuHistory();
+    await loadTasks();
+    await loadAuditLog();
+    await loadImportLog();
+  },100);
   populateFilters();
   populateTagFilter();
   renderBrandSummary();
