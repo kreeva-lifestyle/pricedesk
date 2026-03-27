@@ -2834,20 +2834,61 @@ function renderPricingIntel(){
       </div>
     </div>`;
 
-  if(nearAbove.length){
-    html+=`<div class="info" style="margin-bottom:10px;font-size:11px;line-height:1.6"><strong>Opportunity:</strong> ${nearAbove.length} SKU${nearAbove.length>1?'s':''} are just above ₹2,500 (paying 18% GST). Adjusting discount to bring SP below ₹2,500 could save 13% GST on each — significantly boosting margins.</div>`;
-    html+=`<div style="max-height:180px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px"><table class="dt" style="font-size:11px">
-      <thead><tr><th>SKU</th><th>Category</th><th>SP</th><th>GST</th><th>Profit</th><th>Gap to ₹2,500</th></tr></thead><tbody>`;
-    nearAbove.slice(0,15).forEach(({s,c})=>{
-      const gap=Math.round(c.sp-2500);
-      html+=`<tr><td class="mono" style="font-size:10px">${esc(s.sku||s.styleId)}</td><td>${esc(s.category)}</td>
-        <td class="mono">₹${Math.round(c.sp).toLocaleString('en-IN')}</td>
-        <td><span class="gst18">18%</span></td>
-        <td class="mono" style="color:${c.profitRs>=0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</td>
-        <td class="mono" style="color:var(--ac)">+₹${gap}</td></tr>`;
-    });
-    html+=`</tbody></table></div>`;
-    if(nearAbove.length>15) html+=`<div class="st" style="margin-top:4px">${nearAbove.length-15} more SKUs not shown</div>`;
+  if(nearAbove.length||nearBelow.length){
+    // Simulate moving SKUs near ₹2,500 to ₹2,499 to optimize GST bracket
+    // Only for non-ignored-threshold SKUs
+    const candidates=nearThreshold.filter(({s,c})=>!s.ignoreThreshold&&c.sp>=2300&&c.sp<=2800&&c.sp!==2499);
+    const aboveCandidates=candidates.filter(({c})=>c.sp>=2500);
+    const belowCandidates=candidates.filter(({c})=>c.sp>=2300&&c.sp<2500);
+
+    if(aboveCandidates.length){
+      // For SKUs above ₹2,500: recommend reducing to ₹2,499 (drops from 18% to 5% GST)
+      let totalProfitGain=0,totalIfdGain=0;
+      const rows=aboveCandidates.map(({s,c})=>{
+        const brand=brands.find(b=>b.id===s.brandId);
+        const isMyntra=brand&&brand.model==='myntra';
+        // Calculate what discount would bring SP to ₹2,499
+        const currentSP=c.sp;
+        const currentMRP=c.mrp||currentSP;
+        const targetSP=2499;
+        const neededDisc=currentMRP>0?Math.ceil((1-targetSP/currentMRP)*100):0;
+        // Simulate with new discount
+        const tmpSKU={...s,discount:neededDisc,id:'_gst_'+s.id};
+        invalidateCalcCache();
+        const simC=calcSKU(tmpSKU);
+        const profitGain=simC.profitRs-c.profitRs;
+        const ifdGain=simC.ifDelivered-c.ifDelivered;
+        totalProfitGain+=profitGain;
+        totalIfdGain+=ifdGain;
+        return{s,c,simC,neededDisc,profitGain,ifdGain,currentSP:Math.round(currentSP),isMyntra};
+      });
+      invalidateCalcCache();
+
+      html+=`<div class="success" style="margin-bottom:10px;font-size:11px;line-height:1.6;border-color:rgba(45,212,160,.3)">
+        <strong>Recommendation:</strong> ${aboveCandidates.length} SKU${aboveCandidates.length>1?'s':''} are just above ₹2,500 (18% GST). Moving to ₹2,499 (5% GST) could increase total profit by <strong style="color:var(--gr)">+₹${Math.round(totalProfitGain).toLocaleString('en-IN')}</strong> and If Delivered by <strong style="color:var(--gr)">+₹${Math.round(totalIfdGain).toLocaleString('en-IN')}</strong>.
+      </div>`;
+      html+=`<div style="max-height:220px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;margin-bottom:12px"><table class="dt" style="font-size:11px">
+        <thead><tr><th>SKU</th><th>Category</th><th>Current SP</th><th>Current Disc</th><th>Rec. Disc</th><th>Profit Change</th><th>If Delivered Change</th></tr></thead><tbody>`;
+      rows.slice(0,20).forEach(r=>{
+        html+=`<tr>
+          <td class="mono" style="font-size:10px">${esc(r.s.sku||r.s.styleId)}</td>
+          <td>${esc(r.s.category)}</td>
+          <td class="mono">₹${r.currentSP.toLocaleString('en-IN')} <span class="gst18">18%</span></td>
+          <td class="mono">${r.s.discount||0}%</td>
+          <td class="mono" style="color:var(--ac);font-weight:600">${r.neededDisc}%</td>
+          <td class="mono" style="color:${r.profitGain>=0?'var(--gr)':'var(--re)'};font-weight:600">${r.profitGain>=0?'+':''}₹${Math.round(r.profitGain)}</td>
+          <td class="mono" style="color:${r.ifdGain>=0?'var(--gr)':'var(--re)'}">${r.ifdGain>=0?'+':''}₹${Math.round(r.ifdGain)}</td>
+        </tr>`;
+      });
+      html+=`</tbody></table></div>`;
+      if(rows.length>20) html+=`<div class="st" style="margin-bottom:8px">${rows.length-20} more SKUs not shown</div>`;
+    }
+
+    if(belowCandidates.length){
+      html+=`<div class="info" style="margin-bottom:10px;font-size:11px;line-height:1.6">
+        <strong>Near 5% Ceiling:</strong> ${belowCandidates.length} SKU${belowCandidates.length>1?'s':''} have SP between ₹2,300–2,499. These are safely in the 5% GST bracket but close to the edge — monitor discount changes to avoid accidentally crossing into 18%.
+      </div>`;
+    }
   }
   html+=`</div>`;
 
