@@ -928,6 +928,30 @@ body:has(#login-screen.active){overflow:hidden}
       <table class="dt" style="min-width:600px"><thead><tr><th>Brand</th><th>Marketplace</th><th>Model</th><th>SKUs</th><th>Avg Commission</th><th>Avg Net Profit (₹)</th><th>Status</th></tr></thead><tbody id="brand-summary-body"></tbody></table>
     </div>
   </div>
+
+  <!-- ═══ PRICING INTELLIGENCE ═══ -->
+  <div class="dash-block" data-dash-id="pricing-intel" draggable="true">
+    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+    <div class="card mb0">
+      <div class="ch"><div style="font-size:13px;font-weight:600">Pricing Intelligence</div></div>
+      <div class="cb" id="pricing-intel-body" style="padding:0"></div>
+    </div>
+  </div>
+
+  <div class="dash-block" data-dash-id="discount-sim" draggable="true">
+    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+    <div class="g2 mb0">
+      <div class="card">
+        <div class="ch"><div style="font-size:13px;font-weight:600">Discount Impact Simulator</div></div>
+        <div class="cb" id="discount-sim-body"></div>
+      </div>
+      <div class="card">
+        <div class="ch"><div style="font-size:13px;font-weight:600">Quick Markup Adjuster</div></div>
+        <div class="cb" id="markup-adj-body"></div>
+      </div>
+    </div>
+  </div>
+
   </div><!-- /dash-content -->
 
 </div>
@@ -2460,7 +2484,7 @@ function toggleIgnore(id){
   invalidateCalcCache();
   renderSKUs();updateAlerts();renderBreachList();renderBrands();save('skus');
   if(el('page-thresholds')?.classList.contains('active')) renderThresholds();
-  toast(s.ignoreThreshold?`🔕 ${s.styleId||s.sku} threshold ignored`:`⚠️ ${s.styleId||s.sku} threshold re-enabled`,'green');
+  toast(s.ignoreThreshold?`🔕 ${s.sku||s.styleId} threshold ignored`:`⚠️ ${s.sku||s.styleId} threshold re-enabled`,'green');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2716,7 +2740,7 @@ function renderDashboardWidgets(){
   // ── Top/Bottom 5 profit SKUs ──
   const sorted=[...allCalcs].sort((a,b)=>b.c.profitRs-a.c.profitRs);
   const renderProfitRow=({s,c,b})=>`<tr>
-    <td class="mono" style="font-size:11px;font-weight:600">${esc(s.styleId||s.sku||'—')}</td>
+    <td class="mono" style="font-size:11px;font-weight:600">${esc(s.sku||s.styleId||'—')}</td>
     <td style="font-size:11px">${esc(b.name)}</td>
     <td><span class="tag tb" style="font-size:9px">${esc(s.category)}</span></td>
     <td class="mono" style="font-size:11px">₹${Math.round(c.sp)}</td>
@@ -2756,6 +2780,275 @@ function renderDashboardWidgets(){
       </tr>`;
     }).join('')||'<tr><td colspan="6" class="st" style="text-align:center;padding:12px">No SKUs yet</td></tr>';
   }
+  // Render pricing intelligence widgets
+  renderPricingIntel();renderDiscountSim();renderMarkupAdj();
+}
+
+// ═══════════════════════════════════════════════════════
+// PRICING INTELLIGENCE
+// ═══════════════════════════════════════════════════════
+function renderPricingIntel(){
+  const body=el('pricing-intel-body');if(!body)return;
+  const active=skuDB.filter(s=>!s.archived);
+  const calcs=active.map(s=>({s,c:calcSKU(s),b:brands.find(b=>b.id===s.brandId)}));
+
+  // 1. GST Bracket Analysis — SKUs near ₹2500 threshold
+  const gst5=calcs.filter(({c})=>c.sp<2500);
+  const gst18=calcs.filter(({c})=>c.sp>=2500);
+  const nearThreshold=calcs.filter(({c})=>c.sp>=2200&&c.sp<=2800).sort((a,b)=>a.c.sp-b.c.sp);
+  const nearBelow=nearThreshold.filter(({c})=>c.sp<2500);
+  const nearAbove=nearThreshold.filter(({c})=>c.sp>=2500);
+
+  // 2. Worst performing category
+  const catMap={};
+  calcs.forEach(({s,c})=>{
+    if(!catMap[s.category]) catMap[s.category]={total:0,count:0,breaches:0};
+    catMap[s.category].total+=c.profitRs;catMap[s.category].count++;
+    if(c.isBreach&&!s.ignoreThreshold) catMap[s.category].breaches++;
+  });
+  const catArr=Object.entries(catMap).map(([cat,d])=>({cat,avg:d.count?Math.round(d.total/d.count):0,count:d.count,breaches:d.breaches})).sort((a,b)=>a.avg-b.avg);
+  const worst=catArr[0];
+  const best=catArr[catArr.length-1];
+
+  // 3. Revenue at risk — GMV of breached SKUs
+  const breached=calcs.filter(({s,c})=>!s.ignoreThreshold&&c.isBreach);
+  const atRiskGMV=breached.reduce((a,{c})=>a+c.sp,0);
+
+  let html=`<div style="padding:16px">`;
+
+  // GST Section
+  html+=`<div style="margin-bottom:20px">
+    <div style="font-size:12px;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;color:var(--tx3)">GST Bracket Optimization</div>
+    <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:120px;background:var(--s2);border-radius:6px;padding:10px;border-left:3px solid var(--gr)">
+        <div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">5% GST (SP &lt; ₹2,500)</div>
+        <div class="mono" style="font-size:18px;font-weight:700;color:var(--gr)">${gst5.length}</div>
+      </div>
+      <div style="flex:1;min-width:120px;background:var(--s2);border-radius:6px;padding:10px;border-left:3px solid var(--ac)">
+        <div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">18% GST (SP ≥ ₹2,500)</div>
+        <div class="mono" style="font-size:18px;font-weight:700;color:var(--ac)">${gst18.length}</div>
+      </div>
+      <div style="flex:1;min-width:120px;background:var(--s2);border-radius:6px;padding:10px;border-left:3px solid var(--bl)">
+        <div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Near Threshold (₹2,200–2,800)</div>
+        <div class="mono" style="font-size:18px;font-weight:700;color:var(--bl)">${nearThreshold.length}</div>
+      </div>
+    </div>`;
+
+  if(nearAbove.length||nearBelow.length){
+    // Simulate moving SKUs near ₹2,500 to ₹2,499 to optimize GST bracket
+    // Only for non-ignored-threshold SKUs
+    const candidates=nearThreshold.filter(({s,c})=>!s.ignoreThreshold&&c.sp>=2300&&c.sp<=2800&&c.sp!==2499);
+    const aboveCandidates=candidates.filter(({c})=>c.sp>=2500);
+    const belowCandidates=candidates.filter(({c})=>c.sp>=2300&&c.sp<2500);
+
+    if(aboveCandidates.length){
+      // For SKUs above ₹2,500: recommend reducing to ₹2,499 (drops from 18% to 5% GST)
+      let totalProfitGain=0,totalIfdGain=0;
+      const rows=aboveCandidates.map(({s,c})=>{
+        const brand=brands.find(b=>b.id===s.brandId);
+        const isMyntra=brand&&brand.model==='myntra';
+        // Calculate what discount would bring SP to ₹2,499
+        const currentSP=c.sp;
+        const currentMRP=c.mrp||currentSP;
+        const targetSP=2499;
+        const neededDisc=currentMRP>0?Math.ceil((1-targetSP/currentMRP)*100):0;
+        // Simulate with new discount
+        const tmpSKU={...s,discount:neededDisc,id:'_gst_'+s.id};
+        invalidateCalcCache();
+        const simC=calcSKU(tmpSKU);
+        const profitGain=simC.profitRs-c.profitRs;
+        const ifdGain=simC.ifDelivered-c.ifDelivered;
+        totalProfitGain+=profitGain;
+        totalIfdGain+=ifdGain;
+        return{s,c,simC,neededDisc,profitGain,ifdGain,currentSP:Math.round(currentSP),isMyntra};
+      });
+      invalidateCalcCache();
+
+      html+=`<div class="success" style="margin-bottom:10px;font-size:11px;line-height:1.6;border-color:rgba(45,212,160,.3)">
+        <strong>Recommendation:</strong> ${aboveCandidates.length} SKU${aboveCandidates.length>1?'s':''} are just above ₹2,500 (18% GST). Moving to ₹2,499 (5% GST) could increase total profit by <strong style="color:var(--gr)">+₹${Math.round(totalProfitGain).toLocaleString('en-IN')}</strong> and If Delivered by <strong style="color:var(--gr)">+₹${Math.round(totalIfdGain).toLocaleString('en-IN')}</strong>.
+      </div>`;
+      html+=`<div style="max-height:220px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;margin-bottom:12px"><table class="dt" style="font-size:11px">
+        <thead><tr><th>SKU</th><th>Category</th><th>Current SP</th><th>Current Disc</th><th>Rec. Disc</th><th>Profit Change</th><th>If Delivered Change</th></tr></thead><tbody>`;
+      rows.slice(0,20).forEach(r=>{
+        html+=`<tr>
+          <td class="mono" style="font-size:10px">${esc(r.s.sku||r.s.styleId)}</td>
+          <td>${esc(r.s.category)}</td>
+          <td class="mono">₹${r.currentSP.toLocaleString('en-IN')} <span class="gst18">18%</span></td>
+          <td class="mono">${r.s.discount||0}%</td>
+          <td class="mono" style="color:var(--ac);font-weight:600">${r.neededDisc}%</td>
+          <td class="mono" style="color:${r.profitGain>=0?'var(--gr)':'var(--re)'};font-weight:600">${r.profitGain>=0?'+':''}₹${Math.round(r.profitGain)}</td>
+          <td class="mono" style="color:${r.ifdGain>=0?'var(--gr)':'var(--re)'}">${r.ifdGain>=0?'+':''}₹${Math.round(r.ifdGain)}</td>
+        </tr>`;
+      });
+      html+=`</tbody></table></div>`;
+      if(rows.length>20) html+=`<div class="st" style="margin-bottom:8px">${rows.length-20} more SKUs not shown</div>`;
+    }
+
+    if(belowCandidates.length){
+      html+=`<div class="info" style="margin-bottom:10px;font-size:11px;line-height:1.6">
+        <strong>Near 5% Ceiling:</strong> ${belowCandidates.length} SKU${belowCandidates.length>1?'s':''} have SP between ₹2,300–2,499. These are safely in the 5% GST bracket but close to the edge — monitor discount changes to avoid accidentally crossing into 18%.
+      </div>`;
+    }
+  }
+  html+=`</div>`;
+
+  // Revenue at Risk
+  html+=`<div style="margin-bottom:20px">
+    <div style="font-size:12px;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;color:var(--tx3)">Revenue at Risk</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px;background:rgba(245,87,92,.08);border:1px solid rgba(245,87,92,.2);border-radius:6px;padding:12px">
+        <div style="font-size:10px;color:var(--re);text-transform:uppercase;letter-spacing:1px">Breached SKUs GMV</div>
+        <div class="mono" style="font-size:22px;font-weight:700;color:var(--re)">₹${Math.round(atRiskGMV).toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;color:var(--tx3);margin-top:2px">${breached.length} SKUs below threshold</div>
+      </div>
+      <div style="flex:1;min-width:140px;background:rgba(245,87,92,.08);border:1px solid rgba(245,87,92,.2);border-radius:6px;padding:12px">
+        <div style="font-size:10px;color:var(--re);text-transform:uppercase;letter-spacing:1px">Total Loss on Breached</div>
+        <div class="mono" style="font-size:22px;font-weight:700;color:var(--re)">₹${Math.round(breached.reduce((a,{c})=>a+c.profitRs,0)).toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;color:var(--tx3);margin-top:2px">Combined net profit (may be negative)</div>
+      </div>
+    </div>
+  </div>`;
+
+  // Worst & Best Category
+  if(worst&&best){
+    html+=`<div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;color:var(--tx3)">Category Performance</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">`;
+    catArr.forEach(c=>{
+      const isWorst=c===worst;
+      const isBest=c===best;
+      const color=c.avg<0?'var(--re)':c.avg<200?'var(--ac)':'var(--gr)';
+      const border=isWorst?'border:1px solid rgba(245,87,92,.4);background:rgba(245,87,92,.06)':isBest?'border:1px solid rgba(45,212,160,.4);background:rgba(45,212,160,.06)':'border:1px solid var(--bd);background:var(--s2)';
+      html+=`<div style="flex:1;min-width:110px;border-radius:6px;padding:10px;${border}">
+        <div style="font-size:11px;font-weight:600;margin-bottom:4px">${esc(c.cat)} ${isWorst?'<span style="color:var(--re);font-size:9px">WORST</span>':isBest?'<span style="color:var(--gr);font-size:9px">BEST</span>':''}</div>
+        <div class="mono" style="font-size:14px;font-weight:700;color:${color}">₹${c.avg}</div>
+        <div style="font-size:9px;color:var(--tx3)">${c.count} SKUs · ${c.breaches} breaches</div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+  }
+
+  html+=`</div>`;
+  body.innerHTML=html;
+}
+
+// Discount Impact Simulator
+function renderDiscountSim(){
+  const body=el('discount-sim-body');if(!body)return;
+  const active=skuDB.filter(s=>!s.archived);
+  const brandOpts=brands.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  body.innerHTML=`
+    <div class="fg"><label class="fl">Apply to</label>
+      <select class="fi" id="sim-brand" style="font-size:12px" onchange="runDiscountSim()">
+        <option value="">All Brands</option>${brandOpts}
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Change discount from → to</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="fi" type="number" id="sim-disc-from" placeholder="Current %" style="width:80px;font-size:12px" value="55" oninput="runDiscountSim()">
+        <span style="color:var(--tx3)">→</span>
+        <input class="fi" type="number" id="sim-disc-to" placeholder="New %" style="width:80px;font-size:12px" value="50" oninput="runDiscountSim()">
+      </div>
+    </div>
+    <div id="sim-result" style="margin-top:10px"></div>
+  `;
+  runDiscountSim();
+}
+function runDiscountSim(){
+  const res=el('sim-result');if(!res)return;
+  const brandId=el('sim-brand')?.value||'';
+  const from=parseFloat(el('sim-disc-from')?.value);
+  const to=parseFloat(el('sim-disc-to')?.value);
+  if(isNaN(from)||isNaN(to)){res.innerHTML='';return;}
+  const active=skuDB.filter(s=>!s.archived&&(!brandId||s.brandId===brandId));
+  const matching=active.filter(s=>(s.discount||0)===from);
+  if(!matching.length){res.innerHTML=`<div class="st">No SKUs with ${from}% discount${brandId?' in this brand':''}</div>`;return;}
+  let totalBefore=0,totalAfter=0;
+  matching.forEach(s=>{
+    const cBefore=calcSKU(s);
+    const tmpSKU={...s,discount:to,id:'_sim_'+s.id};
+    invalidateCalcCache();
+    const cAfter=calcSKU(tmpSKU);
+    totalBefore+=cBefore.profitRs;
+    totalAfter+=cAfter.profitRs;
+  });
+  invalidateCalcCache();
+  const delta=totalAfter-totalBefore;
+  const perSku=Math.round(delta/matching.length);
+  res.innerHTML=`
+    <div style="background:${delta>=0?'rgba(45,212,160,.08)':'rgba(245,87,92,.08)'};border:1px solid ${delta>=0?'rgba(45,212,160,.25)':'rgba(245,87,92,.25)'};border-radius:8px;padding:12px">
+      <div style="font-size:11px;color:var(--tx3);margin-bottom:6px">${matching.length} SKUs affected (discount ${from}% → ${to}%)</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div><div style="font-size:10px;color:var(--tx3)">Total Profit Change</div>
+          <div class="mono" style="font-size:18px;font-weight:700;color:${delta>=0?'var(--gr)':'var(--re)'}">${delta>=0?'+':''}₹${Math.round(delta).toLocaleString('en-IN')}</div></div>
+        <div><div style="font-size:10px;color:var(--tx3)">Per SKU Change</div>
+          <div class="mono" style="font-size:18px;font-weight:700;color:${perSku>=0?'var(--gr)':'var(--re)'}">${perSku>=0?'+':''}₹${perSku}</div></div>
+        <div><div style="font-size:10px;color:var(--tx3)">Before → After</div>
+          <div class="mono" style="font-size:14px">₹${Math.round(totalBefore).toLocaleString('en-IN')} → ₹${Math.round(totalAfter).toLocaleString('en-IN')}</div></div>
+      </div>
+    </div>`;
+}
+
+// Quick Markup Adjuster
+function renderMarkupAdj(){
+  const body=el('markup-adj-body');if(!body)return;
+  const brandOpts=brands.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  body.innerHTML=`
+    <div class="fg"><label class="fl">Brand</label>
+      <select class="fi" id="madj-brand" style="font-size:12px" onchange="runMarkupAdj()">
+        <option value="">All Brands</option>${brandOpts}
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Raise markup by</label>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input type="range" id="madj-slider" min="-20" max="20" value="5" style="flex:1;accent-color:var(--ac)" oninput="el('madj-val').textContent=this.value;runMarkupAdj()">
+        <span class="mono" style="font-size:14px;font-weight:700;color:var(--ac);min-width:40px;text-align:right" id="madj-val">5</span><span style="color:var(--tx3)">%</span>
+      </div>
+    </div>
+    <div id="madj-result" style="margin-top:10px"></div>
+  `;
+  runMarkupAdj();
+}
+function runMarkupAdj(){
+  const res=el('madj-result');if(!res)return;
+  const brandId=el('madj-brand')?.value||'';
+  const delta=parseFloat(el('madj-slider')?.value)||0;
+  const active=skuDB.filter(s=>!s.archived&&(!brandId||s.brandId===brandId));
+  if(!active.length){res.innerHTML=`<div class="st">No active SKUs</div>`;return;}
+  let totalBefore=0,totalAfter=0,breachesBefore=0,breachesAfter=0;
+  active.forEach(s=>{
+    const cBefore=calcSKU(s);
+    totalBefore+=cBefore.profitRs;
+    if(cBefore.isBreach&&!s.ignoreThreshold) breachesBefore++;
+    const tmpSKU={...s,markup:s.markup+delta,id:'_madj_'+s.id};
+    invalidateCalcCache();
+    const cAfter=calcSKU(tmpSKU);
+    totalAfter+=cAfter.profitRs;
+    if(cAfter.isBreach&&!s.ignoreThreshold) breachesAfter++;
+  });
+  invalidateCalcCache();
+  const profitDelta=totalAfter-totalBefore;
+  const breachDelta=breachesAfter-breachesBefore;
+  res.innerHTML=`
+    <div style="background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px">
+      <div style="font-size:11px;color:var(--tx3);margin-bottom:8px">${active.length} SKUs · Markup ${delta>=0?'+':''}${delta}%</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:100px">
+          <div style="font-size:10px;color:var(--tx3)">Total Profit</div>
+          <div class="mono" style="font-size:16px;font-weight:700;color:${profitDelta>=0?'var(--gr)':'var(--re)'}">₹${Math.round(totalAfter).toLocaleString('en-IN')}</div>
+          <div style="font-size:10px;color:${profitDelta>=0?'var(--gr)':'var(--re)'}">${profitDelta>=0?'+':''}₹${Math.round(profitDelta).toLocaleString('en-IN')}</div>
+        </div>
+        <div style="flex:1;min-width:100px">
+          <div style="font-size:10px;color:var(--tx3)">Breaches</div>
+          <div class="mono" style="font-size:16px;font-weight:700;color:${breachesAfter?'var(--re)':'var(--gr)'}">${breachesAfter}</div>
+          <div style="font-size:10px;color:${breachDelta<=0?'var(--gr)':'var(--re)'}">${breachDelta>=0?'+':''}${breachDelta}</div>
+        </div>
+        <div style="flex:1;min-width:100px">
+          <div style="font-size:10px;color:var(--tx3)">Avg Profit/SKU</div>
+          <div class="mono" style="font-size:16px;font-weight:700">₹${Math.round(totalAfter/active.length)}</div>
+        </div>
+      </div>
+    </div>`;
 }
 
 function openBrandModal(id){
@@ -3859,7 +4152,7 @@ function nav(p){
     });
     renderWFPreviews();
   }
-  if(p==='dashboard'){renderDashTasks();renderBrandSummary();renderDashboardWidgets();updateAlerts();}
+  if(p==='dashboard'){renderDashTasks();renderBrandSummary();renderDashboardWidgets();renderPricingIntel();renderDiscountSim();renderMarkupAdj();updateAlerts();}
   if(p==='commission'){buildCommMyntra();buildCommAjioBrands();buildCommAmazon();}
   if(p==='wireframe')renderWFBuilder();
   if(p==='brands')renderBrands();
@@ -3896,7 +4189,7 @@ function onGlobalSearch(q){
     const bName=brand?brand.name:'';
     const haystack=(s.styleId+' '+s.sku+' '+bName+' '+s.category+' '+(s.tags||[]).join(' ')).toLowerCase();
     if(haystack.includes(q))
-      results.push({type:'SKU',label:s.styleId||s.sku,sub:bName+' — '+(s.category||''),action:()=>{nav('skus');const fi=el('f-search');if(fi){fi.value=s.styleId||s.sku;renderSKUs();}closeGlobalSearch();}});
+      results.push({type:'SKU',label:s.sku||s.styleId,sub:bName+' — '+(s.category||''),action:()=>{nav('skus');const fi=el('f-search');if(fi){fi.value=s.sku||s.styleId;renderSKUs();}closeGlobalSearch();}});
   });
   // Search users
   users.forEach(u=>{
@@ -6472,7 +6765,7 @@ function saveSkuTags(){
   if(pending&&!_tagModalTags.includes(pending)) _tagModalTags.push(pending);
   s.tags=[..._tagModalTags];
   closeModal();save('skus');populateTagFilter();renderSKUs();
-  audit('tags_edit',`${s.styleId||s.sku}: tags=[${s.tags.join(',')}]`);
+  audit('tags_edit',`${s.sku||s.styleId}: tags=[${s.tags.join(',')}]`);
   toast('Tags saved','green');
 }
 
@@ -6733,7 +7026,7 @@ function trackSkuSnapshot(skuId, before, after){
 function populateSkuHistorySelect(){
   const sel=el('history-sku-sel');if(!sel)return;
   sel.innerHTML='<option value="">Select a SKU to view history</option>'+
-    skuDB.map(s=>`<option value="${escAttr(s.id)}">${esc(s.styleId||s.sku||s.id)} — ${esc((brands.find(b=>b.id===s.brandId)||{}).name||'?')}</option>`).join('');
+    skuDB.map(s=>`<option value="${escAttr(s.id)}">${esc(s.sku||s.styleId||s.id)} — ${esc((brands.find(b=>b.id===s.brandId)||{}).name||'?')}</option>`).join('');
 }
 
 function renderSkuHistory(skuId){
@@ -6866,7 +7159,7 @@ function _renderSkuHistoryModal(skuId){
     </div>`:''}
   </div>`;
 
-  setModal(`<div class="mhdr"><div class="mtl">Price History — ${esc(s.styleId||s.sku||s.id)}</div><span class="mclose" onclick="closeModal()">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">Price History — ${esc(s.sku||s.styleId||s.id)}</div><span class="mclose" onclick="closeModal()">×</span></div>
     <div class="mbody" style="padding:0">
       <div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--bd);display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
         <span><strong>Brand:</strong> ${esc(brand?brand.name:'Unknown')}</span>
