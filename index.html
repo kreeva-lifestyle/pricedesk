@@ -1616,9 +1616,10 @@ const DB_KEYS = {
 };
 
 // ── Save a single key to DB ────────────────────────────
-async function dbSet(key, value, retries=1){
+async function dbSet(key, value, retries=2){
   _lastWriteTs = Date.now(); // Mark own write for realtime debounce
-  const db = getDB(); if(!db) return;
+  const db = getDB();
+  if(!db){ console.error('dbSet: No DB connection for key:', key); throw new Error('No database connection'); }
   for(let attempt=0;attempt<=retries;attempt++){
     try{
       const {error} = await db.from('app_data').upsert(
@@ -2471,7 +2472,8 @@ function toggleIgnore(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   s.ignoreThreshold=!s.ignoreThreshold;
   invalidateCalcCache();
-  renderSKUs();updateAlerts();renderBreachList();renderBrands();save('skus');
+  renderSKUs();updateAlerts();renderBreachList();renderBrands();
+  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
   if(el('page-thresholds')?.classList.contains('active')) renderThresholds();
   toast(s.ignoreThreshold?`🔕 ${s.sku||s.styleId} threshold ignored`:`⚠️ ${s.sku||s.styleId} threshold re-enabled`,'green');
 }
@@ -3418,7 +3420,8 @@ function saveNew(){
     skuDB.push({id:'s'+ts,sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,img:newImg||'',ignoreThreshold:false,archived:false});
     count++;
   });
-  newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');
+  newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();
+  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
   audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
   toast(`✓ ${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`, 'green');
 }
@@ -3454,7 +3457,9 @@ function saveEdit(id){
     const afterSnap={cost,markup:mkp,discount:disc,profit:afterCalc.profitRs,ifDelivered:afterCalc.ifDelivered,grossSettlement:afterCalc.grossSettlement||0,sp:afterCalc.sp};
     trackSkuSnapshot(id,beforeSnap,afterSnap);
   }
-  editId=null;renderSKUs();renderBrands();updateAlerts();save('skus');saveSkuHistory();
+  editId=null;renderSKUs();renderBrands();updateAlerts();
+  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
+  saveSkuHistory();
   if(changed.length) audit('sku_edit',`${skuCode||sid||'SKU'}: ${changed.join(', ')}`);
   toast(`✓ ${skuCode||sid||'SKU'} updated`,'green');
 }
@@ -3473,7 +3478,14 @@ async function archiveSKU(id){
   const label=s.sku||s.styleId||id;
   s.archived=true;
   invalidateCalcCache();
-  renderSKUs();renderBrands();updateAlerts();await save('skus');
+  try{
+    await save('skus');
+  }catch(e){
+    s.archived=false; // rollback on failure
+    toast(`Failed to archive ${esc(label)}: ${e.message}`,'red');
+    return;
+  }
+  renderSKUs();renderBrands();updateAlerts();
   if(el('page-archive')?.classList.contains('active')) renderArchivedSKUs();
   audit('sku_archive',`${label} archived (out of stock)`);
   toast(`📦 ${esc(label)} archived`,'green');
@@ -3483,7 +3495,13 @@ async function unarchiveSKU(id){
   const label=s.sku||s.styleId||id;
   s.archived=false;
   invalidateCalcCache();
-  await save('skus');
+  try{
+    await save('skus');
+  }catch(e){
+    s.archived=true; // rollback on failure
+    toast(`Failed to restore ${esc(label)}: ${e.message}`,'red');
+    return;
+  }
   renderSKUs();renderBrands();updateAlerts();
   renderArchivedSKUs();
   audit('sku_unarchive',`${label} restored from archive`);
@@ -4401,7 +4419,8 @@ function confirmImport(){
   });
   importRows=[];importUpdates=[];
   closeModal();
-  renderSKUs();renderBrands();updateAlerts();save('skus');
+  renderSKUs();renderBrands();updateAlerts();
+  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
   logBulkImport(_importFileName, newCount, updCount, 0);
   audit('bulk_import',`${_importFileName}: ${newCount} added, ${updCount} updated`);
   _importFileName='';
@@ -6669,7 +6688,7 @@ function saveSkuTags(){
   const pending=document.getElementById('tag-new-input')?.value.replace(/,/g,'').trim();
   if(pending&&!_tagModalTags.includes(pending)) _tagModalTags.push(pending);
   s.tags=[..._tagModalTags];
-  closeModal();save('skus');populateTagFilter();renderSKUs();
+  closeModal();save('skus').catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
   audit('tags_edit',`${s.sku||s.styleId}: tags=[${s.tags.join(',')}]`);
   toast('Tags saved','green');
 }
@@ -6677,7 +6696,7 @@ function saveSkuTags(){
 function removeTagFromSku(skuId,tag){
   const s=skuDB.find(x=>x.id===skuId);if(!s||!s.tags)return;
   s.tags=s.tags.filter(t=>t!==tag);
-  save('skus');populateTagFilter();renderSKUs();
+  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
 }
 
 // ═══════════════════════════════════════════════════════
