@@ -868,7 +868,7 @@ body:has(#login-screen.active){overflow:hidden}
       <div class="sc"><div class="sl">Threshold Breaches</div><div class="sv" style="color:var(--re)" id="dash-breaches">0</div><div class="ss">Not ignored</div></div>
       <div class="sc"><div class="sl">Ignored Breaches</div><div class="sv" style="color:var(--ac)" id="dash-ignored">0</div><div class="ss">Threshold ignored</div></div>
     </div>
-    <div style="margin-top:8px;font-size:10px;color:var(--tx3);padding:0 4px">All dashboard metrics (GST split, category breakdown, profit tables, pricing intelligence) exclude <strong style="color:var(--ac)">archived</strong> and <strong style="color:var(--ac)">ignored threshold</strong> SKUs. Ignored threshold SKUs are slow-selling products being sorted out.</div>
+    <div style="margin-top:8px;font-size:10px;color:var(--tx3);padding:0 4px">All dashboard metrics (GST split, category breakdown, profit tables, pricing intelligence) exclude <strong style="color:var(--ac)">archived</strong> and <strong style="color:var(--ac)">ignored threshold</strong> SKUs.</div>
   </div>
 
   <div class="dash-block" data-dash-id="alerts" draggable="true">
@@ -2876,9 +2876,41 @@ function renderPricingIntel(){
     }
 
     if(belowCandidates.length){
-      html+=`<div class="info" style="margin-bottom:10px;font-size:11px;line-height:1.6">
-        <strong>Near 5% Ceiling:</strong> ${belowCandidates.length} SKU${belowCandidates.length>1?'s':''} have SP between ₹2,300–2,499. These are safely in the 5% GST bracket but close to the edge — monitor discount changes to avoid accidentally crossing into 18%.
+      // For SKUs ₹2,300-2,499: show how much they SAVE by staying in 5% vs crossing to 18%
+      let totalSaving=0,totalIfdSaving=0;
+      const bRows=belowCandidates.map(({s,c})=>{
+        const brand=brands.find(b=>b.id===s.brandId);
+        // Simulate what happens if SP crosses to ₹2,500 (18% GST)
+        const currentMRP=c.mrp||c.sp;
+        const crossDisc=currentMRP>0?Math.floor((1-2500/currentMRP)*100):0;
+        const tmpSKU={...s,discount:crossDisc,id:'_gst_b_'+s.id};
+        invalidateCalcCache();
+        const simC=calcSKU(tmpSKU);
+        const profitSaving=c.profitRs-simC.profitRs; // positive = current is better
+        const ifdSaving=c.ifDelivered-simC.ifDelivered;
+        totalSaving+=profitSaving;
+        totalIfdSaving+=ifdSaving;
+        return{s,c,simC,profitSaving,ifdSaving,currentSP:Math.round(c.sp)};
+      });
+      invalidateCalcCache();
+
+      html+=`<div class="info" style="margin-bottom:10px;font-size:11px;line-height:1.6;border-color:rgba(45,212,160,.3)">
+        <strong>5% GST Advantage:</strong> ${belowCandidates.length} SKU${belowCandidates.length>1?'s':''} are in the ₹2,300–2,499 range (5% GST). Staying below ₹2,500 saves <strong style="color:var(--gr)">₹${Math.round(totalSaving).toLocaleString('en-IN')}</strong> in profit and <strong style="color:var(--gr)">₹${Math.round(totalIfdSaving).toLocaleString('en-IN')}</strong> in If Delivered vs crossing to 18% GST. <em>Monitor discount changes to avoid accidentally crossing the threshold.</em>
       </div>`;
+      html+=`<div style="max-height:220px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;margin-bottom:12px"><table class="dt" style="font-size:11px">
+        <thead><tr><th>SKU</th><th>Category</th><th>Current SP</th><th>GST</th><th>Profit Saved</th><th>If Delivered Saved</th></tr></thead><tbody>`;
+      bRows.slice(0,20).forEach(r=>{
+        html+=`<tr>
+          <td class="mono" style="font-size:10px">${esc(r.s.sku||r.s.styleId)}</td>
+          <td>${esc(r.s.category)}</td>
+          <td class="mono">₹${r.currentSP.toLocaleString('en-IN')} <span class="gst5">5%</span></td>
+          <td class="mono" style="color:var(--gr);font-weight:600">5% ✓</td>
+          <td class="mono" style="color:${r.profitSaving>=0?'var(--gr)':'var(--re)'};font-weight:600">${r.profitSaving>=0?'+':''}₹${Math.round(r.profitSaving)}</td>
+          <td class="mono" style="color:${r.ifdSaving>=0?'var(--gr)':'var(--re)'}">${r.ifdSaving>=0?'+':''}₹${Math.round(r.ifdSaving)}</td>
+        </tr>`;
+      });
+      html+=`</tbody></table></div>`;
+      if(bRows.length>20) html+=`<div class="st" style="margin-bottom:8px">${bRows.length-20} more SKUs not shown</div>`;
     }
   }
   html+=`</div>`;
