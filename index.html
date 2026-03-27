@@ -5108,7 +5108,7 @@ async function confirmClearData(){
 const SESSION_KEY = 'pricedesk_session';
 const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour
 const WARN_BEFORE    = 5  * 60 * 1000;  // warn 5 min before
-const SESSION_CHECK_INTERVAL = 180000;  // check every 3 minutes (reduced DB load)
+const SESSION_CHECK_INTERVAL = 300000;  // check every 5 minutes (reduced DB load)
 let _sessionTimer = null, _warnTimer = null, _countdownInterval = null;
 let _sessionCheckTimer = null;
 let currentUser = null;
@@ -5143,7 +5143,7 @@ let _sessionCache={val:null,ts:0};
 async function validateSessionToken(userId, localToken){
   const db = getDB(); if(!db) return true;
   // Use cached result if less than 2 minutes old
-  if(_sessionCache.val!==null&&Date.now()-_sessionCache.ts<120000) return _sessionCache.val;
+  if(_sessionCache.val!==null&&Date.now()-_sessionCache.ts<240000) return _sessionCache.val; // 4-min cache
   try{
     const sessions = await dbGet(DB_KEYS.sessions) || {};
     const remote = sessions[userId];
@@ -7176,15 +7176,19 @@ function setupRealtime(){
     try{ db.removeChannel(_realtimeChannel); }catch(e){}
   }
 
+  // Only listen for UPDATE events (we use upsert, which emits UPDATE after first insert)
+  // This reduces WAL processing vs event:'*' which also tracks INSERT/DELETE
   _realtimeChannel = db.channel('app_data_changes')
     .on('postgres_changes',
-      { event: '*', schema: 'public', table: 'app_data' },
+      { event: 'UPDATE', schema: 'public', table: 'app_data' },
       (payload) => {
         // Ignore our own writes (within last 5 seconds)
         if(Date.now() - _lastWriteTs < 5000) return;
 
         const key = payload.new?.key || payload.old?.key;
         if(!key) return;
+        // Skip session key changes — no need to re-render for session updates
+        if(key === DB_KEYS.sessions) return;
         console.log(`⚡ Realtime: ${payload.eventType} on ${key}`);
         handleRealtimeUpdate(key, payload.new?.value);
       }
@@ -7196,8 +7200,8 @@ function setupRealtime(){
       } else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){
         console.warn('⚡ Realtime error:', status);
         updateRealtimeBadge(false);
-        // Retry after 5s
-        setTimeout(setupRealtime, 5000);
+        // Retry after 30s (was 5s — reduce reconnection churn)
+        setTimeout(setupRealtime, 30000);
       }
     });
 }
