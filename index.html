@@ -4217,8 +4217,9 @@ function openImgModal(skuId){
     <div class="mbody">
       ${fixed ? `<div style="text-align:center;margin-bottom:16px">
         <img src="${esc(fixed)}" id="img-modal-preview" style="width:130px;height:130px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2);cursor:zoom-in" onclick="zoomImg('${escAttr(fixed)}')" onerror="this.style.display='none'">
+        <div style="margin-top:6px;font-size:11px;color:var(--tx3)">${currentUrl.startsWith('data:')?`<span style="color:${(currentUrl.length/1370)>300?'var(--re)':'var(--gr)'}">${(currentUrl.length/1370).toFixed(0)} KB</span> · Stored in database`:'External URL · not stored in DB'}</div>
         <div style="margin-top:8px;display:flex;gap:8px;justify-content:center">
-          <button class="btn bg bsm" onclick="zoomImg('${escAttr(fixed)}')">🔍 Zoom</button>
+          <button class="btn bg bsm" onclick="zoomImg('${escAttr(fixed)}')">Zoom</button>
           <button class="btn br bsm" onclick="removeImgFromModal()">✕ Remove</button>
         </div>
       </div>` : ''}
@@ -4236,6 +4237,9 @@ function openImgModal(skuId){
         <div id="img-upload-preview" style="text-align:center;margin-top:10px"></div>
       </div>
     </div>
+    <div style="padding:8px 21px;background:var(--s2);border-top:1px solid var(--bd);font-size:10px;color:var(--tx3)">
+        ${(()=>{const imgs=skuDB.filter(s=>s.img&&s.img.startsWith('data:'));const totalKB=imgs.reduce((a,s)=>a+(s.img.length/1370),0);return imgs.length?`<span style="color:${totalKB>50000?'var(--re)':totalKB>10000?'var(--ac)':'var(--gr)'}">⬤</span> ${imgs.length} images stored in DB · Total: ${totalKB>1024?(totalKB/1024).toFixed(1)+' MB':Math.round(totalKB)+' KB'} ${totalKB>10000?' — Consider using external URLs (Dropbox/CDN) to reduce DB size':''}`:''})()}
+      </div>
     <div class="mfoot">
       <button class="btn bg" onclick="closeModal()">Cancel</button>
       <button class="btn bp" onclick="saveImgFromModal()">✓ Save Image</button>
