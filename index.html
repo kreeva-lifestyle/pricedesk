@@ -3010,7 +3010,7 @@ function renderSKUs(){
     const _icoStyle='cursor:pointer;font-size:14px;line-height:1;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center';
     if(s.ignoreThreshold) statusIcon=`<span title="Threshold ignored — click to re-enable" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle}">🔕</span>`;
     else if(c.isBreach) statusIcon=`<span title="Below threshold: ₹${c.profitRs.toFixed(0)} < ₹${c.threshold} — click to ignore" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle}">⚠️</span>`;
-    else statusIcon=`<span title="Healthy — click to ignore threshold" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle}">✅</span>`;
+    else statusIcon=`<span title="Healthy" style="${_icoStyle};cursor:default;opacity:.5">✅</span>`;
     return`<tr>
       <td><div data-sku-img="${escAttr(s.id)}" onclick="openImgModal('${escAttr(s.id)}')" style="cursor:pointer" title="Set product image">${s.img?`<img src="${esc(fixImg(s.img))}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">+</div>`}</div></td>
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
