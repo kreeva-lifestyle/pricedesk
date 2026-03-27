@@ -2484,7 +2484,7 @@ function toggleIgnore(id){
   invalidateCalcCache();
   renderSKUs();updateAlerts();renderBreachList();renderBrands();save('skus');
   if(el('page-thresholds')?.classList.contains('active')) renderThresholds();
-  toast(s.ignoreThreshold?`🔕 ${s.styleId||s.sku} threshold ignored`:`⚠️ ${s.styleId||s.sku} threshold re-enabled`,'green');
+  toast(s.ignoreThreshold?`🔕 ${s.sku||s.styleId} threshold ignored`:`⚠️ ${s.sku||s.styleId} threshold re-enabled`,'green');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2740,7 +2740,7 @@ function renderDashboardWidgets(){
   // ── Top/Bottom 5 profit SKUs ──
   const sorted=[...allCalcs].sort((a,b)=>b.c.profitRs-a.c.profitRs);
   const renderProfitRow=({s,c,b})=>`<tr>
-    <td class="mono" style="font-size:11px;font-weight:600">${esc(s.styleId||s.sku||'—')}</td>
+    <td class="mono" style="font-size:11px;font-weight:600">${esc(s.sku||s.styleId||'—')}</td>
     <td style="font-size:11px">${esc(b.name)}</td>
     <td><span class="tag tb" style="font-size:9px">${esc(s.category)}</span></td>
     <td class="mono" style="font-size:11px">₹${Math.round(c.sp)}</td>
@@ -4148,7 +4148,7 @@ function onGlobalSearch(q){
     const bName=brand?brand.name:'';
     const haystack=(s.styleId+' '+s.sku+' '+bName+' '+s.category+' '+(s.tags||[]).join(' ')).toLowerCase();
     if(haystack.includes(q))
-      results.push({type:'SKU',label:s.styleId||s.sku,sub:bName+' — '+(s.category||''),action:()=>{nav('skus');const fi=el('f-search');if(fi){fi.value=s.styleId||s.sku;renderSKUs();}closeGlobalSearch();}});
+      results.push({type:'SKU',label:s.sku||s.styleId,sub:bName+' — '+(s.category||''),action:()=>{nav('skus');const fi=el('f-search');if(fi){fi.value=s.sku||s.styleId;renderSKUs();}closeGlobalSearch();}});
   });
   // Search users
   users.forEach(u=>{
@@ -6724,7 +6724,7 @@ function saveSkuTags(){
   if(pending&&!_tagModalTags.includes(pending)) _tagModalTags.push(pending);
   s.tags=[..._tagModalTags];
   closeModal();save('skus');populateTagFilter();renderSKUs();
-  audit('tags_edit',`${s.styleId||s.sku}: tags=[${s.tags.join(',')}]`);
+  audit('tags_edit',`${s.sku||s.styleId}: tags=[${s.tags.join(',')}]`);
   toast('Tags saved','green');
 }
 
@@ -6985,7 +6985,7 @@ function trackSkuSnapshot(skuId, before, after){
 function populateSkuHistorySelect(){
   const sel=el('history-sku-sel');if(!sel)return;
   sel.innerHTML='<option value="">Select a SKU to view history</option>'+
-    skuDB.map(s=>`<option value="${escAttr(s.id)}">${esc(s.styleId||s.sku||s.id)} — ${esc((brands.find(b=>b.id===s.brandId)||{}).name||'?')}</option>`).join('');
+    skuDB.map(s=>`<option value="${escAttr(s.id)}">${esc(s.sku||s.styleId||s.id)} — ${esc((brands.find(b=>b.id===s.brandId)||{}).name||'?')}</option>`).join('');
 }
 
 function renderSkuHistory(skuId){
@@ -7118,7 +7118,7 @@ function _renderSkuHistoryModal(skuId){
     </div>`:''}
   </div>`;
 
-  setModal(`<div class="mhdr"><div class="mtl">Price History — ${esc(s.styleId||s.sku||s.id)}</div><span class="mclose" onclick="closeModal()">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">Price History — ${esc(s.sku||s.styleId||s.id)}</div><span class="mclose" onclick="closeModal()">×</span></div>
     <div class="mbody" style="padding:0">
       <div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--bd);display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
         <span><strong>Brand:</strong> ${esc(brand?brand.name:'Unknown')}</span>
