@@ -1603,17 +1603,28 @@ const DB_KEYS = {
 };
 
 // ── Save a single key to DB ────────────────────────────
-async function dbSet(key, value){
+async function dbSet(key, value, retries=1){
   _lastWriteTs = Date.now(); // Mark own write for realtime debounce
   const db = getDB(); if(!db) return;
-  try{
-    const {error} = await db.from('app_data').upsert(
-      {key, value, updated_at: new Date().toISOString()},
-      {onConflict:'key'}
-    );
-    if(error) console.warn('dbSet error:', key, error.message);
-    else updateSyncBadge(true);
-  } catch(e){ console.warn('dbSet exception:', key, e); }
+  for(let attempt=0;attempt<=retries;attempt++){
+    try{
+      const {error} = await db.from('app_data').upsert(
+        {key, value, updated_at: new Date().toISOString()},
+        {onConflict:'key'}
+      );
+      if(error){
+        console.warn(`dbSet error (attempt ${attempt+1}):`, key, error.message);
+        if(attempt<retries){await new Promise(r=>setTimeout(r,2000));continue;}
+        throw new Error(error.message);
+      }
+      updateSyncBadge(true);
+      return;
+    } catch(e){
+      if(attempt>=retries) throw e;
+      console.warn(`dbSet retry ${attempt+1}:`, key, e);
+      await new Promise(r=>setTimeout(r,2000));
+    }
+  }
 }
 
 // ── Load a single key from DB ──────────────────────────
@@ -4332,7 +4343,17 @@ async function saveImgFromModal(){
       } else if(imgCell){
         imgCell.innerHTML=`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">+</div>`;
       }
-      save('skus'); // Save in background
+      // Warn if base64 image is large
+      if(url.startsWith('data:')&&url.length>500000){
+        toast('⚠ Large image ('+Math.round(url.length/1370)+'KB) — save may be slow. Consider using an external URL instead.','red');
+      }
+      try{
+        await save('skus');
+        toast('✓ Image saved','green');
+      }catch(e){
+        toast('Image save failed — try using an external URL instead','red');
+        console.error('Image save failed:',e);
+      }
     }
   }
   closeModal();
