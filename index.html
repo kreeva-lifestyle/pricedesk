@@ -1198,6 +1198,7 @@ body:has(#login-screen.active){overflow:hidden}
         <col style="width:75px"><!-- Markup -->
         <col style="width:80px"><!-- Discount -->
         <col style="width:95px"><!-- Selling Price -->
+        <col style="width:95px"><!-- Customer Paid -->
         <col style="width:88px"><!-- Net Profit -->
         <col style="width:88px"><!-- If Delivered -->
         <col style="width:100px"><!-- Gross Settlement -->
@@ -1213,6 +1214,7 @@ body:has(#login-screen.active){overflow:hidden}
         <th class="sortable" onclick="sortSKUs('markup')" data-sort="markup">Markup % <span class="sort-arrow" id="sort-markup"></span></th>
         <th class="sortable" onclick="sortSKUs('discount')" data-sort="discount">Discount % <span class="sort-arrow" id="sort-discount"></span></th>
         <th class="sortable" onclick="sortSKUs('sp')" data-sort="sp">Selling Price <span class="sort-arrow" id="sort-sp"></span></th>
+        <th class="sortable" onclick="sortSKUs('custPaid')" data-sort="custPaid">Cust. Paid <span class="sort-arrow" id="sort-custPaid"></span></th>
         <th class="sortable" onclick="sortSKUs('profit')" data-sort="profit">Net Profit <span class="sort-arrow" id="sort-profit"></span></th>
         <th class="sortable" onclick="sortSKUs('ifDelivered')" data-sort="ifDelivered">If Delivered <span class="sort-arrow" id="sort-ifDelivered"></span></th>
         <th class="sortable" onclick="sortSKUs('grossSettlement')" data-sort="grossSettlement">Gross Sett. <span class="sort-arrow" id="sort-grossSettlement"></span></th>
@@ -2095,13 +2097,14 @@ function calcSKU(s){
   // Auto-derive level from category
   const level = CAT_LEVEL[s.category] || s.level || 'Level 2';
 
-  let mrp, sp, comm, payout, profitRs, ifDelivered=0, grossSettlement=0;
+  let mrp, sp, comm, payout, profitRs, ifDelivered=0, grossSettlement=0, custPaid=0;
 
   if(mp==='myntra'){
     // Use WF engine for full Myntra calculation
     const v2=calcMyntraFull(s.cost,s.markup,s.discount??0,level,s.category,0,0);
     mrp=v2.mrpRnd??v2.mrp??0;
-    sp=v2.sellerPrice??v2.custPaid??mrp??0;
+    custPaid=v2.custPaid??mrp;
+    sp=v2.sellerPrice??custPaid??0;
     comm=brand.commOverride!=null ? brand.commOverride : (v2.rawComm??0);
     payout=v2.payout??0;
     profitRs=v2.profit??(payout-s.cost);
@@ -2118,6 +2121,7 @@ function calcSKU(s){
     const disc=s.discount||0;
     const discAmt=mrpRnd*disc/100;
     const grossSale=mrpRnd-discAmt;
+    custPaid=grossSale;
     const gstRate=grossSale>2500?0.18:0.05;
     const gstValue=grossSale*gstRate/(1+gstRate);
     // Commission: per-brand only — no category fallback for Ajio
@@ -2141,6 +2145,7 @@ function calcSKU(s){
     // Amazon
     mrp=Math.round(s.cost*(1+s.markup/100));
     sp=Math.round(mrp*3/100)*100||mrp*3;
+    custPaid=sp;
     const gst=autoGST(sp);
     if(brand.commOverride!=null) comm=brand.commOverride;
     else comm=COMM_AMAZON[s.category]||17;
@@ -2153,7 +2158,7 @@ function calcSKU(s){
   const profitPct=sp>0?(profitRs/sp*100).toFixed(1):'0';
   const threshold=THRESHOLDS[s.category]||0;
   const isBreach=!s.ignoreThreshold&&profitRs<threshold;
-  const result={mrp,sp,comm,payout,profitRs,profitPct,isBreach,threshold,ifDelivered,grossSettlement};
+  const result={mrp,sp,custPaid,comm,payout,profitRs,profitPct,isBreach,threshold,ifDelivered,grossSettlement};
   _calcCache.set(cacheKey, result);
   return result;
 }
@@ -2270,7 +2275,7 @@ function renderDynamicCalc(mp){
   }
   // Note row for Myntra
   if(isMyntra){
-    html+=`<tr><td colspan="3" style="padding:10px 11px;font-size:11px;color:var(--re);font-style:italic;border-top:2px solid var(--bd)">Note: The above calculation is for ${esc(d.cat||'')} category. Selling price is ${(result.sellerPrice||0)>2500?'above':'below'} ₹2500 so GST applied is ${(result.sellerPrice||0)>2500?'18%':'5%'}. Falls under ${esc(d.level||'')}, commission applied accordingly.</td></tr>`;
+    html+=`<tr><td colspan="3" style="padding:10px 11px;font-size:11px;color:var(--re);font-style:italic;border-top:2px solid var(--bd)">Note: The above calculation is for ${esc(d.cat||'')} category. Customer Paid is ${(result.custPaid||0)>2500?'above':'below'} ₹2500 so GST applied is ${(result.custPaid||0)>2500?'18%':'5%'}. Falls under ${esc(d.level||'')}, commission applied accordingly.</td></tr>`;
   }
   tableEl.innerHTML = html;
   }catch(err){
@@ -2833,12 +2838,12 @@ function renderPricingIntel(){
   const active=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold);
   const calcs=active.map(s=>({s,c:calcSKU(s),b:brands.find(b=>b.id===s.brandId)}));
 
-  // 1. GST Bracket Analysis — SKUs near ₹2500 threshold
-  const gst5=calcs.filter(({c})=>c.sp<2500);
-  const gst18=calcs.filter(({c})=>c.sp>=2500);
-  const nearThreshold=calcs.filter(({c})=>c.sp>=2200&&c.sp<=2800).sort((a,b)=>a.c.sp-b.c.sp);
-  const nearBelow=nearThreshold.filter(({c})=>c.sp<2500);
-  const nearAbove=nearThreshold.filter(({c})=>c.sp>=2500);
+  // 1. GST Bracket Analysis — based on Customer Paid (not Selling Price)
+  const gst5=calcs.filter(({c})=>c.custPaid<2500);
+  const gst18=calcs.filter(({c})=>c.custPaid>=2500);
+  const nearThreshold=calcs.filter(({c})=>c.custPaid>=2200&&c.custPaid<=2800).sort((a,b)=>a.c.custPaid-b.c.custPaid);
+  const nearBelow=nearThreshold.filter(({c})=>c.custPaid<2500);
+  const nearAbove=nearThreshold.filter(({c})=>c.custPaid>=2500);
 
   // 2. Worst performing category
   const catMap={};
@@ -2862,11 +2867,11 @@ function renderPricingIntel(){
     <div style="font-size:12px;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;color:var(--tx3)">GST Bracket Optimization</div>
     <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap">
       <div style="flex:1;min-width:120px;background:var(--s2);border-radius:6px;padding:10px;border-left:3px solid var(--gr)">
-        <div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">5% GST (SP &lt; ₹2,500)</div>
+        <div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">5% GST (Cust. Paid &lt; ₹2,500)</div>
         <div class="mono" style="font-size:18px;font-weight:700;color:var(--gr)">${gst5.length}</div>
       </div>
       <div style="flex:1;min-width:120px;background:var(--s2);border-radius:6px;padding:10px;border-left:3px solid var(--ac)">
-        <div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">18% GST (SP ≥ ₹2,500)</div>
+        <div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">18% GST (Cust. Paid ≥ ₹2,500)</div>
         <div class="mono" style="font-size:18px;font-weight:700;color:var(--ac)">${gst18.length}</div>
       </div>
       <div style="flex:1;min-width:120px;background:var(--s2);border-radius:6px;padding:10px;border-left:3px solid var(--bl)">
@@ -2878,20 +2883,20 @@ function renderPricingIntel(){
   if(nearAbove.length||nearBelow.length){
     // Simulate moving SKUs near ₹2,500 to ₹2,499 to optimize GST bracket
     // Only for non-ignored-threshold SKUs
-    const candidates=nearThreshold.filter(({s,c})=>!s.ignoreThreshold&&c.sp>=2300&&c.sp<=2800&&c.sp!==2499);
-    const aboveCandidates=candidates.filter(({c})=>c.sp>=2500);
-    const belowCandidates=candidates.filter(({c})=>c.sp>=2300&&c.sp<2500);
+    const candidates=nearThreshold.filter(({s,c})=>!s.ignoreThreshold&&c.custPaid>=2300&&c.custPaid<=2800&&c.custPaid!==2499);
+    const aboveCandidates=candidates.filter(({c})=>c.custPaid>=2500);
+    const belowCandidates=candidates.filter(({c})=>c.custPaid>=2300&&c.custPaid<2500);
 
     if(aboveCandidates.length){
-      // For SKUs above ₹2,500: recommend reducing to ₹2,499 (drops from 18% to 5% GST)
+      // For SKUs where Customer Paid >= ₹2,500: recommend reducing to ₹2,499 (drops from 18% to 5% GST)
       let totalProfitGain=0,totalIfdGain=0;
       const rows=aboveCandidates.map(({s,c})=>{
         const brand=brands.find(b=>b.id===s.brandId);
         const isMyntra=brand&&brand.model==='myntra';
-        const currentSP=c.sp;
-        const currentMRP=c.mrp||currentSP;
-        const targetSP=2499;
-        const neededDisc=currentMRP>0?Math.ceil((1-targetSP/currentMRP)*100):0;
+        const currentCP=c.custPaid;
+        const currentMRP=c.mrp||currentCP;
+        const targetCP=2499;
+        const neededDisc=currentMRP>0?Math.ceil((1-targetCP/currentMRP)*100):0;
         // Simulate with temp ID (won't collide with cached entries)
         const tmpSKU={...s,discount:neededDisc,id:'_gst_'+s.id};
         const simC=calcSKU(tmpSKU);
@@ -2899,19 +2904,19 @@ function renderPricingIntel(){
         const ifdGain=simC.ifDelivered-c.ifDelivered;
         totalProfitGain+=profitGain;
         totalIfdGain+=ifdGain;
-        return{s,c,simC,neededDisc,profitGain,ifdGain,currentSP:Math.round(currentSP),isMyntra};
+        return{s,c,simC,neededDisc,profitGain,ifdGain,currentCP:Math.round(currentCP),isMyntra};
       });
 
       html+=`<div class="success" style="margin-bottom:10px;font-size:11px;line-height:1.6;border-color:rgba(45,212,160,.3)">
-        <strong>Recommendation:</strong> ${aboveCandidates.length} SKU${aboveCandidates.length>1?'s':''} are just above ₹2,500 (18% GST). Moving to ₹2,499 (5% GST) could increase total profit by <strong style="color:var(--gr)">+₹${Math.round(totalProfitGain).toLocaleString('en-IN')}</strong> and If Delivered by <strong style="color:var(--gr)">+₹${Math.round(totalIfdGain).toLocaleString('en-IN')}</strong>.
+        <strong>Recommendation:</strong> ${aboveCandidates.length} SKU${aboveCandidates.length>1?'s':''} have Customer Paid just above ₹2,500 (18% GST). Reducing to ₹2,499 (5% GST) could increase total profit by <strong style="color:var(--gr)">+₹${Math.round(totalProfitGain).toLocaleString('en-IN')}</strong> and If Delivered by <strong style="color:var(--gr)">+₹${Math.round(totalIfdGain).toLocaleString('en-IN')}</strong>.
       </div>`;
       html+=`<div style="max-height:220px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;margin-bottom:12px"><table class="dt" style="font-size:11px">
-        <thead><tr><th>SKU</th><th>Category</th><th>Current SP</th><th>Current Disc</th><th>Rec. Disc</th><th>Profit Change</th><th>If Delivered Change</th></tr></thead><tbody>`;
+        <thead><tr><th>SKU</th><th>Category</th><th>Cust. Paid</th><th>Current Disc</th><th>Rec. Disc</th><th>Profit Change</th><th>If Delivered Change</th></tr></thead><tbody>`;
       rows.slice(0,20).forEach(r=>{
         html+=`<tr>
           <td class="mono" style="font-size:10px">${esc(r.s.sku||r.s.styleId)}</td>
           <td>${esc(r.s.category)}</td>
-          <td class="mono">₹${r.currentSP.toLocaleString('en-IN')} <span class="gst18">18%</span></td>
+          <td class="mono">₹${r.currentCP.toLocaleString('en-IN')} <span class="gst18">18%</span></td>
           <td class="mono">${r.s.discount||0}%</td>
           <td class="mono" style="color:var(--ac);font-weight:600">${r.neededDisc}%</td>
           <td class="mono" style="color:${r.profitGain>=0?'var(--gr)':'var(--re)'};font-weight:600">${r.profitGain>=0?'+':''}₹${Math.round(r.profitGain)}</td>
@@ -2927,7 +2932,7 @@ function renderPricingIntel(){
       let totalSaving=0,totalIfdSaving=0;
       const bRows=belowCandidates.map(({s,c})=>{
         const brand=brands.find(b=>b.id===s.brandId);
-        const currentMRP=c.mrp||c.sp;
+        const currentMRP=c.mrp||c.custPaid;
         const crossDisc=currentMRP>0?Math.floor((1-2500/currentMRP)*100):0;
         // Simulate with temp ID (won't collide with cached entries)
         const tmpSKU={...s,discount:crossDisc,id:'_gst_b_'+s.id};
@@ -2936,19 +2941,19 @@ function renderPricingIntel(){
         const ifdSaving=c.ifDelivered-simC.ifDelivered;
         totalSaving+=profitSaving;
         totalIfdSaving+=ifdSaving;
-        return{s,c,simC,profitSaving,ifdSaving,currentSP:Math.round(c.sp)};
+        return{s,c,simC,profitSaving,ifdSaving,currentCP:Math.round(c.custPaid)};
       });
 
       html+=`<div class="info" style="margin-bottom:10px;font-size:11px;line-height:1.6;border-color:rgba(45,212,160,.3)">
-        <strong>5% GST Advantage:</strong> ${belowCandidates.length} SKU${belowCandidates.length>1?'s':''} are in the ₹2,300–2,499 range (5% GST). Staying below ₹2,500 saves <strong style="color:var(--gr)">₹${Math.round(totalSaving).toLocaleString('en-IN')}</strong> in profit and <strong style="color:var(--gr)">₹${Math.round(totalIfdSaving).toLocaleString('en-IN')}</strong> in If Delivered vs crossing to 18% GST. <em>Monitor discount changes to avoid accidentally crossing the threshold.</em>
+        <strong>5% GST Advantage:</strong> ${belowCandidates.length} SKU${belowCandidates.length>1?'s':''} have Customer Paid in the ₹2,300–2,499 range (5% GST). Staying below ₹2,500 saves <strong style="color:var(--gr)">₹${Math.round(totalSaving).toLocaleString('en-IN')}</strong> in profit and <strong style="color:var(--gr)">₹${Math.round(totalIfdSaving).toLocaleString('en-IN')}</strong> in If Delivered vs crossing to 18% GST. <em>Monitor discount changes to avoid accidentally crossing the threshold.</em>
       </div>`;
       html+=`<div style="max-height:220px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;margin-bottom:12px"><table class="dt" style="font-size:11px">
-        <thead><tr><th>SKU</th><th>Category</th><th>Current SP</th><th>GST</th><th>Profit Saved</th><th>If Delivered Saved</th></tr></thead><tbody>`;
+        <thead><tr><th>SKU</th><th>Category</th><th>Cust. Paid</th><th>GST</th><th>Profit Saved</th><th>If Delivered Saved</th></tr></thead><tbody>`;
       bRows.slice(0,20).forEach(r=>{
         html+=`<tr>
           <td class="mono" style="font-size:10px">${esc(r.s.sku||r.s.styleId)}</td>
           <td>${esc(r.s.category)}</td>
-          <td class="mono">₹${r.currentSP.toLocaleString('en-IN')} <span class="gst5">5%</span></td>
+          <td class="mono">₹${r.currentCP.toLocaleString('en-IN')} <span class="gst5">5%</span></td>
           <td class="mono" style="color:var(--gr);font-weight:600">5% ✓</td>
           <td class="mono" style="color:${r.profitSaving>=0?'var(--gr)':'var(--re)'};font-weight:600">${r.profitSaving>=0?'+':''}₹${Math.round(r.profitSaving)}</td>
           <td class="mono" style="color:${r.ifdSaving>=0?'var(--gr)':'var(--re)'}">${r.ifdSaving>=0?'+':''}₹${Math.round(r.ifdSaving)}</td>
@@ -3099,6 +3104,7 @@ function applySKUSort(list){
   sorted.sort((a,b)=>{
     let va,vb;
     if(_skuSortCol==='sp'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.sp;vb=cb.sp;}
+    else if(_skuSortCol==='custPaid'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.custPaid;vb=cb.custPaid;}
     else if(_skuSortCol==='profit'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.profitRs;vb=cb.profitRs;}
     else if(_skuSortCol==='ifDelivered'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.ifDelivered;vb=cb.ifDelivered;}
     else if(_skuSortCol==='grossSettlement'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.grossSettlement;vb=cb.grossSettlement;}
@@ -3263,6 +3269,7 @@ function renderSKUs(){
       <td class="mono">${s.markup}%</td>
       <td class="mono">${s.discount||0}%</td>
       <td class="mono" style="color:var(--bl)">₹${Math.round(c.sp).toLocaleString('en-IN')}</td>
+      <td class="mono">₹${Math.round(c.custPaid).toLocaleString('en-IN')}</td>
       <td class="mono" style="color:${profColor};font-weight:600">₹${c.profitRs.toFixed(0)}</td>
       <td class="mono" style="color:${ifDelColor}">₹${c.ifDelivered.toFixed(0)}</td>
       <td class="mono" style="color:${brand&&brand.model==='myntra'?(c.grossSettlement>=0?'var(--gr)':'var(--re)'):'var(--tx3)'}">${brand&&brand.model==='myntra'?'₹'+c.grossSettlement.toFixed(0):'—'}</td>
@@ -3315,6 +3322,7 @@ function renderEditRow(s){
     <td><input class="si" data-lc id="e-mkp" type="number" value="${s.markup}" placeholder="%" style="width:55px"></td>
     <td><input class="si" data-lc id="e-disc" type="number" value="${s.discount||0}" placeholder="%" style="width:55px"></td>
     <td><div class="av" id="e-sp" style="color:var(--bl)">₹${Math.round(c.sp).toLocaleString('en-IN')}</div></td>
+    <td><div class="av" id="e-cp">₹${Math.round(c.custPaid).toLocaleString('en-IN')}</div></td>
     <td><div class="av" id="e-pp" style="color:${c.profitRs>0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</div></td>
     <td><div class="av" id="e-ifd" style="color:${c.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${c.ifDelivered.toFixed(0)}</div></td>
     <td><div class="av na">—</div></td>
@@ -3356,6 +3364,7 @@ function renderNewRow(){
     <td><input class="si" data-lc id="n-mkp" type="number" placeholder="%" style="width:55px"></td>
     <td><input class="si" data-lc id="n-disc" type="number" placeholder="%" value="0" style="width:55px"></td>
     <td><div class="av na" id="n-sp">—</div></td>
+    <td><div class="av na" id="n-cp">—</div></td>
     <td><div class="av na" id="n-pp">—</div></td>
     <td><div class="av na" id="n-ifd">—</div></td>
     <td><div class="av na">—</div></td>
@@ -3397,8 +3406,9 @@ function liveCalcRow(row){
   const level=CAT_LEVEL[cat]||'Level 2';
   const tmpSKU={cost,markup:mkp,discount:disc,category:cat,level,brandId,ignoreThreshold:false,id:'_tmp'};
   const c=calcSKU(tmpSKU);
-  const spDisp=el(pfx+'sp'),ppDisp=el(pfx+'pp'),ifdDisp=el(pfx+'ifd');
+  const spDisp=el(pfx+'sp'),cpDisp=el(pfx+'cp'),ppDisp=el(pfx+'pp'),ifdDisp=el(pfx+'ifd');
   if(spDisp){spDisp.innerHTML=`₹${Math.round(c.sp).toLocaleString('en-IN')}`;spDisp.style.color='var(--bl)';spDisp.classList.remove('na');}
+  if(cpDisp){cpDisp.innerHTML=`₹${Math.round(c.custPaid).toLocaleString('en-IN')}`;cpDisp.classList.remove('na');}
   if(ppDisp){ppDisp.innerHTML=`₹${c.profitRs.toFixed(0)}`;ppDisp.style.color=c.profitRs>0?'var(--gr)':'var(--re)';ppDisp.classList.remove('na');}
   if(ifdDisp){ifdDisp.innerHTML=`₹${c.ifDelivered.toFixed(0)}`;ifdDisp.style.color=c.ifDelivered>=0?'var(--gr)':'var(--re)';ifdDisp.classList.remove('na');}
 }
