@@ -1613,6 +1613,7 @@ const DB_KEYS = {
   sku_history:    'pd_sku_history',
   bulk_imports:   'pd_bulk_imports',
   user_prefs:     'pd_user_preferences',
+  sku_images:     'pd_sku_images',
 };
 
 // ── Save a single key to DB ────────────────────────────
@@ -1753,8 +1754,24 @@ async function save(type){
     return;
   }
   updateSyncBadge(false);
+  // Special handling for SKUs: strip base64 images into separate key
+  if(type==='skus'){
+    const imgMap={};
+    const skuDataClean=skuDB.map(s=>{
+      if(s.img&&s.img.startsWith('data:')){
+        imgMap[s.id]=s.img;
+        return{...s,img:'__img__'}; // placeholder — real image in pd_sku_images
+      }
+      return s;
+    });
+    await _enqueueWrite(()=>dbSet(DB_KEYS.skus, skuDataClean));
+    // Only save images if any base64 images exist
+    if(Object.keys(imgMap).length){
+      await _enqueueWrite(()=>dbSet(DB_KEYS.sku_images, imgMap));
+    }
+    return;
+  }
   const dataMap = {
-    skus:        skuDB,
     brands:      brands,
     users:       users,
     thresholds:  THRESHOLDS,
@@ -1783,27 +1800,38 @@ async function loadFromStorage(){
 
   updateSyncBadge(false);
   try{
-    // Load in batches — heaviest data first, then config
+    // Load sequentially in small batches to avoid overwhelming free-tier DB
     const loaded = {};
-    // Batch 1: SKUs alone (largest payload ~1-2MB)
+    // Batch 1: SKUs alone (largest payload)
     loaded.skus = await dbGet(DB_KEYS.skus);
-    // Batch 2: Core config (small payloads, safe to parallelize)
-    const batch2 = ['brands','users','thresholds','categories','levels','cat_levels','alert'];
-    const r2 = await Promise.all(batch2.map(t => dbGet(DB_KEYS[t])));
-    batch2.forEach((t,i) => { loaded[t] = r2[i]; });
-    // Batch 3: Commission + logistics + wireframe
-    const batch3 = ['comm_myntra','comm_ppmp','comm_cc','comm_amazon','logistics','wireframe','email_cfg'];
-    const r3 = await Promise.all(batch3.map(t => dbGet(DB_KEYS[t])));
-    batch3.forEach((t,i) => { loaded[t] = r3[i]; });
-    // Skip loading sessions/tokens/audit/history here — loaded on demand
-    const remaining = [];
-    if(0&&remaining.length){
-      const r3 = await Promise.all(remaining.map(t => dbGet(DB_KEYS[t])));
-      remaining.forEach((t,i) => { loaded[t] = r3[i]; });
-    }
+    // Batch 2: Core config (2-3 at a time max)
+    const batch2a = ['brands','users','thresholds'];
+    const r2a = await Promise.all(batch2a.map(t => dbGet(DB_KEYS[t])));
+    batch2a.forEach((t,i) => { loaded[t] = r2a[i]; });
+    const batch2b = ['categories','levels','cat_levels','alert'];
+    const r2b = await Promise.all(batch2b.map(t => dbGet(DB_KEYS[t])));
+    batch2b.forEach((t,i) => { loaded[t] = r2b[i]; });
+    // Batch 3: Commission + logistics (2-3 at a time)
+    const batch3a = ['comm_myntra','comm_ppmp','comm_cc'];
+    const r3a = await Promise.all(batch3a.map(t => dbGet(DB_KEYS[t])));
+    batch3a.forEach((t,i) => { loaded[t] = r3a[i]; });
+    const batch3b = ['comm_amazon','logistics','wireframe','email_cfg'];
+    const r3b = await Promise.all(batch3b.map(t => dbGet(DB_KEYS[t])));
+    batch3b.forEach((t,i) => { loaded[t] = r3b[i]; });
 
     // Apply each type if data exists
-    if(loaded.skus)        skuDB           = loaded.skus;
+    if(loaded.skus){
+      skuDB = loaded.skus;
+      // Merge base64 images from separate key (loaded after UI renders)
+      dbGet(DB_KEYS.sku_images).then(imgMap=>{
+        if(!imgMap||typeof imgMap!=='object') return;
+        let merged=0;
+        skuDB.forEach(s=>{
+          if(s.img==='__img__'&&imgMap[s.id]){s.img=imgMap[s.id];merged++;}
+        });
+        if(merged) console.log(`Merged ${merged} images from separate store`);
+      }).catch(e=>console.warn('Image load deferred:',e));
+    }
     if(loaded.brands)      brands          = loaded.brands;
     if(loaded.thresholds)  THRESHOLDS      = loaded.thresholds;
     if(loaded.alert)       ALERT_SETTINGS  = loaded.alert;
@@ -7296,7 +7324,15 @@ async function handleRealtimeUpdate(key, newValue){
 function applyRealtimeData(type, value){
   try{
     switch(type){
-      case 'skus': skuDB=value; return true;
+      case 'skus':
+        // Preserve existing images when realtime pushes SKU data (images stored separately)
+        if(Array.isArray(value)){
+          const oldImgs={};
+          skuDB.forEach(s=>{if(s.img&&s.img!=='__img__')oldImgs[s.id]=s.img;});
+          skuDB=value;
+          skuDB.forEach(s=>{if(s.img==='__img__'&&oldImgs[s.id])s.img=oldImgs[s.id];});
+        } else { skuDB=value; }
+        return true;
       case 'brands': brands=value; return true;
       case 'users': users=value; applyDefaultUsers(); return true;
       case 'thresholds': THRESHOLDS=value; return true;
