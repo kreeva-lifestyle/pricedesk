@@ -1617,7 +1617,7 @@ const DB_KEYS = {
 };
 
 // ── Save a single key to DB ────────────────────────────
-async function dbSet(key, value, retries=2){
+async function dbSet(key, value, retries=1){
   _lastWriteTs = Date.now(); // Mark own write for realtime debounce
   const db = getDB();
   if(!db){ console.error('dbSet: No DB connection for key:', key); throw new Error('No database connection'); }
@@ -2876,14 +2876,12 @@ function renderPricingIntel(){
       const rows=aboveCandidates.map(({s,c})=>{
         const brand=brands.find(b=>b.id===s.brandId);
         const isMyntra=brand&&brand.model==='myntra';
-        // Calculate what discount would bring SP to ₹2,499
         const currentSP=c.sp;
         const currentMRP=c.mrp||currentSP;
         const targetSP=2499;
         const neededDisc=currentMRP>0?Math.ceil((1-targetSP/currentMRP)*100):0;
-        // Simulate with new discount
+        // Simulate with temp ID (won't collide with cached entries)
         const tmpSKU={...s,discount:neededDisc,id:'_gst_'+s.id};
-        invalidateCalcCache();
         const simC=calcSKU(tmpSKU);
         const profitGain=simC.profitRs-c.profitRs;
         const ifdGain=simC.ifDelivered-c.ifDelivered;
@@ -2891,7 +2889,6 @@ function renderPricingIntel(){
         totalIfdGain+=ifdGain;
         return{s,c,simC,neededDisc,profitGain,ifdGain,currentSP:Math.round(currentSP),isMyntra};
       });
-      invalidateCalcCache();
 
       html+=`<div class="success" style="margin-bottom:10px;font-size:11px;line-height:1.6;border-color:rgba(45,212,160,.3)">
         <strong>Recommendation:</strong> ${aboveCandidates.length} SKU${aboveCandidates.length>1?'s':''} are just above ₹2,500 (18% GST). Moving to ₹2,499 (5% GST) could increase total profit by <strong style="color:var(--gr)">+₹${Math.round(totalProfitGain).toLocaleString('en-IN')}</strong> and If Delivered by <strong style="color:var(--gr)">+₹${Math.round(totalIfdGain).toLocaleString('en-IN')}</strong>.
@@ -2918,19 +2915,17 @@ function renderPricingIntel(){
       let totalSaving=0,totalIfdSaving=0;
       const bRows=belowCandidates.map(({s,c})=>{
         const brand=brands.find(b=>b.id===s.brandId);
-        // Simulate what happens if SP crosses to ₹2,500 (18% GST)
         const currentMRP=c.mrp||c.sp;
         const crossDisc=currentMRP>0?Math.floor((1-2500/currentMRP)*100):0;
+        // Simulate with temp ID (won't collide with cached entries)
         const tmpSKU={...s,discount:crossDisc,id:'_gst_b_'+s.id};
-        invalidateCalcCache();
         const simC=calcSKU(tmpSKU);
-        const profitSaving=c.profitRs-simC.profitRs; // positive = current is better
+        const profitSaving=c.profitRs-simC.profitRs;
         const ifdSaving=c.ifDelivered-simC.ifDelivered;
         totalSaving+=profitSaving;
         totalIfdSaving+=ifdSaving;
         return{s,c,simC,profitSaving,ifdSaving,currentSP:Math.round(c.sp)};
       });
-      invalidateCalcCache();
 
       html+=`<div class="info" style="margin-bottom:10px;font-size:11px;line-height:1.6;border-color:rgba(45,212,160,.3)">
         <strong>5% GST Advantage:</strong> ${belowCandidates.length} SKU${belowCandidates.length>1?'s':''} are in the ₹2,300–2,499 range (5% GST). Staying below ₹2,500 saves <strong style="color:var(--gr)">₹${Math.round(totalSaving).toLocaleString('en-IN')}</strong> in profit and <strong style="color:var(--gr)">₹${Math.round(totalIfdSaving).toLocaleString('en-IN')}</strong> in If Delivered vs crossing to 18% GST. <em>Monitor discount changes to avoid accidentally crossing the threshold.</em>
@@ -4111,7 +4106,7 @@ function nav(p){
     });
     renderWFPreviews();
   }
-  if(p==='dashboard'){renderDashTasks();renderBrandSummary();renderDashboardWidgets();renderPricingIntel();updateAlerts();}
+  if(p==='dashboard'){renderDashTasks();renderBrandSummary();renderDashboardWidgets();updateAlerts();}
   if(p==='commission'){buildCommMyntra();buildCommAjioBrands();buildCommAmazon();}
   if(p==='wireframe')renderWFBuilder();
   if(p==='brands')renderBrands();
