@@ -2436,7 +2436,7 @@ async function saveThr(){
   const alertEmail = ALERT_SETTINGS.email||document.querySelector('#page-thresholds input[type=email]')?.value||'';
   const freq = ALERT_SETTINGS.frequency||'';
   if(alertEmail && freq.includes('Immediately')){
-    const breached = skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+    const breached = skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
     if(breached.length) sendThresholdAlertEmail(breached, alertEmail);
   }
   toast('✓ Thresholds saved','green');
@@ -4775,6 +4775,12 @@ async function deleteBackup(date){
     if(nowIST>=target) target.setDate(target.getDate()+1);
     return target.getTime()-nowIST.getTime();
   }
+  function isAfter9amIST(){
+    const now=new Date();
+    const istOffset=5.5*60*60*1000;
+    const nowIST=new Date(now.getTime()+istOffset);
+    return nowIST.getHours()>=9;
+  }
   function runDailyAlert(){
     const freq=ALERT_SETTINGS.frequency||'';
     const alertEmail=ALERT_SETTINGS.email||'';
@@ -4801,8 +4807,18 @@ async function deleteBackup(date){
     scheduleNext();
   }
   function scheduleNext(){setTimeout(runDailyAlert,24*60*60*1000);}
+  // If it's already past 9 AM IST and today's alert wasn't sent yet, run now
+  const lastRun=localStorage.getItem('pd_last_daily_alert');
+  const today=new Date().toISOString().slice(0,10);
+  if(isAfter9amIST()&&lastRun!==today){
+    console.log('Alert: Past 9 AM IST, today\'s alert pending — sending in 5s');
+    setTimeout(runDailyAlert,5000);
+  } else if(lastRun===today){
+    console.log('Alert: Today\'s alert already sent. Next check at 9 AM IST tomorrow.');
+  }
+  // Also schedule for next 9 AM IST
   const ms=msUntil9amIST();
-  console.log(`Alert cron scheduled in ${Math.round(ms/60000)} min (9 AM IST). Requires browser tab open.`);
+  console.log(`Alert cron: next 9 AM IST in ${Math.round(ms/60000)} min`);
   setTimeout(runDailyAlert,ms);
 })();
 
@@ -5554,17 +5570,21 @@ async function sendPasswordResetEmail(user){
 }
 
 function sendThresholdAlertEmail(breachedList, alertEmail){
-  if(!breachedList.length) return;
-  const body = breachedList.map(s=>{
+  // Only include non-ignored, non-archived SKUs in alert emails
+  const filtered=breachedList.filter(s=>!s.archived&&!s.ignoreThreshold);
+  if(!filtered.length) return;
+  const totalActive=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold).length;
+  const body = filtered.map(s=>{
     const c=calcSKU(s), brand=brands.find(b=>b.id===s.brandId);
-    return `${s.styleId} (${brand?.name||''}, ${s.category}): ₹${c.profitRs.toFixed(0)} < ₹${c.threshold}`;
+    return `${s.sku||s.styleId} (${brand?.name||''}, ${s.category}): Net Profit ₹${c.profitRs.toFixed(0)} < Threshold ₹${c.threshold}`;
   }).join('\n');
   // Send to all comma-separated emails
   const emails=alertEmail.split(',').map(e=>e.trim()).filter(Boolean);
   emails.forEach(email=>{
     sendEmail(EMAIL_CONFIG.templateAlert,{
       to_email: email,
-      breach_count: breachedList.length,
+      breach_count: filtered.length,
+      total_skus: totalActive,
       breach_list: body,
       date: new Date().toLocaleDateString('en-IN'),
     });
