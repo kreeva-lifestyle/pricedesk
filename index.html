@@ -1628,7 +1628,7 @@ async function dbSet(key, value, retries=2){
       );
       if(error){
         console.warn(`dbSet error (attempt ${attempt+1}):`, key, error.message);
-        if(attempt<retries){await new Promise(r=>setTimeout(r,2000));continue;}
+        if(attempt<retries){await new Promise(r=>setTimeout(r,2000*(attempt+1)));continue;}
         throw new Error(error.message);
       }
       updateSyncBadge(true);
@@ -1636,7 +1636,7 @@ async function dbSet(key, value, retries=2){
     } catch(e){
       if(attempt>=retries) throw e;
       console.warn(`dbSet retry ${attempt+1}:`, key, e);
-      await new Promise(r=>setTimeout(r,2000));
+      await new Promise(r=>setTimeout(r,2000*(attempt+1)));
     }
   }
 }
@@ -1732,17 +1732,24 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
     </div>`);
 }
 
+// ── Write queue: serializes DB writes to prevent concurrent upserts ──
+// Free-tier Supabase has limited connections — parallel writes cause
+// statement timeouts (504s). Queue ensures only 1 write at a time.
+let _writeQueue=Promise.resolve();
+function _enqueueWrite(fn){
+  _writeQueue=_writeQueue.then(fn,fn);
+  return _writeQueue;
+}
+
 // ── Save individual data types to DB ─────────────────
 // Each data type gets its own DB row — completely independent
 async function save(type){
-  const db = getDB();
   if(!type){
-    // Save ALL data types
-    await Promise.all([
-      save('skus'), save('brands'), save('users'), save('thresholds'), save('cat_levels'),
-      save('comm_myntra'), save('comm_ppmp'), save('comm_cc'), save('comm_amazon'),
-      save('logistics'), save('wireframe'), save('email_cfg')
-    ]);
+    // Save ALL data types sequentially
+    const types=['skus','brands','users','thresholds','cat_levels',
+      'comm_myntra','comm_ppmp','comm_cc','comm_amazon',
+      'logistics','wireframe','email_cfg'];
+    for(const t of types) await save(t);
     return;
   }
   updateSyncBadge(false);
@@ -1765,7 +1772,8 @@ async function save(type){
   };
   const val = dataMap[type];
   if(val === undefined){ console.warn('Unknown save type:', type); return; }
-  await dbSet(DB_KEYS[type], val);
+  // Queue the write so only one upsert runs at a time
+  await _enqueueWrite(()=>dbSet(DB_KEYS[type], val));
 }
 
 // ── Load ALL data types from DB ───────────────────────
@@ -2296,7 +2304,7 @@ function buildCommAmazon(){
   CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AMAZON[cat]||17}" onchange="COMM_AMAZON['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
-async function saveComm(){triggerRecalc();renderSKUs();await Promise.all([save('cat_levels'),save('comm_myntra'),save('comm_ppmp'),save('comm_cc'),save('comm_amazon')]);audit('commission','Commission rates updated');toast('Commission saved','green');}
+async function saveComm(){triggerRecalc();renderSKUs();for(const t of['cat_levels','comm_myntra','comm_ppmp','comm_cc','comm_amazon'])await save(t);audit('commission','Commission rates updated');toast('Commission saved','green');}
 
 // ── Category Management ──────────────────────────────
 function openAddCategoryModal(){
@@ -2325,7 +2333,7 @@ async function addCategory(){
   THRESHOLDS[name]=THRESHOLDS[name]||0;
   COMM_MYNTRA[name]=COMM_MYNTRA[name]||[0,0,18.88,18.88,18.88];
   COMM_AMAZON[name]=COMM_AMAZON[name]||17;
-  await Promise.all([save('categories'),save('cat_levels'),save('comm_myntra'),save('comm_amazon')]);
+  for(const t of['categories','cat_levels','comm_myntra','comm_amazon'])await save(t);
   buildCommMyntra();buildCommAmazon();populateFilters();
   audit('category_add',`Category "${name}" added (${level})`);
   toast(`✓ "${name}" added`,'green');
@@ -2348,7 +2356,7 @@ async function deleteCategory(cat){
     await save('skus');
   }
   delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];
-  await Promise.all([save('categories'),save('cat_levels'),save('comm_myntra'),save('comm_amazon'),save('thresholds')]);
+  for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
   buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
   audit('category_delete',`Category "${cat}" deleted${usedCount?` (${usedCount} SKUs moved to ${CATS[0]})`:''}`);
   toast(`"${cat}" removed — `,`red`);
@@ -2370,7 +2378,7 @@ async function _reinstateCategory(name){
   COMM_MYNTRA[name]=stashed.commMyntra||[0,0,18.88,18.88,18.88];
   COMM_AMAZON[name]=stashed.commAmazon||17;
   _deletedCategories=_deletedCategories.filter(d=>d.name!==name);
-  await Promise.all([save('categories'),save('cat_levels'),save('comm_myntra'),save('comm_amazon'),save('thresholds')]);
+  for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
   buildCommMyntra();buildCommAmazon();populateFilters();
   audit('category_reinstate',`Category "${name}" reinstated`);
   toast(`✓ "${name}" reinstated`,'green');
@@ -5706,7 +5714,7 @@ async function addLevel(){
   LEVELS.push(name);
   GT_DATA[name]=[0,1,gtVal,gtVal,gtVal,gtVal,gtVal];
   REVERSE_FEES[name]=revVal;
-  await Promise.all([save('levels'),save('logistics')]);
+  await save('levels');await save('logistics');
   renderGTTable();renderRetTable();buildCommMyntra();
   audit('level_add',`Level "${name}" added (GT:₹${gtVal}, Rev:₹${revVal})`);
   toast(`✓ "${name}" added`,'green');
@@ -5721,7 +5729,7 @@ async function deleteLevel(lvl){
   LEVELS=LEVELS.filter(l=>l!==lvl);
   delete GT_DATA[lvl];
   delete REVERSE_FEES[lvl];
-  await Promise.all([save('levels'),save('logistics')]);
+  await save('levels');await save('logistics');
   renderGTTable();renderRetTable();buildCommMyntra();triggerRecalc();renderSKUs();
   audit('level_delete',`Level "${lvl}" deleted`);
   toast(`"${lvl}" removed — `,'red');
@@ -5740,7 +5748,7 @@ async function _reinstateLevel(name){
   GT_DATA[name]=stashed.gt||[0,1,0,0,0,0,0];
   REVERSE_FEES[name]=stashed.rev||0;
   _deletedLevels=_deletedLevels.filter(d=>d.name!==name);
-  await Promise.all([save('levels'),save('logistics')]);
+  await save('levels');await save('logistics');
   renderGTTable();renderRetTable();buildCommMyntra();triggerRecalc();renderSKUs();
   audit('level_reinstate',`Level "${name}" reinstated`);
   toast(`✓ "${name}" reinstated`,'green');
