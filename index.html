@@ -3282,7 +3282,7 @@ function renderEditRow(s){
     <td><div class="av" id="e-cp">₹${Math.round(c.custPaid).toLocaleString('en-IN')}</div></td>
     <td><div class="av" id="e-pp" style="color:${c.profitRs>0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</div></td>
     <td><div class="av" id="e-ifd" style="color:${c.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${c.ifDelivered.toFixed(0)}</div></td>
-    <td><div class="av na">—</div></td>
+    <td><div class="av" id="e-gs" style="color:${c.grossSettlement>=0?'var(--gr)':'var(--re)'}">₹${c.grossSettlement.toFixed(0)}</div></td>
     <td><div style="display:flex;gap:5px"><button class="btn bp bxs" onclick="saveEdit('${s.id}')" title="Save changes">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()" title="Cancel editing">✕</button></div></td>
   </tr>`;
 }
@@ -3324,7 +3324,7 @@ function renderNewRow(){
     <td><div class="av na" id="n-cp">—</div></td>
     <td><div class="av na" id="n-pp">—</div></td>
     <td><div class="av na" id="n-ifd">—</div></td>
-    <td><div class="av na">—</div></td>
+    <td><div class="av na" id="n-gs">—</div></td>
     <td><div style="display:flex;gap:5px"><button class="btn bp bxs" onclick="saveNew()" title="Save new SKU">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()" title="Cancel">✕</button></div></td>
   </tr>`;
 }
@@ -3354,7 +3354,7 @@ function liveCalcRow(row){
   const costEl=el(pfx+'cost'),mkpEl=el(pfx+'mkp'),discEl=el(pfx+'disc'),brandEl=el(pfx+'brand'),catEl=el(pfx+'cat');
   const cost=parseFloat(costEl?.value)||0;const mkp=parseFloat(mkpEl?.value)||0;const disc=parseFloat(discEl?.value)||0;
   if(cost<=0||mkp<=0){
-    [pfx+'sp',pfx+'mrp',pfx+'cp',pfx+'pp',pfx+'ifd'].forEach(id=>{
+    [pfx+'sp',pfx+'mrp',pfx+'cp',pfx+'pp',pfx+'ifd',pfx+'gs'].forEach(id=>{
       const e=el(id);if(e){e.innerHTML='—';e.classList.add('na');}
     });
     return;
@@ -3369,6 +3369,10 @@ function liveCalcRow(row){
   if(cpDisp){cpDisp.innerHTML=`₹${Math.round(c.custPaid).toLocaleString('en-IN')}`;cpDisp.classList.remove('na');}
   if(ppDisp){ppDisp.innerHTML=`₹${c.profitRs.toFixed(0)}`;ppDisp.style.color=c.profitRs>0?'var(--gr)':'var(--re)';ppDisp.classList.remove('na');}
   if(ifdDisp){ifdDisp.innerHTML=`₹${c.ifDelivered.toFixed(0)}`;ifdDisp.style.color=c.ifDelivered>=0?'var(--gr)':'var(--re)';ifdDisp.classList.remove('na');}
+  const gsDisp=el(pfx+'gs');
+  const brand=brands.find(b=>b.id===brandId);
+  if(gsDisp&&brand&&brand.model==='myntra'){gsDisp.innerHTML=`₹${c.grossSettlement.toFixed(0)}`;gsDisp.style.color=c.grossSettlement>=0?'var(--gr)':'var(--re)';gsDisp.classList.remove('na');}
+  else if(gsDisp){gsDisp.innerHTML='—';gsDisp.classList.add('na');}
 }
 
 function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sku')?.focus(),50);}
