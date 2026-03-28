@@ -1628,7 +1628,7 @@ async function dbSet(key, value, retries=2){
       );
       if(error){
         console.warn(`dbSet error (attempt ${attempt+1}):`, key, error.message);
-        if(attempt<retries){await new Promise(r=>setTimeout(r,2000));continue;}
+        if(attempt<retries){await new Promise(r=>setTimeout(r,2000*(attempt+1)));continue;}
         throw new Error(error.message);
       }
       updateSyncBadge(true);
@@ -1636,7 +1636,7 @@ async function dbSet(key, value, retries=2){
     } catch(e){
       if(attempt>=retries) throw e;
       console.warn(`dbSet retry ${attempt+1}:`, key, e);
-      await new Promise(r=>setTimeout(r,2000));
+      await new Promise(r=>setTimeout(r,2000*(attempt+1)));
     }
   }
 }
@@ -1732,17 +1732,24 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
     </div>`);
 }
 
+// ── Write queue: serializes DB writes to prevent concurrent upserts ──
+// Free-tier Supabase has limited connections — parallel writes cause
+// statement timeouts (504s). Queue ensures only 1 write at a time.
+let _writeQueue=Promise.resolve();
+function _enqueueWrite(fn){
+  _writeQueue=_writeQueue.then(fn,fn);
+  return _writeQueue;
+}
+
 // ── Save individual data types to DB ─────────────────
 // Each data type gets its own DB row — completely independent
 async function save(type){
-  const db = getDB();
   if(!type){
-    // Save ALL data types
-    await Promise.all([
-      save('skus'), save('brands'), save('users'), save('thresholds'), save('cat_levels'),
-      save('comm_myntra'), save('comm_ppmp'), save('comm_cc'), save('comm_amazon'),
-      save('logistics'), save('wireframe'), save('email_cfg')
-    ]);
+    // Save ALL data types sequentially
+    const types=['skus','brands','users','thresholds','cat_levels',
+      'comm_myntra','comm_ppmp','comm_cc','comm_amazon',
+      'logistics','wireframe','email_cfg'];
+    for(const t of types) await save(t);
     return;
   }
   updateSyncBadge(false);
@@ -1765,7 +1772,8 @@ async function save(type){
   };
   const val = dataMap[type];
   if(val === undefined){ console.warn('Unknown save type:', type); return; }
-  await dbSet(DB_KEYS[type], val);
+  // Queue the write so only one upsert runs at a time
+  await _enqueueWrite(()=>dbSet(DB_KEYS[type], val));
 }
 
 // ── Load ALL data types from DB ───────────────────────
@@ -2296,7 +2304,7 @@ function buildCommAmazon(){
   CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AMAZON[cat]||17}" onchange="COMM_AMAZON['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
-async function saveComm(){triggerRecalc();renderSKUs();await Promise.all([save('cat_levels'),save('comm_myntra'),save('comm_ppmp'),save('comm_cc'),save('comm_amazon')]);audit('commission','Commission rates updated');toast('Commission saved','green');}
+async function saveComm(){triggerRecalc();renderSKUs();for(const t of['cat_levels','comm_myntra','comm_ppmp','comm_cc','comm_amazon'])await save(t);audit('commission','Commission rates updated');toast('Commission saved','green');}
 
 // ── Category Management ──────────────────────────────
 function openAddCategoryModal(){
@@ -2325,7 +2333,7 @@ async function addCategory(){
   THRESHOLDS[name]=THRESHOLDS[name]||0;
   COMM_MYNTRA[name]=COMM_MYNTRA[name]||[0,0,18.88,18.88,18.88];
   COMM_AMAZON[name]=COMM_AMAZON[name]||17;
-  await Promise.all([save('categories'),save('cat_levels'),save('comm_myntra'),save('comm_amazon')]);
+  for(const t of['categories','cat_levels','comm_myntra','comm_amazon'])await save(t);
   buildCommMyntra();buildCommAmazon();populateFilters();
   audit('category_add',`Category "${name}" added (${level})`);
   toast(`✓ "${name}" added`,'green');
@@ -2348,7 +2356,7 @@ async function deleteCategory(cat){
     await save('skus');
   }
   delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];
-  await Promise.all([save('categories'),save('cat_levels'),save('comm_myntra'),save('comm_amazon'),save('thresholds')]);
+  for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
   buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
   audit('category_delete',`Category "${cat}" deleted${usedCount?` (${usedCount} SKUs moved to ${CATS[0]})`:''}`);
   toast(`"${cat}" removed — `,`red`);
@@ -2370,7 +2378,7 @@ async function _reinstateCategory(name){
   COMM_MYNTRA[name]=stashed.commMyntra||[0,0,18.88,18.88,18.88];
   COMM_AMAZON[name]=stashed.commAmazon||17;
   _deletedCategories=_deletedCategories.filter(d=>d.name!==name);
-  await Promise.all([save('categories'),save('cat_levels'),save('comm_myntra'),save('comm_amazon'),save('thresholds')]);
+  for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
   buildCommMyntra();buildCommAmazon();populateFilters();
   audit('category_reinstate',`Category "${name}" reinstated`);
   toast(`✓ "${name}" reinstated`,'green');
@@ -2436,7 +2444,7 @@ async function saveThr(){
   const alertEmail = ALERT_SETTINGS.email||document.querySelector('#page-thresholds input[type=email]')?.value||'';
   const freq = ALERT_SETTINGS.frequency||'';
   if(alertEmail && freq.includes('Immediately')){
-    const breached = skuDB.filter(s=>!s.ignoreThreshold&&calcSKU(s).isBreach);
+    const breached = skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
     if(breached.length) sendThresholdAlertEmail(breached, alertEmail);
   }
   toast('✓ Thresholds saved','green');
@@ -4775,6 +4783,12 @@ async function deleteBackup(date){
     if(nowIST>=target) target.setDate(target.getDate()+1);
     return target.getTime()-nowIST.getTime();
   }
+  function isAfter9amIST(){
+    const now=new Date();
+    const istOffset=5.5*60*60*1000;
+    const nowIST=new Date(now.getTime()+istOffset);
+    return nowIST.getHours()>=9;
+  }
   function runDailyAlert(){
     const freq=ALERT_SETTINGS.frequency||'';
     const alertEmail=ALERT_SETTINGS.email||'';
@@ -4801,8 +4815,18 @@ async function deleteBackup(date){
     scheduleNext();
   }
   function scheduleNext(){setTimeout(runDailyAlert,24*60*60*1000);}
+  // If it's already past 9 AM IST and today's alert wasn't sent yet, run now
+  const lastRun=localStorage.getItem('pd_last_daily_alert');
+  const today=new Date().toISOString().slice(0,10);
+  if(isAfter9amIST()&&lastRun!==today){
+    console.log('Alert: Past 9 AM IST, today\'s alert pending — sending in 5s');
+    setTimeout(runDailyAlert,5000);
+  } else if(lastRun===today){
+    console.log('Alert: Today\'s alert already sent. Next check at 9 AM IST tomorrow.');
+  }
+  // Also schedule for next 9 AM IST
   const ms=msUntil9amIST();
-  console.log(`Alert cron scheduled in ${Math.round(ms/60000)} min (9 AM IST). Requires browser tab open.`);
+  console.log(`Alert cron: next 9 AM IST in ${Math.round(ms/60000)} min`);
   setTimeout(runDailyAlert,ms);
 })();
 
@@ -5554,17 +5578,21 @@ async function sendPasswordResetEmail(user){
 }
 
 function sendThresholdAlertEmail(breachedList, alertEmail){
-  if(!breachedList.length) return;
-  const body = breachedList.map(s=>{
+  // Only include non-ignored, non-archived SKUs in alert emails
+  const filtered=breachedList.filter(s=>!s.archived&&!s.ignoreThreshold);
+  if(!filtered.length) return;
+  const totalActive=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold).length;
+  const body = filtered.map(s=>{
     const c=calcSKU(s), brand=brands.find(b=>b.id===s.brandId);
-    return `${s.styleId} (${brand?.name||''}, ${s.category}): ₹${c.profitRs.toFixed(0)} < ₹${c.threshold}`;
+    return `${s.sku||s.styleId} (${brand?.name||''}, ${s.category}): Net Profit ₹${c.profitRs.toFixed(0)} < Threshold ₹${c.threshold}`;
   }).join('\n');
   // Send to all comma-separated emails
   const emails=alertEmail.split(',').map(e=>e.trim()).filter(Boolean);
   emails.forEach(email=>{
     sendEmail(EMAIL_CONFIG.templateAlert,{
       to_email: email,
-      breach_count: breachedList.length,
+      breach_count: filtered.length,
+      total_skus: totalActive,
       breach_list: body,
       date: new Date().toLocaleDateString('en-IN'),
     });
@@ -5686,7 +5714,7 @@ async function addLevel(){
   LEVELS.push(name);
   GT_DATA[name]=[0,1,gtVal,gtVal,gtVal,gtVal,gtVal];
   REVERSE_FEES[name]=revVal;
-  await Promise.all([save('levels'),save('logistics')]);
+  await save('levels');await save('logistics');
   renderGTTable();renderRetTable();buildCommMyntra();
   audit('level_add',`Level "${name}" added (GT:₹${gtVal}, Rev:₹${revVal})`);
   toast(`✓ "${name}" added`,'green');
@@ -5701,7 +5729,7 @@ async function deleteLevel(lvl){
   LEVELS=LEVELS.filter(l=>l!==lvl);
   delete GT_DATA[lvl];
   delete REVERSE_FEES[lvl];
-  await Promise.all([save('levels'),save('logistics')]);
+  await save('levels');await save('logistics');
   renderGTTable();renderRetTable();buildCommMyntra();triggerRecalc();renderSKUs();
   audit('level_delete',`Level "${lvl}" deleted`);
   toast(`"${lvl}" removed — `,'red');
@@ -5720,7 +5748,7 @@ async function _reinstateLevel(name){
   GT_DATA[name]=stashed.gt||[0,1,0,0,0,0,0];
   REVERSE_FEES[name]=stashed.rev||0;
   _deletedLevels=_deletedLevels.filter(d=>d.name!==name);
-  await Promise.all([save('levels'),save('logistics')]);
+  await save('levels');await save('logistics');
   renderGTTable();renderRetTable();buildCommMyntra();triggerRecalc();renderSKUs();
   audit('level_reinstate',`Level "${name}" reinstated`);
   toast(`✓ "${name}" reinstated`,'green');
