@@ -1174,6 +1174,7 @@ body:has(#login-screen.active){overflow:hidden}
         <col style="width:120px"><!-- Tags -->
         <col style="width:80px"><!-- Cost -->
         <col style="width:75px"><!-- Markup -->
+        <col style="width:88px"><!-- MRP -->
         <col style="width:80px"><!-- Discount -->
         <col style="width:95px"><!-- Selling Price -->
         <col style="width:95px"><!-- Customer Paid -->
@@ -1189,6 +1190,7 @@ body:has(#login-screen.active){overflow:hidden}
         <th>Tags</th>
         <th class="sortable" onclick="sortSKUs('cost')" data-sort="cost">Cost ₹ <span class="sort-arrow" id="sort-cost"></span></th>
         <th class="sortable" onclick="sortSKUs('markup')" data-sort="markup">Markup % <span class="sort-arrow" id="sort-markup"></span></th>
+        <th class="sortable" onclick="sortSKUs('mrp')" data-sort="mrp">MRP <span class="sort-arrow" id="sort-mrp"></span></th>
         <th class="sortable" onclick="sortSKUs('discount')" data-sort="discount">Discount % <span class="sort-arrow" id="sort-discount"></span></th>
         <th class="sortable" onclick="sortSKUs('sp')" data-sort="sp">Selling Price <span class="sort-arrow" id="sort-sp"></span></th>
         <th class="sortable" onclick="sortSKUs('custPaid')" data-sort="custPaid">Cust. Paid <span class="sort-arrow" id="sort-custPaid"></span></th>
@@ -1745,7 +1747,7 @@ async function save(type){
   }
   updateSyncBadge(false);
   const dataMap = {
-    skus:        skuDB,
+    skus:        skuDB.map(s=>{const{img,...rest}=s;return rest;}),
     brands:      brands,
     users:       users,
     thresholds:  THRESHOLDS,
@@ -3058,6 +3060,7 @@ function applySKUSort(list){
   sorted.sort((a,b)=>{
     let va,vb;
     if(_skuSortCol==='sp'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.sp;vb=cb.sp;}
+    else if(_skuSortCol==='mrp'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.mrp;vb=cb.mrp;}
     else if(_skuSortCol==='custPaid'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.custPaid;vb=cb.custPaid;}
     else if(_skuSortCol==='profit'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.profitRs;vb=cb.profitRs;}
     else if(_skuSortCol==='ifDelivered'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.ifDelivered;vb=cb.ifDelivered;}
@@ -3220,6 +3223,7 @@ function renderSKUs(){
       <td style="line-height:1.6">${!s.styleId?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
+      <td class="mono">₹${Math.round(c.mrp).toLocaleString('en-IN')}</td>
       <td class="mono">${s.discount||0}%</td>
       <td class="mono" style="color:var(--bl)">₹${Math.round(c.sp).toLocaleString('en-IN')}</td>
       <td class="mono">₹${Math.round(c.custPaid).toLocaleString('en-IN')}</td>
@@ -3272,6 +3276,7 @@ function renderEditRow(s){
     <td><select class="sse" id="e-brand" onchange="onCatSelectChange('e')" style="display:none">${brandOpts}</select></td>
     <td><input class="si" data-lc id="e-cost" type="number" value="${s.cost}" placeholder="₹" style="width:70px"></td>
     <td><input class="si" data-lc id="e-mkp" type="number" value="${s.markup}" placeholder="%" style="width:55px"></td>
+    <td><div class="av" id="e-mrp">₹${Math.round(c.mrp).toLocaleString('en-IN')}</div></td>
     <td><input class="si" data-lc id="e-disc" type="number" value="${s.discount||0}" placeholder="%" style="width:55px"></td>
     <td><div class="av" id="e-sp" style="color:var(--bl)">₹${Math.round(c.sp).toLocaleString('en-IN')}</div></td>
     <td><div class="av" id="e-cp">₹${Math.round(c.custPaid).toLocaleString('en-IN')}</div></td>
@@ -3313,6 +3318,7 @@ function renderNewRow(){
     <td>${brandCell}</td>
     <td><input class="si" data-lc id="n-cost" type="number" placeholder="₹ Cost" style="width:70px"></td>
     <td><input class="si" data-lc id="n-mkp" type="number" placeholder="%" style="width:55px"></td>
+    <td><div class="av na" id="n-mrp">—</div></td>
     <td><input class="si" data-lc id="n-disc" type="number" placeholder="%" value="0" style="width:55px"></td>
     <td><div class="av na" id="n-sp">—</div></td>
     <td><div class="av na" id="n-cp">—</div></td>
@@ -3348,7 +3354,7 @@ function liveCalcRow(row){
   const costEl=el(pfx+'cost'),mkpEl=el(pfx+'mkp'),discEl=el(pfx+'disc'),brandEl=el(pfx+'brand'),catEl=el(pfx+'cat');
   const cost=parseFloat(costEl?.value)||0;const mkp=parseFloat(mkpEl?.value)||0;const disc=parseFloat(discEl?.value)||0;
   if(cost<=0||mkp<=0){
-    [pfx+'sp',pfx+'pp',pfx+'ifd'].forEach(id=>{
+    [pfx+'sp',pfx+'mrp',pfx+'cp',pfx+'pp',pfx+'ifd'].forEach(id=>{
       const e=el(id);if(e){e.innerHTML='—';e.classList.add('na');}
     });
     return;
@@ -3357,7 +3363,8 @@ function liveCalcRow(row){
   const level=CAT_LEVEL[cat]||'Level 2';
   const tmpSKU={cost,markup:mkp,discount:disc,category:cat,level,brandId,ignoreThreshold:false,id:'_tmp_'+cost+'_'+mkp+'_'+disc+'_'+cat+'_'+brandId};
   const c=calcSKU(tmpSKU);
-  const spDisp=el(pfx+'sp'),cpDisp=el(pfx+'cp'),ppDisp=el(pfx+'pp'),ifdDisp=el(pfx+'ifd');
+  const mrpDisp=el(pfx+'mrp'),spDisp=el(pfx+'sp'),cpDisp=el(pfx+'cp'),ppDisp=el(pfx+'pp'),ifdDisp=el(pfx+'ifd');
+  if(mrpDisp){mrpDisp.innerHTML=`₹${Math.round(c.mrp).toLocaleString('en-IN')}`;mrpDisp.classList.remove('na');}
   if(spDisp){spDisp.innerHTML=`₹${Math.round(c.sp).toLocaleString('en-IN')}`;spDisp.style.color='var(--bl)';spDisp.classList.remove('na');}
   if(cpDisp){cpDisp.innerHTML=`₹${Math.round(c.custPaid).toLocaleString('en-IN')}`;cpDisp.classList.remove('na');}
   if(ppDisp){ppDisp.innerHTML=`₹${c.profitRs.toFixed(0)}`;ppDisp.style.color=c.profitRs>0?'var(--gr)':'var(--re)';ppDisp.classList.remove('na');}
