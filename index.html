@@ -2833,6 +2833,7 @@ function renderDashboardWidgets(){
 // ═══════════════════════════════════════════════════════
 // PRICING INTELLIGENCE
 // ═══════════════════════════════════════════════════════
+let _gstAboveRows=[], _gstBelowRows=[]; // stored for export
 function renderPricingIntel(){
   const body=el('pricing-intel-body');if(!body)return;
   const active=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold);
@@ -2925,6 +2926,8 @@ function renderPricingIntel(){
       });
       html+=`</tbody></table></div>`;
       if(rows.length>20) html+=`<div class="st" style="margin-bottom:8px">${rows.length-20} more SKUs not shown</div>`;
+      _gstAboveRows=rows;
+      html+=`<button class="btn bg bxs" onclick="exportGSTAbove()" style="font-size:10px;margin-bottom:12px">📥 Export 18% → 5% Recommendations</button>`;
     }
 
     if(belowCandidates.length){
@@ -2961,6 +2964,8 @@ function renderPricingIntel(){
       });
       html+=`</tbody></table></div>`;
       if(bRows.length>20) html+=`<div class="st" style="margin-bottom:8px">${bRows.length-20} more SKUs not shown</div>`;
+      _gstBelowRows=bRows;
+      html+=`<button class="btn bg bxs" onclick="exportGSTBelow()" style="font-size:10px;margin-bottom:12px">📥 Export 5% GST Advantage</button>`;
     }
   }
   html+=`</div>`;
@@ -4818,6 +4823,7 @@ async function deleteBackup(date){
 })();
 
 // Daily/Weekly alert cron: fires at 9:00 AM IST
+// lastRun is stored in ALERT_SETTINGS (database) — not localStorage
 (function scheduleDailyAlert(){
   function msUntil9amIST(){
     const now=new Date();
@@ -4834,11 +4840,11 @@ async function deleteBackup(date){
     const nowIST=new Date(now.getTime()+istOffset);
     return nowIST.getHours()>=9;
   }
-  function runDailyAlert(){
+  async function runDailyAlert(){
     const freq=ALERT_SETTINGS.frequency||'';
     const alertEmail=ALERT_SETTINGS.email||'';
     if(!alertEmail||!emailReady()){scheduleNext();return;}
-    const lastRun=localStorage.getItem('pd_last_daily_alert');
+    const lastRun=ALERT_SETTINGS._lastAlertDate||'';
     const today=new Date().toISOString().slice(0,10);
     if(lastRun===today){scheduleNext();return;}
     if(freq.includes('Daily')){
@@ -4847,13 +4853,15 @@ async function deleteBackup(date){
         sendThresholdAlertEmail(breached,alertEmail);
         console.log('✓ Daily alert sent for',breached.length,'breaches to',alertEmail);
       }
-      localStorage.setItem('pd_last_daily_alert',today);
+      ALERT_SETTINGS._lastAlertDate=today;
+      save('alert').catch(e=>console.warn('Alert date save failed:',e));
     } else if(freq.includes('Weekly')){
       const dayOfWeek=new Date().getDay();
       if(dayOfWeek===1){
         const breached=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
         if(breached.length) sendThresholdAlertEmail(breached,alertEmail);
-        localStorage.setItem('pd_last_daily_alert',today);
+        ALERT_SETTINGS._lastAlertDate=today;
+        save('alert').catch(e=>console.warn('Alert date save failed:',e));
         console.log('✓ Weekly alert sent');
       }
     }
@@ -4861,7 +4869,7 @@ async function deleteBackup(date){
   }
   function scheduleNext(){setTimeout(runDailyAlert,24*60*60*1000);}
   // If it's already past 9 AM IST and today's alert wasn't sent yet, run now
-  const lastRun=localStorage.getItem('pd_last_daily_alert');
+  const lastRun=ALERT_SETTINGS._lastAlertDate||'';
   const today=new Date().toISOString().slice(0,10);
   if(isAfter9amIST()&&lastRun!==today){
     console.log('Alert: Past 9 AM IST, today\'s alert pending — sending in 5s');
@@ -5701,6 +5709,42 @@ function exportBreaches(){
     XLSX.writeFile(wb,'PriceDesk_Breaches_'+new Date().toISOString().slice(0,10)+'.xlsx');
     toast(`✓ Exported ${breached.length} breaches to Excel`,'green');
   }catch(e){console.error('Export failed:',e);toast('Export failed: '+e.message,'red');}
+}
+
+function exportGSTAbove(){
+  if(typeof XLSX==='undefined'){toast('Loading Excel library…','red');return;}
+  if(!_gstAboveRows.length){toast('No 18% GST recommendations to export','red');return;}
+  try{
+    const rows=[['SKU','Category','Brand','Cust. Paid (₹)','GST','Current Disc %','Rec. Disc %','Profit Change (₹)','If Delivered Change (₹)']];
+    _gstAboveRows.forEach(r=>{
+      const brand=brands.find(b=>b.id===r.s.brandId);
+      rows.push([r.s.sku||r.s.styleId,r.s.category,brand?.name||'',r.currentCP,'18%',r.s.discount||0,r.neededDisc,Math.round(r.profitGain),Math.round(r.ifdGain)]);
+    });
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:18},{wch:14},{wch:16},{wch:14},{wch:6},{wch:12},{wch:10},{wch:14},{wch:18}];
+    XLSX.utils.book_append_sheet(wb,ws,'18% to 5% Recommendations');
+    XLSX.writeFile(wb,'PriceDesk_GST_18_to_5_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    toast(`✓ Exported ${_gstAboveRows.length} recommendations`,'green');
+  }catch(e){toast('Export failed: '+e.message,'red');}
+}
+
+function exportGSTBelow(){
+  if(typeof XLSX==='undefined'){toast('Loading Excel library…','red');return;}
+  if(!_gstBelowRows.length){toast('No 5% GST advantage data to export','red');return;}
+  try{
+    const rows=[['SKU','Category','Brand','Cust. Paid (₹)','GST','Profit Saved (₹)','If Delivered Saved (₹)']];
+    _gstBelowRows.forEach(r=>{
+      const brand=brands.find(b=>b.id===r.s.brandId);
+      rows.push([r.s.sku||r.s.styleId,r.s.category,brand?.name||'',r.currentCP,'5%',Math.round(r.profitSaving),Math.round(r.ifdSaving)]);
+    });
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:18},{wch:14},{wch:16},{wch:14},{wch:6},{wch:14},{wch:18}];
+    XLSX.utils.book_append_sheet(wb,ws,'5% GST Advantage');
+    XLSX.writeFile(wb,'PriceDesk_GST_5pct_Advantage_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    toast(`✓ Exported ${_gstBelowRows.length} SKUs`,'green');
+  }catch(e){toast('Export failed: '+e.message,'red');}
 }
 
 // ═══════════════════════════════════════════════════════
