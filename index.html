@@ -1633,6 +1633,8 @@ async function dbSet(key, value, retries=1){
         throw new Error(error.message);
       }
       updateSyncBadge(true);
+      // Notify sync table (tiny row — Realtime watches this, not app_data)
+      db.from('pd_sync').upsert({key, updated_at: new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
       return;
     } catch(e){
       if(attempt>=retries) throw e;
@@ -1707,11 +1709,21 @@ DROP POLICY IF EXISTS "allow_update" ON app_data;
 DROP POLICY IF EXISTS "allow_upsert" ON app_data;
 CREATE POLICY "allow_all" ON app_data FOR ALL USING (true) WITH CHECK (true);
 
--- Enable Realtime for live sync across multiple PCs
+-- Remove app_data from Realtime (large JSONB WAL kills connection pool)
 DO $$ BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE app_data;
-EXCEPTION WHEN duplicate_object THEN NULL;
+  ALTER PUBLICATION supabase_realtime DROP TABLE app_data;
+EXCEPTION WHEN undefined_object THEN NULL;
 END $$;
+
+-- Lightweight sync table: Realtime watches THIS instead of app_data
+-- Only key + timestamp (tiny WAL payload), triggers instant notifications
+CREATE TABLE IF NOT EXISTS pd_sync (
+  key         TEXT PRIMARY KEY,
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE pd_sync ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_sync" ON pd_sync FOR ALL USING (true) WITH CHECK (true);
+ALTER PUBLICATION supabase_realtime ADD TABLE pd_sync;
 
 -- Backup table for daily automated backups (7-day rolling)
 CREATE TABLE IF NOT EXISTS pd_backups (
@@ -1961,9 +1973,9 @@ function updateSyncBadge(synced, msg){
     b.title = msg;
     b.onclick = () => showSqlSetupModal();
   } else if(synced){
-    b.innerHTML = _realtimeChannel ? '&#9889; Live' : '&#9729; Synced';
+    b.innerHTML = '&#9889; Live';
     b.style.color = 'var(--gr)';
-    b.title = _realtimeChannel ? 'Realtime sync active — changes appear on all PCs instantly' : 'Data saved to Supabase database';
+    b.title = 'Data saved to Supabase';
     b.onclick = null;
   } else {
     b.innerHTML = '&#9729; Saving&hellip;';
@@ -7239,49 +7251,72 @@ function applyUserPrefs(){
 }
 
 // ═══════════════════════════════════════════════════════
-// SUPABASE REALTIME — live sync across all PCs
+// REALTIME SYNC via pd_sync table (lightweight notifications)
 // ═══════════════════════════════════════════════════════
+// Realtime on app_data caused WAL processing of large JSONB (25MB+),
+// exhausting all DB connections. Instead, Realtime watches pd_sync
+// (tiny rows: key + timestamp). When a change is detected, we fetch
+// the full data from app_data — instant notifications, zero WAL bloat.
 let _realtimeChannel = null;
 
 function setupRealtime(){
   const db = getDB();
   if(!db || !db.channel){
-    console.warn('Realtime not available — Supabase client missing .channel()');
+    console.warn('Realtime not available');
+    // Fallback to polling if Realtime unavailable
+    setInterval(_pollForChanges, 30000);
     return;
   }
-  // Clean up previous subscription if any
   if(_realtimeChannel){
     try{ db.removeChannel(_realtimeChannel); }catch(e){}
   }
 
-  // Only listen for UPDATE events (we use upsert, which emits UPDATE after first insert)
-  // This reduces WAL processing vs event:'*' which also tracks INSERT/DELETE
-  _realtimeChannel = db.channel('app_data_changes')
+  _realtimeChannel = db.channel('pd_sync_changes')
     .on('postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'app_data' },
+      { event: '*', schema: 'public', table: 'pd_sync' },
       (payload) => {
         // Ignore our own writes (within last 5 seconds)
         if(Date.now() - _lastWriteTs < 5000) return;
-
-        const key = payload.new?.key || payload.old?.key;
-        if(!key) return;
-        // Skip session key changes — no need to re-render for session updates
-        if(key === DB_KEYS.sessions) return;
-        console.log(`⚡ Realtime: ${payload.eventType} on ${key}`);
-        handleRealtimeUpdate(key, payload.new?.value);
+        const key = payload.new?.key;
+        if(!key || key === DB_KEYS.sessions) return;
+        console.log(`⚡ Sync: ${key} changed`);
+        // Fetch the actual data from app_data
+        dbGet(key).then(val=>{
+          if(val) handleRealtimeUpdate(key, val);
+        }).catch(e=>console.warn('Sync fetch failed:', key, e));
       }
     )
     .subscribe((status)=>{
       if(status==='SUBSCRIBED'){
-        console.log('⚡ Realtime connected — live sync active');
+        console.log('⚡ Realtime sync active via pd_sync');
         updateRealtimeBadge(true);
       } else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){
         console.warn('⚡ Realtime error:', status);
         updateRealtimeBadge(false);
-        // Retry after 30s (was 5s — reduce reconnection churn)
         setTimeout(setupRealtime, 30000);
       }
     });
+}
+
+// Fallback polling (used if pd_sync table doesn't exist yet)
+let _lastPollTs = {};
+async function _pollForChanges(){
+  if(Date.now() - _lastWriteTs < 10000) return;
+  const db = getDB(); if(!db) return;
+  try{
+    const {data} = await db.from('pd_sync').select('key,updated_at');
+    if(!data) return;
+    const changed = [];
+    data.forEach(r=>{
+      if(r.key === DB_KEYS.sessions) return;
+      if(_lastPollTs[r.key] && _lastPollTs[r.key] !== r.updated_at) changed.push(r.key);
+      _lastPollTs[r.key] = r.updated_at;
+    });
+    for(const key of changed){
+      const val = await dbGet(key);
+      if(val) handleRealtimeUpdate(key, val);
+    }
+  }catch(e){/* pd_sync may not exist yet */}
 }
 
 async function handleRealtimeUpdate(key, newValue){
@@ -7366,7 +7401,7 @@ function updateRealtimeBadge(connected){
   if(connected){
     badge.innerHTML='<span style="color:var(--gr)">⚡ Live</span>';
     badge.style.display='';
-    badge.title='Realtime sync active — changes from other PCs appear instantly';
+    badge.title='Realtime sync active';
   }
 }
 
