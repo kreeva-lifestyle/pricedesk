@@ -3495,7 +3495,7 @@ function saveEdit(id){
   }
   editId=null;renderSKUs();renderBrands();updateAlerts();
   save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
-  saveSkuHistory();
+  debouncedSaveHistory();
   if(changed.length) audit('sku_edit',`${skuCode||sid||'SKU'}: ${changed.join(', ')}`);
   toast(`✓ ${skuCode||sid||'SKU'} updated`,'green');
 }
@@ -6893,6 +6893,7 @@ async function loadAuditLog(){
   const data=await dbGet(DB_KEYS.audit_log);
   if(data&&Array.isArray(data)) auditLogData=data;
 }
+let _auditSaveTimer=null;
 async function saveAuditLog(){ await dbSet(DB_KEYS.audit_log, auditLogData); }
 
 function audit(action, details, extra){
@@ -6906,7 +6907,9 @@ function audit(action, details, extra){
   if(extra) entry.extra=extra;
   auditLogData.unshift(entry);
   if(auditLogData.length>AUDIT_MAX) auditLogData=auditLogData.slice(0,AUDIT_MAX);
-  saveAuditLog(); // fire and forget
+  // Debounce: batch multiple audits into one DB write (10s window)
+  clearTimeout(_auditSaveTimer);
+  _auditSaveTimer=setTimeout(()=>saveAuditLog().catch(e=>console.warn('Audit save failed:',e)),10000);
 }
 
 function populateAuditFilters(){
@@ -6973,7 +6976,12 @@ async function loadSkuHistory(){
   const data=await dbGet(DB_KEYS.sku_history);
   if(data&&typeof data==='object') skuHistoryData=data;
 }
+let _historySaveTimer=null;
 async function saveSkuHistory(){ await dbSet(DB_KEYS.sku_history, skuHistoryData); }
+function debouncedSaveHistory(){
+  clearTimeout(_historySaveTimer);
+  _historySaveTimer=setTimeout(()=>saveSkuHistory().catch(e=>console.warn('History save failed:',e)),10000);
+}
 
 function trackSkuChange(skuId, field, oldVal, newVal){
   if(oldVal===newVal) return;
@@ -7288,8 +7296,12 @@ async function handleRealtimeUpdate(key, newValue){
   const type=keyToType[key];
   if(!type) return;
 
-  // Fetch fresh value from DB (payload.new.value may be truncated)
-  const freshValue = newValue || await dbGet(key);
+  // Use payload value directly — only fetch from DB if payload is empty
+  // This avoids an extra DB read on every realtime notification
+  let freshValue = newValue;
+  if(!freshValue){
+    try{ freshValue = await dbGet(key); }catch(e){ console.warn('Realtime fetch failed:', key, e); return; }
+  }
   if(!freshValue) return;
 
   // Apply the update
@@ -7430,6 +7442,11 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   }
   // Start Supabase Realtime for live sync across PCs
   setupRealtime();
+  // Flush debounced saves (audit/history) when user leaves
+  window.addEventListener('beforeunload',()=>{
+    if(_auditSaveTimer){clearTimeout(_auditSaveTimer);saveAuditLog().catch(()=>{});}
+    if(_historySaveTimer){clearTimeout(_historySaveTimer);saveSkuHistory().catch(()=>{});}
+  });
 });
 </script>
 <script>
