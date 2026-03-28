@@ -287,19 +287,6 @@ body:has(#login-screen.active){overflow:hidden}
 .bdg.bo{background:rgba(45,212,160,.15);color:var(--gr);border:1px solid rgba(45,212,160,.3)}
 .bdg.bl{background:rgba(78,142,247,.15);color:var(--bl);border-color:rgba(78,142,247,.3)}
 .fb-preview-err{font-family:var(--mono);color:var(--re);font-size:12px}
-/* ── IMAGE MODAL (zoom) ─────────────────────────────── */
-#img-zoom-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:500;display:none;align-items:center;justify-content:center;cursor:zoom-out;backdrop-filter:blur(6px)}
-#img-zoom-overlay.active{display:flex}
-#img-zoom-overlay img{max-width:90vw;max-height:88vh;border-radius:10px;box-shadow:0 8px 48px rgba(0,0,0,.8);object-fit:contain}
-#img-zoom-overlay .zoom-close{position:absolute;top:18px;right:22px;color:#fff;font-size:28px;cursor:pointer;opacity:.7;line-height:1;padding:8px;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center}
-#img-zoom-overlay .zoom-close:hover{opacity:1}
-/* ── IMAGE UPLOAD MODAL ─────────────────────────────── */
-.dropzone{border:2px dashed var(--bd2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .15s;position:relative}
-.dropzone:hover,.dropzone.drag-over{border-color:var(--ac);background:rgba(245,166,35,.05)}
-.dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.img-preview-wrap{position:relative;display:inline-block;margin-top:12px}
-.img-preview-wrap img{width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2);display:block}
-.img-remove-btn{position:absolute;top:-10px;right:-10px;width:30px;height:30px;border-radius:50%;background:var(--re);color:#fff;border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:700}
 /* ── IGNORE THRESHOLD TOGGLE (inline SKU table) ─────── */
 .ignore-toggle{display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;padding:3px 7px;border-radius:4px;border:1px solid var(--bd2);background:transparent;color:var(--tx3);transition:all .12s;white-space:nowrap}
 .ignore-toggle:hover{border-color:var(--ac);color:var(--ac)}
@@ -454,10 +441,6 @@ body:has(#login-screen.active){overflow:hidden}
   /* Formula builder: mobile friendly */
   .fb-box{width:100%;max-width:100%;max-height:92vh;border-radius:16px 16px 0 0}
   .fb-row{padding:8px 10px}
-
-  /* Image zoom */
-  #img-zoom-overlay img{max-width:96vw;max-height:80vh}
-  #img-zoom-overlay .zoom-close{top:10px;right:10px;min-width:44px;min-height:44px}
 
   /* Flexb utility: allow wrapping */
   .flexb{flex-wrap:wrap;gap:8px}
@@ -782,11 +765,7 @@ body:has(#login-screen.active){overflow:hidden}
   </div>
 </div>
 
-<!-- ═══ IMAGE ZOOM OVERLAY ═══ -->
-<div id="img-zoom-overlay" onclick="if(event.target===this)closeZoom()">
-  <span class="zoom-close" onclick="closeZoom()" role="button" aria-label="Close zoom">×</span>
-  <img id="img-zoom-img" src="" alt="">
-</div>
+
 
 <!-- ═══ SESSION EXPIRY WARNING ═══ -->
 <div id="session-warn">
@@ -1189,7 +1168,6 @@ body:has(#login-screen.active){overflow:hidden}
   <div class="ss-wrap">
     <table class="ss" style="width:100%;min-width:1250px">
       <colgroup>
-        <col style="width:36px"><!-- Img -->
         <col style="width:100px"><!-- SKU -->
         <col style="width:90px"><!-- Style ID -->
         <col style="width:95px"><!-- Category -->
@@ -1205,7 +1183,6 @@ body:has(#login-screen.active){overflow:hidden}
         <col style="width:170px"><!-- Actions -->
       </colgroup>
       <thead><tr>
-        <th>Img</th>
         <th class="sortable" onclick="sortSKUs('sku')" data-sort="sku">SKU <span class="sort-arrow" id="sort-sku"></span></th>
         <th class="sortable" onclick="sortSKUs('styleId')" data-sort="styleId">Style ID <span class="sort-arrow" id="sort-styleId"></span></th>
         <th class="sortable" onclick="sortSKUs('category')" data-sort="category">Category <span class="sort-arrow" id="sort-category"></span></th>
@@ -1239,7 +1216,7 @@ body:has(#login-screen.active){overflow:hidden}
   <div class="ss-wrap">
     <table class="ss" style="width:100%;min-width:800px">
       <thead><tr>
-        <th>Img</th><th>SKU</th><th>Style ID</th><th>Category</th><th>Brand</th><th>Cost ₹</th><th>Markup %</th><th>Discount %</th><th>Last Profit</th><th>Actions</th>
+        <th>SKU</th><th>Style ID</th><th>Category</th><th>Brand</th><th>Cost ₹</th><th>Markup %</th><th>Discount %</th><th>Last Profit</th><th>Actions</th>
       </tr></thead>
       <tbody id="archive-body"></tbody>
     </table>
@@ -1615,7 +1592,6 @@ const DB_KEYS = {
   sku_history:    'pd_sku_history',
   bulk_imports:   'pd_bulk_imports',
   user_prefs:     'pd_user_preferences',
-  sku_images:     'pd_sku_images',
 };
 
 // ── Save a single key to DB ────────────────────────────
@@ -1768,24 +1744,8 @@ async function save(type){
     return;
   }
   updateSyncBadge(false);
-  // Special handling for SKUs: strip base64 images into separate key
-  if(type==='skus'){
-    const imgMap={};
-    const skuDataClean=skuDB.map(s=>{
-      if(s.img&&s.img.startsWith('data:')){
-        imgMap[s.id]=s.img;
-        return{...s,img:'__img__'}; // placeholder — real image in pd_sku_images
-      }
-      return s;
-    });
-    await _enqueueWrite(()=>dbSet(DB_KEYS.skus, skuDataClean));
-    // Only save images if any base64 images exist
-    if(Object.keys(imgMap).length){
-      await _enqueueWrite(()=>dbSet(DB_KEYS.sku_images, imgMap));
-    }
-    return;
-  }
   const dataMap = {
+    skus:        skuDB,
     brands:      brands,
     users:       users,
     thresholds:  THRESHOLDS,
@@ -1834,18 +1794,7 @@ async function loadFromStorage(){
     batch3b.forEach((t,i) => { loaded[t] = r3b[i]; });
 
     // Apply each type if data exists
-    if(loaded.skus){
-      skuDB = loaded.skus;
-      // Merge base64 images from separate key (loaded after UI renders)
-      dbGet(DB_KEYS.sku_images).then(imgMap=>{
-        if(!imgMap||typeof imgMap!=='object') return;
-        let merged=0;
-        skuDB.forEach(s=>{
-          if(s.img==='__img__'&&imgMap[s.id]){s.img=imgMap[s.id];merged++;}
-        });
-        if(merged) console.log(`Merged ${merged} images from separate store`);
-      }).catch(e=>console.warn('Image load deferred:',e));
-    }
+    if(loaded.skus)        skuDB           = loaded.skus;
     if(loaded.brands)      brands          = loaded.brands;
     if(loaded.thresholds)  THRESHOLDS      = loaded.thresholds;
     if(loaded.alert)       ALERT_SETTINGS  = loaded.alert;
@@ -2039,7 +1988,7 @@ let users=[
 // ═══════════════════════════════════════════════════════
 let skuDB=[];
 
-let editId=null, newImg='';
+let editId=null;
 
 // ═══════════════════════════════════════════════════════
 // CALC HELPERS
@@ -2080,7 +2029,7 @@ function getMynFwd(level, sp){
 }
 function getMynRet(level){return REVERSE_FEES[level]||218;}
 function el(id){return document.getElementById(id);}
-function fixImg(url){if(!url)return'';url=url.replace('www.dropbox.com','dl.dropboxusercontent.com').replace(/[?&]dl=[01]/g,'');if(url.includes('dropboxusercontent')&&!url.includes('raw=1'))url+=(url.includes('?')?'&':'?')+'raw=1';return url;}
+
 
 // ── calcSKU cache — invalidated on any data change ────
 let _calcCache = new Map();
@@ -3265,11 +3214,10 @@ function renderSKUs(){
     else if(c.isBreach) statusIcon=`<span title="Below threshold: ₹${c.profitRs.toFixed(0)} < ₹${c.threshold} — click to ignore" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle}">⚠️</span>`;
     else statusIcon=`<span title="Healthy" style="${_icoStyle};cursor:default;opacity:.5">✅</span>`;
     return`<tr>
-      <td><div data-sku-img="${escAttr(s.id)}" onclick="openImgModal('${escAttr(s.id)}')" style="cursor:pointer" title="Set product image">${s.img?`<img src="${esc(fixImg(s.img))}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">+</div>`}</div></td>
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
       <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}${brand&&brand.model==='myntra'&&s.styleId?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:rgba(255,63,108,.12);color:var(--mn);font-size:11px;text-decoration:none;vertical-align:middle;margin-left:4px">↗</a>`:''}</td>
       <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
-      <td style="line-height:1.6">${!s.img?'<span class="sku-tag" style="background:rgba(255,59,48,.12);color:var(--re);border-color:rgba(255,59,48,.25)">No Image</span>':''}${!s.styleId?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
+      <td style="line-height:1.6">${!s.styleId?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
       <td class="mono">${s.discount||0}%</td>
@@ -3318,7 +3266,6 @@ function renderEditRow(s){
   const catOpts=CATS.map(c=>`<option ${c===s.category?'selected':''}>${c}</option>`).join('');
   const c=calcSKU(s);
   return`<tr class="er" id="er-${s.id}">
-    <td><div onclick="openImgModal('${s.id}')" style="cursor:pointer">${s.img?`<img src="${fixImg(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover">`:`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div>`}</div></td>
     <td><input class="si" id="e-sku" value="${s.sku||''}" placeholder="SKU code" style="width:80px"></td>
     <td><input class="si" id="e-sid" value="${s.styleId}" placeholder="Style ID" style="width:90px"></td>
     <td><select class="sse" id="e-cat" onchange="onCatSelectChange('e')">${catOpts}</select></td>
@@ -3358,7 +3305,6 @@ function renderNewRow(){
     brandCell='<span style="font-size:11px;color:var(--re)">No brands</span>';
   }
   return`<tr class="er" id="er-new">
-    <td><div onclick="openImgModal('new')" style="cursor:pointer;width:32px;height:32px;border-radius:4px;border:1px dashed var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ac)">+</div></td>
     <td><input class="si" id="n-sku" placeholder="SKU *" style="width:80px" required></td>
     <td><input class="si" id="n-sid" placeholder="Style ID" style="width:90px"></td>
     <td>
@@ -3409,7 +3355,7 @@ function liveCalcRow(row){
   }
   const brandId=isNew?(document.querySelector('.n-brand-chk:checked')?.value||brands[0]?.id):(brandEl?.value);const cat=catEl?.value||CATS[0];
   const level=CAT_LEVEL[cat]||'Level 2';
-  const tmpSKU={cost,markup:mkp,discount:disc,category:cat,level,brandId,ignoreThreshold:false,id:'_tmp'};
+  const tmpSKU={cost,markup:mkp,discount:disc,category:cat,level,brandId,ignoreThreshold:false,id:'_tmp_'+cost+'_'+mkp+'_'+disc+'_'+cat+'_'+brandId};
   const c=calcSKU(tmpSKU);
   const spDisp=el(pfx+'sp'),cpDisp=el(pfx+'cp'),ppDisp=el(pfx+'pp'),ifdDisp=el(pfx+'ifd');
   if(spDisp){spDisp.innerHTML=`₹${Math.round(c.sp).toLocaleString('en-IN')}`;spDisp.style.color='var(--bl)';spDisp.classList.remove('na');}
@@ -3438,8 +3384,8 @@ function hideSkuMenus(){document.querySelectorAll('.sku-menu').forEach(m=>m.styl
 document.addEventListener('click',hideSkuMenus);
 
 function startEdit(id){editId=id;renderSKUs();setTimeout(()=>el('e-sid')?.focus(),50);}
-function cancelEdit(){editId=null;newImg='';renderSKUs();}
-// promptImg / promptImgNew now replaced by openImgModal — see IMAGE MANAGEMENT section
+function cancelEdit(){editId=null;renderSKUs();}
+
 
 function saveNew(){
   const skuCode=el('n-sku')?.value.trim()||'';
@@ -3475,10 +3421,10 @@ function saveNew(){
   let count=0;
   selectedBrands.forEach((brandId,i)=>{
     const ts=Date.now()+i;
-    skuDB.push({id:'s'+ts,sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,img:newImg||'',ignoreThreshold:false,archived:false});
+    skuDB.push({id:'s'+ts,sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,ignoreThreshold:false,archived:false});
     count++;
   });
-  newImg='';editId=null;renderSKUs();renderBrands();updateAlerts();
+  editId=null;renderSKUs();renderBrands();updateAlerts();
   save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
   audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
   toast(`✓ ${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`, 'green');
@@ -3589,7 +3535,6 @@ function renderArchivedSKUs(){
       const brand=brands.find(b=>b.id===s.brandId);
       const c=calcSKU(s);
       return`<tr style="opacity:.8">
-        <td>${s.img?`<img src="${esc(s.img)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)">`:'<div style="width:32px;height:32px;border-radius:4px;background:var(--s2)"></div>'}</td>
         <td class="mono" style="font-size:11px;font-weight:600">${esc(s.sku||'—')}</td>
         <td class="mono" style="font-size:11px">${esc(s.styleId||'—')}</td>
         <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
@@ -4300,7 +4245,7 @@ function openImport(){
         <div id="xi-filename" class="st" style="margin-top:8px"></div>
       </div>
       <input type="file" id="xi" accept=".xlsx,.xls,.csv" style="display:none" onchange="previewImport(this)">
-      <div class="info" style="margin-top:14px">Required columns: <span class="mono" style="color:var(--ac)">SKU, BRAND_NAME, CATEGORY, COST_PRICE, MARKUP_PCT</span> &nbsp;·&nbsp; Optional: STYLE_ID, DISCOUNT, IMAGE_URL<br><span class="st">Tip: Use comma-separated brand names to add one SKU to multiple brands. Existing SKUs will be <strong>updated</strong> (blank cells keep old values).</span></div>
+      <div class="info" style="margin-top:14px">Required columns: <span class="mono" style="color:var(--ac)">SKU, BRAND_NAME, CATEGORY, COST_PRICE, MARKUP_PCT</span> &nbsp;·&nbsp; Optional: STYLE_ID, DISCOUNT<br><span class="st">Tip: Use comma-separated brand names to add one SKU to multiple brands. Existing SKUs will be <strong>updated</strong> (blank cells keep old values).</span></div>
       <div id="xi-preview" style="margin-top:14px"></div>
     </div>
     <div class="mfoot">
@@ -4366,7 +4311,7 @@ function previewImport(input){
         const costRaw=r['COST_PRICE']||r['COST']||r['COST (₹)']||'';
         const mkpRaw=r['MARKUP_PCT']||r['MARKUP']||r['MARKUP %']||'';
         const discRaw=r['DISCOUNT']||r['DISCOUNT_PCT']||'';
-        const img=(r['IMAGE_URL']||r['IMAGE URL']||'').trim();
+
         // SKU is mandatory
         if(!skuCode){errors.push(`Row ${i+2}: Missing SKU (mandatory)`);return;}
         // Brand is mandatory
@@ -4405,7 +4350,7 @@ function previewImport(input){
           if(costRaw && parseFloat(costRaw)>0) changes.cost=parseFloat(costRaw);
           if(mkpRaw && parseFloat(mkpRaw)>=0) changes.markup=parseFloat(mkpRaw);
           if(discRaw!=='' && !isNaN(parseFloat(discRaw))) changes.discount=parseFloat(discRaw);
-          if(img) changes.img=img;
+
           if(sid) changes.styleId=sid;
           if(Object.keys(changes).length>0){
             existing.forEach(ex=>{importUpdates.push({id:ex.id, changes});});
@@ -4430,7 +4375,7 @@ function previewImport(input){
           if(!brand){errors.push(`Row ${i+2} (${skuCode}): Unknown brand "${bname}"`);return;}
           const validCat=CATS.includes(cat)?cat:CATS[0];
           const level=(brand.model==='myntra'&&CAT_LEVEL[validCat])?CAT_LEVEL[validCat]:'Level 2';
-          importRows.push({id:'s'+Date.now()+i+'_'+bi,sku:skuCode,styleId:sid||'',brandId:brand.id,category:validCat,level,cost,markup:mkp||0,discount:disc||0,img,ignoreThreshold:false,archived:false});
+          importRows.push({id:'s'+Date.now()+i+'_'+bi,sku:skuCode,styleId:sid||'',brandId:brand.id,category:validCat,level,cost,markup:mkp||0,discount:disc||0,ignoreThreshold:false,archived:false});
           preview.push({sku:skuCode,sid,brand:brand.name,cat:validCat,cost,mkp,disc});
         });
       });
@@ -4489,189 +4434,11 @@ function confirmImport(){
 }
 
 
-// ═══════════════════════════════════════════════════════
-// IMAGE MANAGEMENT — upload, dropbox, drag-drop, remove, zoom
-// ═══════════════════════════════════════════════════════
-let _imgTargetId = null;
-
-function openImgModal(skuId){
-  _imgTargetId = skuId;
-  const s = skuId === 'new' ? {img: newImg||''} : skuDB.find(x=>x.id===skuId);
-  const currentUrl = s?.img || '';
-  const fixed = fixImg(currentUrl);
-  setModal(`<div class="mhdr"><div class="mtl">📷 Set Product Image</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
-    <div class="mbody">
-      ${fixed ? `<div style="text-align:center;margin-bottom:16px">
-        <img src="${esc(fixed)}" id="img-modal-preview" style="width:130px;height:130px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2);cursor:zoom-in" onclick="zoomImg('${escAttr(fixed)}')" onerror="this.style.display='none'">
-        <div style="margin-top:6px;font-size:11px;color:var(--tx3)">${currentUrl.startsWith('data:')?`<span style="color:${(currentUrl.length/1370)>300?'var(--re)':'var(--gr)'}">${(currentUrl.length/1370).toFixed(0)} KB</span> · Stored in database`:'External URL · not stored in DB'}</div>
-        <div style="margin-top:8px;display:flex;gap:8px;justify-content:center">
-          <button class="btn bg bsm" onclick="zoomImg('${escAttr(fixed)}')">Zoom</button>
-          <button class="btn br bsm" onclick="removeImgFromModal()">✕ Remove</button>
-        </div>
-      </div>` : ''}
-      <div class="fg"><label class="fl">Paste image URL (Dropbox / CDN / Google Drive)</label>
-        <input class="fi" id="img-url-input" placeholder="https://..." value="${currentUrl}" oninput="previewImgUrl(this.value)">
-        <div class="st" style="margin-top:4px">Dropbox tip: change <span style="font-family:monospace;color:var(--ac)">?dl=0</span> → <span style="font-family:monospace;color:var(--gr)">?raw=1</span></div>
-      </div>
-      <div class="fg"><label class="fl">Or upload from device / drag & drop</label>
-        <div class="dropzone" id="img-dropzone" ondragover="this.classList.add('drag-over');event.preventDefault()" ondragleave="this.classList.remove('drag-over')" ondrop="handleImgDrop(event)">
-          <input type="file" accept="image/*" onchange="handleImgFile(this.files[0])">
-          <div style="font-size:26px;margin-bottom:6px">🖼</div>
-          <div style="font-size:13px;color:var(--tx2)">Drag & drop here, or click to browse</div>
-          <div class="st" style="margin-top:3px">JPG, PNG, WebP · any size (auto-compressed)</div>
-        </div>
-        <div id="img-upload-preview" style="text-align:center;margin-top:10px"></div>
-      </div>
-    </div>
-    <div style="padding:8px 21px;background:var(--s2);border-top:1px solid var(--bd);font-size:10px;color:var(--tx3)">
-        ${(()=>{const imgs=skuDB.filter(s=>s.img&&s.img.startsWith('data:'));const totalKB=imgs.reduce((a,s)=>a+(s.img.length/1370),0);return imgs.length?`<span style="color:${totalKB>50000?'var(--re)':totalKB>10000?'var(--ac)':'var(--gr)'}">⬤</span> ${imgs.length} images stored in DB · Total: ${totalKB>1024?(totalKB/1024).toFixed(1)+' MB':Math.round(totalKB)+' KB'} ${totalKB>10000?' — Consider using external URLs (Dropbox/CDN) to reduce DB size':''}`:''})()}
-      </div>
-    <div class="mfoot">
-      <button class="btn bg" onclick="closeModal()">Cancel</button>
-      <button class="btn bp" onclick="saveImgFromModal()">✓ Save Image</button>
-    </div>`);
-}
-
-function previewImgUrl(url){
-  const fixed = fixImg(url);
-  const prev = document.getElementById('img-modal-preview');
-  if(prev && fixed){ prev.src=fixed; prev.style.display=''; }
-}
-
-function handleImgFile(file){
-  if(!file) return;
-  // Auto-compress any image to WebP, resize if large
-  const MAX_DIM = 800; // max width/height in pixels
-  const TARGET_KB = 500; // target ~500KB max output
-  const img = new Image();
-  const objectUrl = URL.createObjectURL(file);
-  img.onload = function(){
-    URL.revokeObjectURL(objectUrl);
-    let w = img.width, h = img.height;
-    // Scale down if larger than MAX_DIM
-    if(w > MAX_DIM || h > MAX_DIM){
-      const ratio = Math.min(MAX_DIM/w, MAX_DIM/h);
-      w = Math.round(w * ratio);
-      h = Math.round(h * ratio);
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, w, h);
-    // Try WebP at decreasing quality until under target size
-    let quality = 0.82;
-    let dataUrl = canvas.toDataURL('image/webp', quality);
-    while(dataUrl.length > TARGET_KB * 1370 && quality > 0.3){ // ~1370 base64 chars per KB
-      quality -= 0.1;
-      dataUrl = canvas.toDataURL('image/webp', quality);
-    }
-    // Fallback to JPEG if WebP not supported
-    if(!dataUrl.startsWith('data:image/webp')){
-      dataUrl = canvas.toDataURL('image/jpeg', quality);
-    }
-    const urlInput = document.getElementById('img-url-input');
-    if(urlInput) urlInput.value = dataUrl;
-    const prev = document.getElementById('img-upload-preview');
-    if(prev) prev.innerHTML = `<img src="${dataUrl}" style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2)">
-      <div class="st" style="margin-top:4px">${(dataUrl.length/1370).toFixed(0)}KB · ${w}×${h}px · WebP</div>`;
-  };
-  img.onerror = function(){ URL.revokeObjectURL(objectUrl); toast('Could not read image file','red'); };
-  img.src = objectUrl;
-}
-
-function handleImgDrop(e){
-  e.preventDefault();
-  const dz = document.getElementById('img-dropzone');
-  if(dz) dz.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if(file && file.type.startsWith('image/')) handleImgFile(file);
-}
-
-function removeImgFromModal(){
-  const urlInput = document.getElementById('img-url-input');
-  if(urlInput) urlInput.value='';
-  const prev = document.getElementById('img-modal-preview');
-  if(prev) prev.style.display='none';
-  const up = document.getElementById('img-upload-preview');
-  if(up) up.innerHTML='';
-}
-
-async function saveImgFromModal(){
-  const url = document.getElementById('img-url-input')?.value.trim() || '';
-  if(_imgTargetId === 'new'){
-    // Preserve new row input values before re-render
-    _newRowDraft = {
-      sku: el('n-sku')?.value||'', sid: el('n-sid')?.value||'',
-      brand: el('n-brand')?.value||'', cat: el('n-cat')?.value||'',
-      cost: el('n-cost')?.value||'', mkp: el('n-mkp')?.value||'',
-      disc: el('n-disc')?.value||'0'
-    };
-    newImg = url;
-  } else {
-    const s = skuDB.find(x=>x.id===_imgTargetId);
-    if(s){
-      s.img = url;
-      // Immediately update the image in the DOM without waiting for full save
-      const imgCell = document.querySelector(`[data-sku-img="${_imgTargetId}"]`);
-      if(imgCell && url){
-        imgCell.innerHTML=`<img src="${fixImg(url)}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;border:1px solid var(--bd)" onerror="this.style.display='none'">`;
-      } else if(imgCell){
-        imgCell.innerHTML=`<div style="width:32px;height:32px;border-radius:4px;border:1px dashed var(--bd2);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3)">+</div>`;
-      }
-      // Warn if base64 image is large
-      if(url.startsWith('data:')&&url.length>500000){
-        toast('⚠ Large image ('+Math.round(url.length/1370)+'KB) — save may be slow. Consider using an external URL instead.','red');
-      }
-      try{
-        await save('skus');
-        toast('✓ Image saved','green');
-      }catch(e){
-        toast('Image save failed — try using an external URL instead','red');
-        console.error('Image save failed:',e);
-      }
-    }
-  }
-  closeModal();
-  if(_imgTargetId === 'new') renderSKUs();
-  // Restore new row draft values after re-render
-  if(_imgTargetId === 'new' && _newRowDraft){
-    const d = _newRowDraft;
-    if(el('n-sku')) el('n-sku').value = d.sku;
-    if(el('n-sid')) el('n-sid').value = d.sid;
-    if(el('n-brand')) el('n-brand').value = d.brand;
-    if(el('n-cat')) el('n-cat').value = d.cat;
-    if(el('n-cost')) el('n-cost').value = d.cost;
-    if(el('n-mkp')) el('n-mkp').value = d.mkp;
-    if(el('n-disc')) el('n-disc').value = d.disc;
-    _newRowDraft = null;
-    // Trigger live calc to show computed values
-    const row = el('er-new');
-    if(row) liveCalcRow(row);
-  }
-  toast(url ? '✓ Image saved' : '✓ Image removed','green');
-}
-let _newRowDraft = null;
-
-// ── Image zoom ────────────────────────────────────────
-function zoomImg(url){
-  const ov = document.getElementById('img-zoom-overlay');
-  const img = document.getElementById('img-zoom-img');
-  if(!ov||!img||!url) return;
-  img.src = fixImg(url)||url;
-  ov.classList.add('active');
-  document.body.style.overflow='hidden';
-}
 function _anyOverlayOpen(){
   return document.getElementById('sidebar')?.classList.contains('open')
-    || document.getElementById('fb-overlay')?.classList.contains('active')
-    || document.getElementById('img-zoom-overlay')?.classList.contains('active');
+    || document.getElementById('fb-overlay')?.classList.contains('active');
 }
-function closeZoom(){
-  const ov = document.getElementById('img-zoom-overlay');
-  if(ov) ov.classList.remove('active');
-  if(!_anyOverlayOpen()) document.body.style.overflow='';
-}
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeFB(); closeZoom(); closeModal(); if(typeof closeSidebar==='function') closeSidebar(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeFB(); closeModal(); if(typeof closeSidebar==='function') closeSidebar(); } });
 
 // ═══════════════════════════════════════════════════════
 // DATA EXPORT / IMPORT (JSON backup)
@@ -6711,10 +6478,10 @@ function renderSKUPagination(total){
 // ═══════════════════════════════════════════════════════
 // SKU NOTES / TAGS
 // ═══════════════════════════════════════════════════════
-const AUTO_TAGS=['No Image','No Style ID'];
+const AUTO_TAGS=['No Style ID'];
 function getAutoTags(s){
   const at=[];
-  if(!s.img) at.push('No Image');
+
   if(!s.styleId) at.push('No Style ID');
   return at;
 }
@@ -7083,7 +6850,7 @@ function renderSkuHistory(skuId){
   if(!skuId){body.innerHTML='<div class="st" style="text-align:center;padding:10px">Select a SKU above</div>';return;}
   const history=skuHistoryData[skuId];
   if(!history||!history.length){body.innerHTML='<div class="st" style="text-align:center;padding:10px">No price changes recorded for this SKU yet</div>';return;}
-  const fieldLabels={cost:'Cost (₹)',markup:'Markup %',discount:'Discount %',category:'Category',brandId:'Brand',img:'Image'};
+  const fieldLabels={cost:'Cost (₹)',markup:'Markup %',discount:'Discount %',category:'Category',brandId:'Brand'};
   body.innerHTML=`<div style="max-height:250px;overflow-y:auto"><table class="dt" style="font-size:11px">
     <thead><tr><th>Date</th><th>Field</th><th>Old Value</th><th>New Value</th><th>Changed By</th></tr></thead>
     <tbody>${history.slice().reverse().map(h=>{
@@ -7157,7 +6924,7 @@ function _renderSkuHistoryModal(skuId){
   const brand=brands.find(b=>b.id===s.brandId);
   const isMyntra=brand&&brand.model==='myntra';
   const history=skuHistoryData[skuId];
-  const fieldLabels={cost:'Cost (₹)',markup:'Markup %',discount:'Discount %',category:'Category',brandId:'Brand',img:'Image'};
+  const fieldLabels={cost:'Cost (₹)',markup:'Markup %',discount:'Discount %',category:'Category',brandId:'Brand'};
   function fmtDelta(v){return v>0?`<span style="color:var(--gr)">+₹${Math.round(v)}</span>`:`<span style="color:var(--re)">₹${Math.round(v)}</span>`;}
   function fmtDate(ts){const d=new Date(ts);return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});}
 
@@ -7420,15 +7187,7 @@ async function handleRealtimeUpdate(key, newValue){
 function applyRealtimeData(type, value){
   try{
     switch(type){
-      case 'skus':
-        // Preserve existing images when realtime pushes SKU data (images stored separately)
-        if(Array.isArray(value)){
-          const oldImgs={};
-          skuDB.forEach(s=>{if(s.img&&s.img!=='__img__')oldImgs[s.id]=s.img;});
-          skuDB=value;
-          skuDB.forEach(s=>{if(s.img==='__img__'&&oldImgs[s.id])s.img=oldImgs[s.id];});
-        } else { skuDB=value; }
-        return true;
+      case 'skus': skuDB=value; return true;
       case 'brands': brands=value; return true;
       case 'users': users=value; applyDefaultUsers(); return true;
       case 'thresholds': THRESHOLDS=value; return true;
