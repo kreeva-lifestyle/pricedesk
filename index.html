@@ -816,6 +816,7 @@ body:has(#login-screen.active){overflow:hidden}
         <div id="global-search-results" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--s);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:200;min-width:320px;max-height:360px;overflow-y:auto"></div>
       </div>
       <span id="sync-badge" style="font-size:11px;display:none"></span>
+      <span id="save-queue-badge" style="font-size:10px;display:none;background:rgba(245,166,35,.15);color:var(--ac);border:1px solid rgba(245,166,35,.3);border-radius:4px;padding:2px 8px;font-weight:600"></span>
       <div id="alert-badge" style="background:var(--re);color:#fff;border-radius:4px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;animation:pulse 2s infinite;display:none" onclick="dismissAlertBadge()"></div>
     </div>
   </div>
@@ -1732,32 +1733,54 @@ function _enqueueWrite(fn){
   return _writeQueue;
 }
 
-// ── Debounced SKU save: batches rapid edits into one write ──
-// When user edits 10 SKUs quickly, instead of 10 writes (where
-// intermediate ones can fail and lose data), we wait 2s after
-// the last edit and do ONE write with the final state.
+// ── Save Queue: batches rapid edits into one DB write ──
+// Tracks pending changes visually. When user edits multiple SKUs,
+// changes queue up and sync as one batch after 2s of inactivity.
 let _skuSaveTimer=null;
 let _skuSaveResolvers=[];
+let _pendingEdits=0;
+
+function _updateQueueBadge(){
+  const badge=el('save-queue-badge');
+  if(!badge) return;
+  if(_pendingEdits>0){
+    badge.textContent=`${_pendingEdits} change${_pendingEdits>1?'s':''} pending...`;
+    badge.style.display='';
+  } else {
+    badge.style.display='none';
+  }
+}
+
 function debouncedSaveSKUs(){
   return new Promise((resolve,reject)=>{
     _skuSaveResolvers.push({resolve,reject});
+    _pendingEdits++;
+    _updateQueueBadge();
     clearTimeout(_skuSaveTimer);
     _skuSaveTimer=setTimeout(async()=>{
       const resolvers=[..._skuSaveResolvers];
+      const count=_pendingEdits;
       _skuSaveResolvers=[];
+      _pendingEdits=0;
+      _updateQueueBadge();
       try{
         await _doSaveSKUs();
         resolvers.forEach(r=>r.resolve());
-        toast('✓ Saved to database','green');
+        toast(`✓ ${count} change${count>1?'s':''} saved to database`,'green');
       }catch(e){
         resolvers.forEach(r=>r.reject(e));
-        toast('⚠ Save failed: '+e.message,'red');
+        toast('⚠ Save failed: '+e.message+' — changes kept locally, will retry','red');
+        // Auto-retry once after 5s
+        setTimeout(()=>{
+          _doSaveSKUs().then(()=>toast('✓ Retry succeeded — saved to database','green'))
+            .catch(()=>toast('⚠ Retry failed — please check your connection','red'));
+        },5000);
       }
     },2000);
   });
 }
 async function _doSaveSKUs(){
-  _lastWriteTs=Date.now(); // prevent realtime from overwriting during save
+  _lastWriteTs=Date.now();
   updateSyncBadge(false);
   const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
   await _enqueueWrite(()=>dbSet(DB_KEYS.skus,val));
