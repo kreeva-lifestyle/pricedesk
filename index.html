@@ -1748,8 +1748,10 @@ function debouncedSaveSKUs(){
       try{
         await _doSaveSKUs();
         resolvers.forEach(r=>r.resolve());
+        toast('✓ Saved to database','green');
       }catch(e){
         resolvers.forEach(r=>r.reject(e));
+        toast('⚠ Save failed: '+e.message,'red');
       }
     },2000);
   });
@@ -3467,9 +3469,9 @@ function saveNew(){
     count++;
   });
   editId=null;renderSKUs();renderBrands();updateAlerts();
-  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
+  save('skus').catch(()=>{});
   audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
-  toast(`✓ ${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`, 'green');
+  toast(`✓ ${skuCode||sid||'SKU'} added — saving...`, 'green');
 }
 
 function saveEdit(id){
@@ -3504,10 +3506,10 @@ function saveEdit(id){
     trackSkuSnapshot(id,beforeSnap,afterSnap);
   }
   editId=null;renderSKUs();renderBrands();updateAlerts();
-  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
+  save('skus').catch(()=>{});
   debouncedSaveHistory();
   if(changed.length) audit('sku_edit',`${skuCode||sid||'SKU'}: ${changed.join(', ')}`);
-  toast(`✓ ${skuCode||sid||'SKU'} updated`,'green');
+  toast(`✓ ${skuCode||sid||'SKU'} updated — saving...`,'green');
 }
 
 async function delSKU(id){
