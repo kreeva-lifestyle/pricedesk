@@ -1731,7 +1731,9 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
 // ── Write queue: serializes DB writes to prevent concurrent upserts ──
 let _writeQueue=Promise.resolve();
 function _enqueueWrite(fn){
-  _writeQueue=_writeQueue.then(fn,fn);
+  // Always run fn regardless of previous write success/failure
+  // Use .catch(()=>{}) to prevent previous rejection from blocking queue
+  _writeQueue=_writeQueue.catch(()=>{}).then(fn);
   return _writeQueue;
 }
 
@@ -3287,7 +3289,7 @@ function renderSKUs(){
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
       <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}${brand&&brand.model==='myntra'&&s.styleId?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:rgba(255,63,108,.12);color:var(--mn);font-size:11px;text-decoration:none;vertical-align:middle;margin-left:4px">↗</a>`:''}</td>
       <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
-      <td style="font-size:10px">${esc(brand?.name||'—')}<div style="font-size:9px;color:var(--tx3)">${({'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'})[brand?.model]||''}</div></td>
+      <td><div style="font-size:11px;font-weight:600;color:var(--tx)">${esc(brand?.name||'—')}</div><div style="font-size:9px;color:var(--ac);margin-top:1px">${({'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'})[brand?.model]||''}</div></td>
       <td style="line-height:1.6">${!s.styleId?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
@@ -3555,11 +3557,18 @@ async function delSKU(id){
   if(!confirm(`Delete SKU "${label}"?`))return;
   skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();
   try{
-    await save('skus',{immediate:true});
+    // Wait for any pending writes to finish, then save immediately
+    await _writeQueue;
+    await _doSaveSKUs();
+    // Verify: read back and confirm SKU is gone
+    const dbData=await dbGet(DB_KEYS.skus);
+    if(dbData&&dbData.find(x=>x.id===id)){
+      console.error('Delete verification FAILED — SKU still in DB, retrying...');
+      await _doSaveSKUs();
+    }
     audit('sku_delete',`${label} deleted`);
     toast(`✓ ${esc(label)} deleted from database`,'green');
   }catch(e){
-    // Rollback: re-add the SKU
     skuDB.push(s);renderSKUs();renderBrands();updateAlerts();
     toast(`Delete failed: ${e.message}`,'red');
   }
@@ -7344,8 +7353,11 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   if(stockOutToArchive.length){
     stockOutToArchive.forEach(s=>{s.archived=true;});
     invalidateCalcCache();
-    console.log(`Auto-archived ${stockOutToArchive.length} SKUs tagged STOCK OUT`);
-    _doSaveSKUs().then(()=>console.log('✓ STOCK OUT auto-archive saved')).catch(e=>console.warn('Auto-archive save failed:',e));
+    console.log(`Auto-archiving ${stockOutToArchive.length} SKUs tagged STOCK OUT...`);
+    try{
+      await _doSaveSKUs();
+      console.log('✓ STOCK OUT auto-archive saved');
+    }catch(e){console.warn('Auto-archive save failed:',e);}
   }
   // Defer non-critical data load (audit log, import log, history) to after UI renders
   setTimeout(async()=>{
