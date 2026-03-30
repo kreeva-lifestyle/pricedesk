@@ -1172,6 +1172,7 @@ body:has(#login-screen.active){overflow:hidden}
         <col style="width:100px"><!-- SKU -->
         <col style="width:90px"><!-- Style ID -->
         <col style="width:95px"><!-- Category -->
+        <col style="width:85px"><!-- Brand -->
         <col style="width:120px"><!-- Tags -->
         <col style="width:80px"><!-- Cost -->
         <col style="width:75px"><!-- Markup -->
@@ -1188,6 +1189,7 @@ body:has(#login-screen.active){overflow:hidden}
         <th class="sortable" onclick="sortSKUs('sku')" data-sort="sku">SKU <span class="sort-arrow" id="sort-sku"></span></th>
         <th class="sortable" onclick="sortSKUs('styleId')" data-sort="styleId">Style ID <span class="sort-arrow" id="sort-styleId"></span></th>
         <th class="sortable" onclick="sortSKUs('category')" data-sort="category">Category <span class="sort-arrow" id="sort-category"></span></th>
+        <th>Brand</th>
         <th>Tags</th>
         <th class="sortable" onclick="sortSKUs('cost')" data-sort="cost">Cost ₹ <span class="sort-arrow" id="sort-cost"></span></th>
         <th class="sortable" onclick="sortSKUs('markup')" data-sort="markup">Markup % <span class="sort-arrow" id="sort-markup"></span></th>
@@ -3276,6 +3278,7 @@ function renderSKUs(){
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
       <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}${brand&&brand.model==='myntra'&&s.styleId?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:rgba(255,63,108,.12);color:var(--mn);font-size:11px;text-decoration:none;vertical-align:middle;margin-left:4px">↗</a>`:''}</td>
       <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
+      <td style="font-size:10px">${esc(brand?.name||'—')}<div style="font-size:9px;color:var(--tx3)">${({'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'})[brand?.model]||''}</div></td>
       <td style="line-height:1.6">${!s.styleId?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
@@ -3329,7 +3332,8 @@ function renderEditRow(s){
     <td><input class="si" id="e-sku" value="${s.sku||''}" placeholder="SKU code" style="width:80px"></td>
     <td><input class="si" id="e-sid" value="${s.styleId}" placeholder="Style ID" style="width:90px"></td>
     <td><select class="sse" id="e-cat" onchange="onCatSelectChange('e')">${catOpts}</select></td>
-    <td><select class="sse" id="e-brand" onchange="onCatSelectChange('e')" style="display:none">${brandOpts}</select></td>
+    <td style="font-size:10px">${esc(brands.find(b=>b.id===s.brandId)?.name||'—')}<select class="sse" id="e-brand" onchange="onCatSelectChange('e')" style="display:none">${brandOpts}</select></td>
+    <td></td>
     <td><input class="si" data-lc id="e-cost" type="number" value="${s.cost}" placeholder="₹" style="width:70px"></td>
     <td><input class="si" data-lc id="e-mkp" type="number" value="${s.markup}" placeholder="%" style="width:55px"></td>
     <td><div class="av" id="e-mrp">₹${Math.round(c.mrp).toLocaleString('en-IN')}</div></td>
@@ -3372,6 +3376,7 @@ function renderNewRow(){
       <select class="sse" id="n-cat" onchange="onCatSelectChange('n')">${catOpts}</select>
     </td>
     <td>${brandCell}</td>
+    <td></td>
     <td><input class="si" data-lc id="n-cost" type="number" placeholder="₹ Cost" style="width:70px"></td>
     <td><input class="si" data-lc id="n-mkp" type="number" placeholder="%" style="width:55px"></td>
     <td><div class="av na" id="n-mrp">—</div></td>
@@ -7326,6 +7331,14 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   await loadUserPrefs();
   _dataReady=true;
   applyUserPrefs();
+  // Auto-archive SKUs tagged "STOCK OUT" that aren't archived yet
+  const stockOutToArchive=skuDB.filter(s=>!s.archived&&s.tags&&s.tags.includes('STOCK OUT'));
+  if(stockOutToArchive.length){
+    stockOutToArchive.forEach(s=>{s.archived=true;});
+    invalidateCalcCache();
+    console.log(`Auto-archived ${stockOutToArchive.length} SKUs tagged STOCK OUT`);
+    _doSaveSKUs().then(()=>console.log('✓ STOCK OUT auto-archive saved')).catch(e=>console.warn('Auto-archive save failed:',e));
+  }
   // Defer non-critical data load (audit log, import log, history) to after UI renders
   setTimeout(async()=>{
     await loadSkuHistory();
