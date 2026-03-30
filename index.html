@@ -7326,6 +7326,14 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   await loadUserPrefs();
   _dataReady=true;
   applyUserPrefs();
+  // Auto-archive SKUs tagged "STOCK OUT" that aren't archived yet
+  const stockOutToArchive=skuDB.filter(s=>!s.archived&&s.tags&&s.tags.includes('STOCK OUT'));
+  if(stockOutToArchive.length){
+    stockOutToArchive.forEach(s=>{s.archived=true;});
+    invalidateCalcCache();
+    console.log(`Auto-archived ${stockOutToArchive.length} SKUs tagged STOCK OUT`);
+    _doSaveSKUs().then(()=>console.log('✓ STOCK OUT auto-archive saved')).catch(e=>console.warn('Auto-archive save failed:',e));
+  }
   // Defer non-critical data load (audit log, import log, history) to after UI renders
   setTimeout(async()=>{
     await loadSkuHistory();
