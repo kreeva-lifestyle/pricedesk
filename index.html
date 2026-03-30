@@ -4476,7 +4476,7 @@ function previewImport(input){
   else reader.readAsArrayBuffer(file);
 }
 
-function confirmImport(){
+async function confirmImport(){
   if(!importRows.length&&!importUpdates.length){toast('No valid rows to import','red');return;}
   // Add new SKUs
   const newCount=importRows.length;
@@ -4490,7 +4490,20 @@ function confirmImport(){
   importRows=[];importUpdates=[];
   closeModal();
   renderSKUs();renderBrands();updateAlerts();
-  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
+  const total=newCount+updCount;
+  toast(`Saving ${total} SKU${total>1?'s':''} to database...`,'blue');
+  try{
+    // For bulk imports, save immediately (don't debounce — this is a single large operation)
+    _lastWriteTs=Date.now();
+    await _doSaveSKUs();
+    toast(`✓ ${total} SKU${total>1?'s':''} saved to database`,'green');
+  }catch(e){
+    toast(`⚠ Save failed: ${e.message} — retrying in 5s...`,'red');
+    setTimeout(async()=>{
+      try{await _doSaveSKUs();toast(`✓ Retry succeeded — ${total} SKUs saved`,'green');}
+      catch(e2){toast('⚠ Retry failed — please save manually from SKU page','red');}
+    },5000);
+  }
   logBulkImport(_importFileName, newCount, updCount, 0);
   audit('bulk_import',`${_importFileName}: ${newCount} added, ${updCount} updated`);
   _importFileName='';
