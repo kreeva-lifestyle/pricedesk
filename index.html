@@ -1731,7 +1731,9 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
 // ── Write queue: serializes DB writes to prevent concurrent upserts ──
 let _writeQueue=Promise.resolve();
 function _enqueueWrite(fn){
-  _writeQueue=_writeQueue.then(fn,fn);
+  // Always run fn regardless of previous write success/failure
+  // Use .catch(()=>{}) to prevent previous rejection from blocking queue
+  _writeQueue=_writeQueue.catch(()=>{}).then(fn);
   return _writeQueue;
 }
 
@@ -3555,11 +3557,18 @@ async function delSKU(id){
   if(!confirm(`Delete SKU "${label}"?`))return;
   skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();
   try{
-    await save('skus',{immediate:true});
+    // Wait for any pending writes to finish, then save immediately
+    await _writeQueue;
+    await _doSaveSKUs();
+    // Verify: read back and confirm SKU is gone
+    const dbData=await dbGet(DB_KEYS.skus);
+    if(dbData&&dbData.find(x=>x.id===id)){
+      console.error('Delete verification FAILED — SKU still in DB, retrying...');
+      await _doSaveSKUs();
+    }
     audit('sku_delete',`${label} deleted`);
     toast(`✓ ${esc(label)} deleted from database`,'green');
   }catch(e){
-    // Rollback: re-add the SKU
     skuDB.push(s);renderSKUs();renderBrands();updateAlerts();
     toast(`Delete failed: ${e.message}`,'red');
   }
@@ -7344,8 +7353,11 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   if(stockOutToArchive.length){
     stockOutToArchive.forEach(s=>{s.archived=true;});
     invalidateCalcCache();
-    console.log(`Auto-archived ${stockOutToArchive.length} SKUs tagged STOCK OUT`);
-    _doSaveSKUs().then(()=>console.log('✓ STOCK OUT auto-archive saved')).catch(e=>console.warn('Auto-archive save failed:',e));
+    console.log(`Auto-archiving ${stockOutToArchive.length} SKUs tagged STOCK OUT...`);
+    try{
+      await _doSaveSKUs();
+      console.log('✓ STOCK OUT auto-archive saved');
+    }catch(e){console.warn('Auto-archive save failed:',e);}
   }
   // Defer non-critical data load (audit log, import log, history) to after UI renders
   setTimeout(async()=>{
