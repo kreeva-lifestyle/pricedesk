@@ -1790,7 +1790,7 @@ async function _doSaveSKUs(){
 
 // ── Save individual data types to DB ─────────────────
 // Each data type gets its own DB row — completely independent
-async function save(type){
+async function save(type, opts){
   if(!type){
     // Save ALL data types sequentially
     const types=['skus','brands','users','thresholds','cat_levels',
@@ -1799,9 +1799,18 @@ async function save(type){
     for(const t of types) await save(t);
     return;
   }
-  // SKUs use debounced save to batch rapid edits
+  // SKU saves: debounce for edits, immediate for critical operations
   if(type==='skus'){
-    _lastWriteTs=Date.now(); // prevent realtime overwrite immediately
+    _lastWriteTs=Date.now();
+    if(opts?.immediate){
+      // Flush any pending debounced save first, then save immediately
+      if(_skuSaveTimer){
+        clearTimeout(_skuSaveTimer);
+        _skuSaveResolvers.forEach(r=>r.resolve());
+        _skuSaveResolvers=[];_pendingEdits=0;_updateQueueBadge();
+      }
+      return _doSaveSKUs();
+    }
     return debouncedSaveSKUs();
   }
   updateSyncBadge(false);
@@ -2407,7 +2416,7 @@ async function deleteCategory(cat){
   if(usedCount&&CATS.length){
     const fallback=CATS[0];
     skuDB.filter(s=>s.category===cat).forEach(s=>{s.category=fallback;s.level=CAT_LEVEL[fallback]||'Level 2';});
-    await save('skus');
+    await save('skus',{immediate:true});
   }
   delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];
   for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
@@ -2535,7 +2544,7 @@ function toggleIgnore(id){
   s.ignoreThreshold=!s.ignoreThreshold;
   invalidateCalcCache();
   renderSKUs();updateAlerts();renderBreachList();renderBrands();
-  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
+  save('skus',{immediate:true}).catch(e=>toast('Save failed: '+e.message,'red'));
   if(el('page-thresholds')?.classList.contains('active')) renderThresholds();
   toast(s.ignoreThreshold?`🔕 ${s.sku||s.styleId} threshold ignored`:`⚠️ ${s.sku||s.styleId} threshold re-enabled`,'green');
 }
@@ -3497,7 +3506,7 @@ function saveNew(){
     count++;
   });
   editId=null;renderSKUs();renderBrands();updateAlerts();
-  save('skus').catch(()=>{});
+  save('skus',{immediate:true}).then(()=>toast(`✓ ${skuCode||sid||'SKU'} saved to database`,'green')).catch(e=>toast('Save failed: '+e.message,'red'));
   audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
   toast(`✓ ${skuCode||sid||'SKU'} added — saving...`, 'green');
 }
@@ -3535,7 +3544,7 @@ function saveEdit(id){
   }
   editId=null;renderSKUs();renderBrands();updateAlerts();
   save('skus').catch(()=>{});
-  debouncedSaveHistory();
+  saveSkuHistory().catch(e=>console.warn('History save failed:',e));
   if(changed.length) audit('sku_edit',`${skuCode||sid||'SKU'}: ${changed.join(', ')}`);
   toast(`✓ ${skuCode||sid||'SKU'} updated — saving...`,'green');
 }
@@ -3544,9 +3553,16 @@ async function delSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   const label=s.sku||s.styleId||id;
   if(!confirm(`Delete SKU "${label}"?`))return;
-  skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();await save('skus');
-  audit('sku_delete',`${label} deleted`);
-  toast(`${esc(label)} deleted`,'red');
+  skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();
+  try{
+    await save('skus',{immediate:true});
+    audit('sku_delete',`${label} deleted`);
+    toast(`✓ ${esc(label)} deleted from database`,'green');
+  }catch(e){
+    // Rollback: re-add the SKU
+    skuDB.push(s);renderSKUs();renderBrands();updateAlerts();
+    toast(`Delete failed: ${e.message}`,'red');
+  }
 }
 
 async function archiveSKU(id){
@@ -3558,7 +3574,7 @@ async function archiveSKU(id){
   if(!s.tags.includes('STOCK OUT')) s.tags.push('STOCK OUT');
   invalidateCalcCache();
   try{
-    await save('skus');
+    await save('skus',{immediate:true});
   }catch(e){
     s.archived=false;
     s.tags=s.tags.filter(t=>t!=='STOCK OUT');
@@ -3578,7 +3594,7 @@ async function unarchiveSKU(id){
   if(s.tags) s.tags=s.tags.filter(t=>t!=='STOCK OUT');
   invalidateCalcCache();
   try{
-    await save('skus');
+    await save('skus',{immediate:true});
   }catch(e){
     s.archived=true;
     if(!s.tags) s.tags=[];
@@ -6665,7 +6681,7 @@ function saveSkuTags(){
   const pending=document.getElementById('tag-new-input')?.value.replace(/,/g,'').trim();
   if(pending&&!_tagModalTags.includes(pending)) _tagModalTags.push(pending);
   s.tags=[..._tagModalTags];
-  closeModal();save('skus').catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
+  closeModal();save('skus',{immediate:true}).catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
   audit('tags_edit',`${s.sku||s.styleId}: tags=[${s.tags.join(',')}]`);
   toast('Tags saved','green');
 }
@@ -6673,7 +6689,7 @@ function saveSkuTags(){
 function removeTagFromSku(skuId,tag){
   const s=skuDB.find(x=>x.id===skuId);if(!s||!s.tags)return;
   s.tags=s.tags.filter(t=>t!==tag);
-  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
+  save('skus',{immediate:true}).catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -6814,7 +6830,6 @@ async function loadAuditLog(){
   const data=await dbGet(DB_KEYS.audit_log);
   if(data&&Array.isArray(data)) auditLogData=data;
 }
-let _auditSaveTimer=null;
 async function saveAuditLog(){ await dbSet(DB_KEYS.audit_log, auditLogData); }
 
 function audit(action, details, extra){
@@ -6828,9 +6843,7 @@ function audit(action, details, extra){
   if(extra) entry.extra=extra;
   auditLogData.unshift(entry);
   if(auditLogData.length>AUDIT_MAX) auditLogData=auditLogData.slice(0,AUDIT_MAX);
-  // Debounce: batch multiple audits into one DB write (10s window)
-  clearTimeout(_auditSaveTimer);
-  _auditSaveTimer=setTimeout(()=>saveAuditLog().catch(e=>console.warn('Audit save failed:',e)),10000);
+  saveAuditLog().catch(e=>console.warn('Audit save failed:',e));
 }
 
 function populateAuditFilters(){
@@ -6897,12 +6910,7 @@ async function loadSkuHistory(){
   const data=await dbGet(DB_KEYS.sku_history);
   if(data&&typeof data==='object') skuHistoryData=data;
 }
-let _historySaveTimer=null;
 async function saveSkuHistory(){ await dbSet(DB_KEYS.sku_history, skuHistoryData); }
-function debouncedSaveHistory(){
-  clearTimeout(_historySaveTimer);
-  _historySaveTimer=setTimeout(()=>saveSkuHistory().catch(e=>console.warn('History save failed:',e)),10000);
-}
 
 function trackSkuChange(skuId, field, oldVal, newVal){
   if(oldVal===newVal) return;
@@ -7389,8 +7397,6 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   // Flush debounced saves (audit/history) when user leaves
   window.addEventListener('beforeunload',()=>{
     if(_skuSaveTimer){clearTimeout(_skuSaveTimer);_doSaveSKUs().catch(()=>{});}
-    if(_auditSaveTimer){clearTimeout(_auditSaveTimer);saveAuditLog().catch(()=>{});}
-    if(_historySaveTimer){clearTimeout(_historySaveTimer);saveSkuHistory().catch(()=>{});}
   });
 });
 </script>
