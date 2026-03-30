@@ -1726,12 +1726,39 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
 }
 
 // ── Write queue: serializes DB writes to prevent concurrent upserts ──
-// Free-tier Supabase has limited connections — parallel writes cause
-// statement timeouts (504s). Queue ensures only 1 write at a time.
 let _writeQueue=Promise.resolve();
 function _enqueueWrite(fn){
   _writeQueue=_writeQueue.then(fn,fn);
   return _writeQueue;
+}
+
+// ── Debounced SKU save: batches rapid edits into one write ──
+// When user edits 10 SKUs quickly, instead of 10 writes (where
+// intermediate ones can fail and lose data), we wait 2s after
+// the last edit and do ONE write with the final state.
+let _skuSaveTimer=null;
+let _skuSaveResolvers=[];
+function debouncedSaveSKUs(){
+  return new Promise((resolve,reject)=>{
+    _skuSaveResolvers.push({resolve,reject});
+    clearTimeout(_skuSaveTimer);
+    _skuSaveTimer=setTimeout(async()=>{
+      const resolvers=[..._skuSaveResolvers];
+      _skuSaveResolvers=[];
+      try{
+        await _doSaveSKUs();
+        resolvers.forEach(r=>r.resolve());
+      }catch(e){
+        resolvers.forEach(r=>r.reject(e));
+      }
+    },2000);
+  });
+}
+async function _doSaveSKUs(){
+  _lastWriteTs=Date.now(); // prevent realtime from overwriting during save
+  updateSyncBadge(false);
+  const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
+  await _enqueueWrite(()=>dbSet(DB_KEYS.skus,val));
 }
 
 // ── Save individual data types to DB ─────────────────
@@ -1745,9 +1772,13 @@ async function save(type){
     for(const t of types) await save(t);
     return;
   }
+  // SKUs use debounced save to batch rapid edits
+  if(type==='skus'){
+    _lastWriteTs=Date.now(); // prevent realtime overwrite immediately
+    return debouncedSaveSKUs();
+  }
   updateSyncBadge(false);
   const dataMap = {
-    skus:        skuDB.map(s=>{const{img,...rest}=s;return rest;}),
     brands:      brands,
     users:       users,
     thresholds:  THRESHOLDS,
@@ -7108,7 +7139,7 @@ function setupRealtime(){
       { event: '*', schema: 'public', table: 'pd_sync' },
       (payload) => {
         // Ignore our own writes (within last 5 seconds)
-        if(Date.now() - _lastWriteTs < 5000) return;
+        if(Date.now() - _lastWriteTs < 10000) return;
         const key = payload.new?.key;
         if(!key || key === DB_KEYS.sessions) return;
         console.log(`⚡ Sync: ${key} changed`);
@@ -7298,6 +7329,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   setupRealtime();
   // Flush debounced saves (audit/history) when user leaves
   window.addEventListener('beforeunload',()=>{
+    if(_skuSaveTimer){clearTimeout(_skuSaveTimer);_doSaveSKUs().catch(()=>{});}
     if(_auditSaveTimer){clearTimeout(_auditSaveTimer);saveAuditLog().catch(()=>{});}
     if(_historySaveTimer){clearTimeout(_historySaveTimer);saveSkuHistory().catch(()=>{});}
   });
