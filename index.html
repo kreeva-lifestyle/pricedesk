@@ -3548,15 +3548,19 @@ async function archiveSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   const label=s.sku||s.styleId||id;
   s.archived=true;
+  // Auto-add STOCK OUT tag
+  if(!s.tags) s.tags=[];
+  if(!s.tags.includes('STOCK OUT')) s.tags.push('STOCK OUT');
   invalidateCalcCache();
   try{
     await save('skus');
   }catch(e){
-    s.archived=false; // rollback on failure
+    s.archived=false;
+    s.tags=s.tags.filter(t=>t!=='STOCK OUT');
     toast(`Failed to archive ${esc(label)}: ${e.message}`,'red');
     return;
   }
-  renderSKUs();renderBrands();updateAlerts();
+  renderSKUs();renderBrands();updateAlerts();populateTagFilter();
   if(el('page-archive')?.classList.contains('active')) renderArchivedSKUs();
   audit('sku_archive',`${label} archived (out of stock)`);
   toast(`📦 ${esc(label)} archived`,'green');
@@ -3565,15 +3569,19 @@ async function unarchiveSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   const label=s.sku||s.styleId||id;
   s.archived=false;
+  // Auto-remove STOCK OUT tag
+  if(s.tags) s.tags=s.tags.filter(t=>t!=='STOCK OUT');
   invalidateCalcCache();
   try{
     await save('skus');
   }catch(e){
-    s.archived=true; // rollback on failure
+    s.archived=true;
+    if(!s.tags) s.tags=[];
+    if(!s.tags.includes('STOCK OUT')) s.tags.push('STOCK OUT');
     toast(`Failed to restore ${esc(label)}: ${e.message}`,'red');
     return;
   }
-  renderSKUs();renderBrands();updateAlerts();
+  renderSKUs();renderBrands();updateAlerts();populateTagFilter();
   renderArchivedSKUs();
   audit('sku_unarchive',`${label} restored from archive`);
   toast(`✓ ${esc(label)} restored to active SKUs`,'green');
@@ -6558,11 +6566,11 @@ function renderSKUPagination(total){
 // ═══════════════════════════════════════════════════════
 // SKU NOTES / TAGS
 // ═══════════════════════════════════════════════════════
-const AUTO_TAGS=['No Style ID'];
+const AUTO_TAGS=['No Style ID','STOCK OUT'];
 function getAutoTags(s){
   const at=[];
-
   if(!s.styleId) at.push('No Style ID');
+  if(s.archived) at.push('STOCK OUT');
   return at;
 }
 function getAllTags(){
