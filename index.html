@@ -3544,7 +3544,7 @@ function saveEdit(id){
   }
   editId=null;renderSKUs();renderBrands();updateAlerts();
   save('skus').catch(()=>{});
-  debouncedSaveHistory();
+  saveSkuHistory().catch(e=>console.warn('History save failed:',e));
   if(changed.length) audit('sku_edit',`${skuCode||sid||'SKU'}: ${changed.join(', ')}`);
   toast(`✓ ${skuCode||sid||'SKU'} updated — saving...`,'green');
 }
@@ -6830,7 +6830,6 @@ async function loadAuditLog(){
   const data=await dbGet(DB_KEYS.audit_log);
   if(data&&Array.isArray(data)) auditLogData=data;
 }
-let _auditSaveTimer=null;
 async function saveAuditLog(){ await dbSet(DB_KEYS.audit_log, auditLogData); }
 
 function audit(action, details, extra){
@@ -6844,9 +6843,7 @@ function audit(action, details, extra){
   if(extra) entry.extra=extra;
   auditLogData.unshift(entry);
   if(auditLogData.length>AUDIT_MAX) auditLogData=auditLogData.slice(0,AUDIT_MAX);
-  // Debounce: batch multiple audits into one DB write (10s window)
-  clearTimeout(_auditSaveTimer);
-  _auditSaveTimer=setTimeout(()=>saveAuditLog().catch(e=>console.warn('Audit save failed:',e)),10000);
+  saveAuditLog().catch(e=>console.warn('Audit save failed:',e));
 }
 
 function populateAuditFilters(){
@@ -6913,12 +6910,7 @@ async function loadSkuHistory(){
   const data=await dbGet(DB_KEYS.sku_history);
   if(data&&typeof data==='object') skuHistoryData=data;
 }
-let _historySaveTimer=null;
 async function saveSkuHistory(){ await dbSet(DB_KEYS.sku_history, skuHistoryData); }
-function debouncedSaveHistory(){
-  clearTimeout(_historySaveTimer);
-  _historySaveTimer=setTimeout(()=>saveSkuHistory().catch(e=>console.warn('History save failed:',e)),10000);
-}
 
 function trackSkuChange(skuId, field, oldVal, newVal){
   if(oldVal===newVal) return;
@@ -7405,8 +7397,6 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   // Flush debounced saves (audit/history) when user leaves
   window.addEventListener('beforeunload',()=>{
     if(_skuSaveTimer){clearTimeout(_skuSaveTimer);_doSaveSKUs().catch(()=>{});}
-    if(_auditSaveTimer){clearTimeout(_auditSaveTimer);saveAuditLog().catch(()=>{});}
-    if(_historySaveTimer){clearTimeout(_historySaveTimer);saveSkuHistory().catch(()=>{});}
   });
 });
 </script>
