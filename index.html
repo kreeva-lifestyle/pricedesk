@@ -816,6 +816,7 @@ body:has(#login-screen.active){overflow:hidden}
         <div id="global-search-results" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--s);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:200;min-width:320px;max-height:360px;overflow-y:auto"></div>
       </div>
       <span id="sync-badge" style="font-size:11px;display:none"></span>
+      <span id="save-queue-badge" style="font-size:10px;display:none;background:rgba(245,166,35,.15);color:var(--ac);border:1px solid rgba(245,166,35,.3);border-radius:4px;padding:2px 8px;font-weight:600"></span>
       <div id="alert-badge" style="background:var(--re);color:#fff;border-radius:4px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;animation:pulse 2s infinite;display:none" onclick="dismissAlertBadge()"></div>
     </div>
   </div>
@@ -1726,12 +1727,63 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
 }
 
 // ── Write queue: serializes DB writes to prevent concurrent upserts ──
-// Free-tier Supabase has limited connections — parallel writes cause
-// statement timeouts (504s). Queue ensures only 1 write at a time.
 let _writeQueue=Promise.resolve();
 function _enqueueWrite(fn){
   _writeQueue=_writeQueue.then(fn,fn);
   return _writeQueue;
+}
+
+// ── Save Queue: batches rapid edits into one DB write ──
+// Tracks pending changes visually. When user edits multiple SKUs,
+// changes queue up and sync as one batch after 2s of inactivity.
+let _skuSaveTimer=null;
+let _skuSaveResolvers=[];
+let _pendingEdits=0;
+
+function _updateQueueBadge(){
+  const badge=el('save-queue-badge');
+  if(!badge) return;
+  if(_pendingEdits>0){
+    badge.textContent=`${_pendingEdits} change${_pendingEdits>1?'s':''} pending...`;
+    badge.style.display='';
+  } else {
+    badge.style.display='none';
+  }
+}
+
+function debouncedSaveSKUs(){
+  return new Promise((resolve,reject)=>{
+    _skuSaveResolvers.push({resolve,reject});
+    _pendingEdits++;
+    _updateQueueBadge();
+    clearTimeout(_skuSaveTimer);
+    _skuSaveTimer=setTimeout(async()=>{
+      const resolvers=[..._skuSaveResolvers];
+      const count=_pendingEdits;
+      _skuSaveResolvers=[];
+      _pendingEdits=0;
+      _updateQueueBadge();
+      try{
+        await _doSaveSKUs();
+        resolvers.forEach(r=>r.resolve());
+        toast(`✓ ${count} change${count>1?'s':''} saved to database`,'green');
+      }catch(e){
+        resolvers.forEach(r=>r.reject(e));
+        toast('⚠ Save failed: '+e.message+' — changes kept locally, will retry','red');
+        // Auto-retry once after 5s
+        setTimeout(()=>{
+          _doSaveSKUs().then(()=>toast('✓ Retry succeeded — saved to database','green'))
+            .catch(()=>toast('⚠ Retry failed — please check your connection','red'));
+        },5000);
+      }
+    },2000);
+  });
+}
+async function _doSaveSKUs(){
+  _lastWriteTs=Date.now();
+  updateSyncBadge(false);
+  const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
+  await _enqueueWrite(()=>dbSet(DB_KEYS.skus,val));
 }
 
 // ── Save individual data types to DB ─────────────────
@@ -1745,9 +1797,13 @@ async function save(type){
     for(const t of types) await save(t);
     return;
   }
+  // SKUs use debounced save to batch rapid edits
+  if(type==='skus'){
+    _lastWriteTs=Date.now(); // prevent realtime overwrite immediately
+    return debouncedSaveSKUs();
+  }
   updateSyncBadge(false);
   const dataMap = {
-    skus:        skuDB.map(s=>{const{img,...rest}=s;return rest;}),
     brands:      brands,
     users:       users,
     thresholds:  THRESHOLDS,
@@ -3436,9 +3492,9 @@ function saveNew(){
     count++;
   });
   editId=null;renderSKUs();renderBrands();updateAlerts();
-  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
+  save('skus').catch(()=>{});
   audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
-  toast(`✓ ${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`, 'green');
+  toast(`✓ ${skuCode||sid||'SKU'} added — saving...`, 'green');
 }
 
 function saveEdit(id){
@@ -3473,10 +3529,10 @@ function saveEdit(id){
     trackSkuSnapshot(id,beforeSnap,afterSnap);
   }
   editId=null;renderSKUs();renderBrands();updateAlerts();
-  save('skus').catch(e=>toast('Save failed: '+e.message,'red'));
+  save('skus').catch(()=>{});
   debouncedSaveHistory();
   if(changed.length) audit('sku_edit',`${skuCode||sid||'SKU'}: ${changed.join(', ')}`);
-  toast(`✓ ${skuCode||sid||'SKU'} updated`,'green');
+  toast(`✓ ${skuCode||sid||'SKU'} updated — saving...`,'green');
 }
 
 async function delSKU(id){
@@ -7108,7 +7164,7 @@ function setupRealtime(){
       { event: '*', schema: 'public', table: 'pd_sync' },
       (payload) => {
         // Ignore our own writes (within last 5 seconds)
-        if(Date.now() - _lastWriteTs < 5000) return;
+        if(Date.now() - _lastWriteTs < 10000) return;
         const key = payload.new?.key;
         if(!key || key === DB_KEYS.sessions) return;
         console.log(`⚡ Sync: ${key} changed`);
@@ -7298,6 +7354,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   setupRealtime();
   // Flush debounced saves (audit/history) when user leaves
   window.addEventListener('beforeunload',()=>{
+    if(_skuSaveTimer){clearTimeout(_skuSaveTimer);_doSaveSKUs().catch(()=>{});}
     if(_auditSaveTimer){clearTimeout(_auditSaveTimer);saveAuditLog().catch(()=>{});}
     if(_historySaveTimer){clearTimeout(_historySaveTimer);saveSkuHistory().catch(()=>{});}
   });
