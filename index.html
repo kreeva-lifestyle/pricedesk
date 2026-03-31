@@ -314,15 +314,15 @@ body:has(#login-screen.active){overflow:hidden}
   .sidebar{transform:translateX(-100%);transition:transform .25s ease;z-index:100;box-shadow:4px 0 24px rgba(0,0,0,.5)}
   .sidebar.open{transform:translateX(0)}
 
-  /* Main takes full width */
-  .main{margin-left:0}
+  /* Main takes full width, prevent right overflow */
+  .main{margin-left:0;overflow-x:hidden;max-width:100vw}
 
   /* Topbar: compact */
   .topbar{padding:10px 12px;gap:8px}
   .topbar>.flex{gap:8px}
 
-  /* Content padding reduced */
-  .content{padding:14px 12px}
+  /* Content padding reduced, prevent overflow */
+  .content{padding:14px 12px;overflow-x:hidden;max-width:100%}
 
   /* Dashboard: disable drag-and-drop on mobile */
   #page-dashboard{padding-left:0}
@@ -351,20 +351,24 @@ body:has(#login-screen.active){overflow:hidden}
   .sku-mp-tab{white-space:nowrap;padding:8px 12px;font-size:11px}
   .sku-actions-wrap{justify-content:flex-start!important}
 
-  /* Filter bar: wrap + full-width search */
-  .filter-bar{gap:8px;padding:10px 10px;flex-direction:row;flex-wrap:wrap}
-  .filter-bar>div:first-child{width:100%}
-  .filter-bar>div:first-child .filter-select{width:100%!important;min-width:0!important}
-  .filter-select{min-width:0;flex:1;padding:7px 9px}
+  /* Filter bar: stack vertically on mobile */
+  .filter-bar{gap:6px;padding:10px 10px;flex-direction:column;flex-wrap:wrap}
+  .filter-bar>*{width:100%;min-width:0}
+  .filter-bar .fi{width:100%!important}
+  .filter-select{min-width:0;width:100%;padding:7px 9px;flex:none}
   .filter-sep{display:none}
+  /* Profit range: inline */
+  .filter-bar .profit-range{display:flex;gap:4px;align-items:center;width:100%}
+  .filter-bar .profit-range input{flex:1;min-width:0}
 
   /* SKU sheet: horizontal scroll */
   .ss-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:0 12px;scrollbar-width:thin}
-  .ss{min-width:1200px}
+  .ss{min-width:1100px}
   .ss th,.ss td{padding:5px 6px;font-size:11px}
 
-  /* Hide Style ID & Tags columns to save space */
-  .ss th:nth-child(3),.ss td:nth-child(3){display:none}
+  /* Hide Style ID (col 2), Brand (col 4), Tags (col 5) on mobile */
+  .ss th:nth-child(2),.ss td:nth-child(2){display:none}
+  .ss th:nth-child(4),.ss td:nth-child(4){display:none}
   .ss th:nth-child(5),.ss td:nth-child(5){display:none}
 
   /* Global search: compact on mobile */
@@ -375,9 +379,14 @@ body:has(#login-screen.active){overflow:hidden}
   .ct td{padding:6px 9px;font-size:12px}
   .ct input[type=number]{width:80px}
 
-  /* Cards: wrap headers */
+  /* Cards: wrap headers, prevent overflow */
+  .card{max-width:100%;overflow-x:hidden}
   .card .ch{flex-wrap:wrap;gap:8px}
+  .card .cb{overflow-x:auto}
   .ch .btn,.ch button{font-size:11px;padding:5px 9px}
+
+  /* Pages: prevent horizontal overflow */
+  .page{overflow-x:hidden;max-width:100%}
 
   /* Info/warning boxes */
   .info,.success,.warn{font-size:11px;padding:8px 11px;line-height:1.5}
@@ -788,7 +797,7 @@ body:has(#login-screen.active){overflow:hidden}
     <div class="nav-item" data-page="logistics" onclick="nav('logistics')"><span class="ni">⇅</span> Logistics</div>
     <div class="nav-sec">Products</div>
     <div class="nav-item" data-page="skus" onclick="nav('skus')"><span class="ni">⊟</span> SKUs</div>
-    <div class="nav-item" data-page="archive" onclick="nav('archive')"><span class="ni">▣</span> Archive <span id="nav-archive-count" style="font-size:10px;color:var(--tx3);margin-left:auto"></span></div>
+    <div class="nav-item" data-page="archive" onclick="nav('archive')"><span class="ni">▣</span> Archive <span id="nav-archive-count" style="margin-left:auto;font-size:10px;font-weight:600;background:rgba(245,87,92,.15);color:var(--re);border-radius:10px;padding:1px 7px;min-width:20px;text-align:center;display:none"></span></div>
     <div class="nav-sec">Admin</div>
     <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni">☰</span> Wireframe Builder</div>
     <div class="nav-item" data-page="activity" onclick="nav('activity')"><span class="ni">▤</span> Activity Log</div>
@@ -3425,7 +3434,7 @@ function renderSKUs(){
     return`<tr>
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
       <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}${brand&&brand.model==='myntra'&&s.styleId?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:rgba(255,63,108,.12);color:var(--mn);font-size:11px;text-decoration:none;vertical-align:middle;margin-left:4px">↗</a>`:''}</td>
-      <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
+      <td><span class="tag tb" style="font-size:10px;white-space:nowrap">${esc(s.category)}</span></td>
       <td><div style="font-size:11px;font-weight:600;color:var(--tx)">${esc(brand?.name||'—')}</div><div style="font-size:9px;color:var(--ac);margin-top:1px">${({'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'})[brand?.model]||''}</div></td>
       <td style="line-height:1.6">${!s.styleId?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
@@ -3436,7 +3445,7 @@ function renderSKUs(){
       <td class="mono">₹${Math.round(c.custPaid).toLocaleString('en-IN')}</td>
       <td class="mono" style="color:${profColor};font-weight:600">₹${c.profitRs.toFixed(0)}</td>
       <td class="mono" style="color:${ifDelColor}">₹${c.ifDelivered.toFixed(0)}</td>
-      <td class="mono" style="color:${brand&&brand.model==='myntra'?(c.grossSettlement>=0?'var(--gr)':'var(--re)'):'var(--tx3)'}">${brand&&brand.model==='myntra'?'₹'+c.grossSettlement.toFixed(0):'—'}</td>
+      <td class="mono" style="color:${brand&&brand.model==='myntra'?(c.grossSettlement>=0?'var(--bl)':'var(--re)'):'var(--tx3)'}">${brand&&brand.model==='myntra'?'₹'+c.grossSettlement.toFixed(0):'—'}</td>
       <td>
         <div style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
           ${statusIcon}
@@ -3462,7 +3471,7 @@ function renderSKUs(){
   t.querySelectorAll('[data-lc]').forEach(e=>e.addEventListener('input',()=>liveCalcRow(e.closest('tr'))));
   // Update archive nav badge
   const navCount=el('nav-archive-count');
-  if(navCount){const archCount=skuDB.filter(s=>s.archived).length;navCount.textContent=archCount||'';}
+  if(navCount){const archCount=skuDB.filter(s=>s.archived).length;navCount.textContent=archCount;navCount.style.display=archCount?'':'none';}
 }
 
 // ── Category change triggers recalc (level auto-derived from CAT_LEVEL) ──
@@ -3490,7 +3499,7 @@ function renderEditRow(s){
     <td><div class="av" id="e-cp">₹${Math.round(c.custPaid).toLocaleString('en-IN')}</div></td>
     <td><div class="av" id="e-pp" style="color:${c.profitRs>0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</div></td>
     <td><div class="av" id="e-ifd" style="color:${c.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${c.ifDelivered.toFixed(0)}</div></td>
-    <td><div class="av" id="e-gs" style="color:${c.grossSettlement>=0?'var(--gr)':'var(--re)'}">₹${c.grossSettlement.toFixed(0)}</div></td>
+    <td><div class="av" id="e-gs" style="color:${c.grossSettlement>=0?'var(--bl)':'var(--re)'}">₹${c.grossSettlement.toFixed(0)}</div></td>
     <td><div style="display:flex;gap:5px"><button class="btn bp bxs" onclick="saveEdit('${s.id}')" title="Save changes">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()" title="Cancel editing">✕</button></div></td>
   </tr>`;
 }
@@ -3580,7 +3589,7 @@ function liveCalcRow(row){
   if(ifdDisp){ifdDisp.innerHTML=`₹${c.ifDelivered.toFixed(0)}`;ifdDisp.style.color=c.ifDelivered>=0?'var(--gr)':'var(--re)';ifdDisp.classList.remove('na');}
   const gsDisp=el(pfx+'gs');
   const brand=brands.find(b=>b.id===brandId);
-  if(gsDisp&&brand&&brand.model==='myntra'){gsDisp.innerHTML=`₹${c.grossSettlement.toFixed(0)}`;gsDisp.style.color=c.grossSettlement>=0?'var(--gr)':'var(--re)';gsDisp.classList.remove('na');}
+  if(gsDisp&&brand&&brand.model==='myntra'){gsDisp.innerHTML=`₹${c.grossSettlement.toFixed(0)}`;gsDisp.style.color=c.grossSettlement>=0?'var(--bl)':'var(--re)';gsDisp.classList.remove('na');}
   else if(gsDisp){gsDisp.innerHTML='—';gsDisp.classList.add('na');}
 }
 
@@ -3758,7 +3767,7 @@ function renderArchivedSKUs(){
   if(countEl) countEl.textContent=`${archived.length} archived SKU${archived.length!==1?'s':''}`;
   // Update nav badge
   const navCount=el('nav-archive-count');
-  if(navCount){const total=skuDB.filter(s=>s.archived).length;navCount.textContent=total?total:'';}
+  if(navCount){const total=skuDB.filter(s=>s.archived).length;navCount.textContent=total;navCount.style.display=total?'':'none';}
   const pageSize=25;
   const totalPages=Math.ceil(archived.length/pageSize);
   if(_archivePage>totalPages&&totalPages>0) _archivePage=totalPages;
@@ -3775,7 +3784,7 @@ function renderArchivedSKUs(){
       return`<tr style="opacity:.8">
         <td class="mono" style="font-size:11px;font-weight:600">${esc(s.sku||'—')}</td>
         <td class="mono" style="font-size:11px">${esc(s.styleId||'—')}</td>
-        <td><span class="tag tb" style="font-size:10px">${esc(s.category)}</span></td>
+        <td><span class="tag tb" style="font-size:10px;white-space:nowrap">${esc(s.category)}</span></td>
         <td class="st">${esc(brand?.name||'—')}</td>
         <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
         <td class="mono">${s.markup}%</td>
