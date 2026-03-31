@@ -797,7 +797,7 @@ body:has(#login-screen.active){overflow:hidden}
     <div class="nav-item" data-page="logistics" onclick="nav('logistics')"><span class="ni">⇅</span> Logistics</div>
     <div class="nav-sec">Products</div>
     <div class="nav-item" data-page="skus" onclick="nav('skus')"><span class="ni">⊟</span> SKUs</div>
-    <div class="nav-item" data-page="archive" onclick="nav('archive')"><span class="ni">▣</span> Archive <span id="nav-archive-count" style="font-size:10px;color:var(--tx3);margin-left:auto"></span></div>
+    <div class="nav-item" data-page="archive" onclick="nav('archive')"><span class="ni">▣</span> Archive <span id="nav-archive-count" style="margin-left:auto;font-size:10px;font-weight:600;background:rgba(245,87,92,.15);color:var(--re);border-radius:10px;padding:1px 7px;min-width:20px;text-align:center;display:none"></span></div>
     <div class="nav-sec">Admin</div>
     <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni">☰</span> Wireframe Builder</div>
     <div class="nav-item" data-page="activity" onclick="nav('activity')"><span class="ni">▤</span> Activity Log</div>
@@ -3471,7 +3471,7 @@ function renderSKUs(){
   t.querySelectorAll('[data-lc]').forEach(e=>e.addEventListener('input',()=>liveCalcRow(e.closest('tr'))));
   // Update archive nav badge
   const navCount=el('nav-archive-count');
-  if(navCount){const archCount=skuDB.filter(s=>s.archived).length;navCount.textContent=archCount||'';}
+  if(navCount){const archCount=skuDB.filter(s=>s.archived).length;navCount.textContent=archCount;navCount.style.display=archCount?'':'none';}
 }
 
 // ── Category change triggers recalc (level auto-derived from CAT_LEVEL) ──
@@ -3767,7 +3767,7 @@ function renderArchivedSKUs(){
   if(countEl) countEl.textContent=`${archived.length} archived SKU${archived.length!==1?'s':''}`;
   // Update nav badge
   const navCount=el('nav-archive-count');
-  if(navCount){const total=skuDB.filter(s=>s.archived).length;navCount.textContent=total?total:'';}
+  if(navCount){const total=skuDB.filter(s=>s.archived).length;navCount.textContent=total;navCount.style.display=total?'':'none';}
   const pageSize=25;
   const totalPages=Math.ceil(archived.length/pageSize);
   if(_archivePage>totalPages&&totalPages>0) _archivePage=totalPages;
