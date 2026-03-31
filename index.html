@@ -2900,21 +2900,22 @@ function renderDashboardWidgets(){
   const gstEl=el('dash-gst-split');
   if(gstEl){
     let low5=0, high18=0;
-    allCalcs.forEach(({c})=>{ if(c.sp>2500) high18++; else low5++; });
+    allCalcs.forEach(({c})=>{ if(c.custPaid>=2500) high18++; else low5++; });
     const total=low5+high18||1;
     const pct5=Math.round(low5/total*100), pct18=Math.round(high18/total*100);
     gstEl.innerHTML=`
       <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px">
         <div style="flex:1;text-align:center">
           <div style="font-size:24px;font-weight:700;color:var(--gr)">${low5}</div>
-          <div class="st" style="font-size:11px">GST 5% (SP ≤ ₹2,500)</div>
+          <div class="st" style="font-size:11px">GST 5% (Cust. Paid &lt; ₹2,500)</div>
         </div>
         <div style="width:1px;height:40px;background:var(--bd)"></div>
         <div style="flex:1;text-align:center">
           <div style="font-size:24px;font-weight:700;color:var(--ac)">${high18}</div>
-          <div class="st" style="font-size:11px">GST 18% (SP > ₹2,500)</div>
+          <div class="st" style="font-size:11px">GST 18% (Cust. Paid ≥ ₹2,500)</div>
         </div>
       </div>
+      <div class="st" style="font-size:10px;text-align:center;margin-bottom:6px">${low5+high18} of ${countableSKUs.length} SKUs</div>
       <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--s2)">
         <div style="width:${pct5}%;background:var(--gr);transition:width .3s"></div>
         <div style="width:${pct18}%;background:var(--ac);transition:width .3s"></div>
