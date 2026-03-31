@@ -1783,11 +1783,56 @@ function debouncedSaveSKUs(){
     },2000);
   });
 }
+
+// ── Atomic SKU operations: read-modify-write to prevent overwrites ──
+// Each operation reads fresh DB state, applies the change, writes back.
+// This prevents User A's save from overwriting User B's changes.
+
+// Track local changes for merge
+let _localDeletedIds=new Set(); // SKUs deleted by this user
+let _localChangedIds=new Set(); // SKUs edited by this user
+let _localAddedIds=new Set();   // SKUs added by this user
+
 async function _doSaveSKUs(){
   _lastWriteTs=Date.now();
   updateSyncBadge(false);
-  const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
-  await _enqueueWrite(()=>dbSet(DB_KEYS.skus,val));
+
+  // Read-modify-write: fetch fresh DB state and merge
+  const dbData=await dbGet(DB_KEYS.skus);
+  let merged;
+
+  if(dbData&&Array.isArray(dbData)){
+    const localMap=new Map(skuDB.map(s=>[s.id,s]));
+    const dbMap=new Map(dbData.map(s=>[s.id,s]));
+    merged=[];
+
+    // 1. Include all local SKUs (our edits/adds take priority)
+    for(const s of skuDB){
+      const{img,...clean}=s;
+      merged.push(clean);
+    }
+
+    // 2. Add SKUs from DB that exist there but NOT locally
+    //    (added by other users, or unchanged SKUs we haven't loaded)
+    //    UNLESS we explicitly deleted them
+    for(const[id,s]of dbMap){
+      if(!localMap.has(id)&&!_localDeletedIds.has(id)){
+        const{img,...clean}=s;
+        merged.push(clean);
+        // Also add to local state so UI is in sync
+        skuDB.push(s);
+      }
+    }
+  } else {
+    merged=skuDB.map(s=>{const{img,...rest}=s;return rest;});
+  }
+
+  await _enqueueWrite(()=>dbSet(DB_KEYS.skus,merged));
+
+  // Clear tracking after successful save
+  _localDeletedIds.clear();
+  _localChangedIds.clear();
+  _localAddedIds.clear();
 }
 
 // ── Save individual data types to DB ─────────────────
@@ -2544,6 +2589,7 @@ function updateAlerts(){
 function toggleIgnore(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   s.ignoreThreshold=!s.ignoreThreshold;
+  _localChangedIds.add(id);
   invalidateCalcCache();
   renderSKUs();updateAlerts();renderBreachList();renderBrands();
   save('skus',{immediate:true}).catch(e=>toast('Save failed: '+e.message,'red'));
@@ -3504,7 +3550,9 @@ function saveNew(){
   let count=0;
   selectedBrands.forEach((brandId,i)=>{
     const ts=Date.now()+i;
-    skuDB.push({id:'s'+ts,sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,ignoreThreshold:false,archived:false});
+    const newId='s'+ts;
+    skuDB.push({id:newId,sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,ignoreThreshold:false,archived:false});
+    _localAddedIds.add(newId);
     count++;
   });
   editId=null;renderSKUs();renderBrands();updateAlerts();
@@ -3537,6 +3585,7 @@ function saveEdit(id){
   if(s.markup!==mkp)changed.push(`markup ${s.markup}→${mkp}%`);
   if(s.discount!==disc)changed.push(`disc ${s.discount}→${disc}%`);
   Object.assign(s,{sku:skuCode,styleId:sid||'',brandId:el('e-brand')?.value,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc});
+  _localChangedIds.add(id);
   // Snapshot AFTER changes and record impact
   if(hasChange){
     invalidateCalcCache();
@@ -3555,20 +3604,24 @@ async function delSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   const label=s.sku||s.styleId||id;
   if(!confirm(`Delete SKU "${label}"?`))return;
-  skuDB=skuDB.filter(x=>x.id!==id);renderSKUs();renderBrands();updateAlerts();
+  // Track deletion so merge won't re-add from other user's data
+  _localDeletedIds.add(id);
+  skuDB=skuDB.filter(x=>x.id!==id);
+  renderSKUs();renderBrands();updateAlerts();
   try{
-    // Wait for any pending writes to finish, then save immediately
-    await _writeQueue;
+    await _writeQueue; // drain pending writes first
     await _doSaveSKUs();
-    // Verify: read back and confirm SKU is gone
-    const dbData=await dbGet(DB_KEYS.skus);
-    if(dbData&&dbData.find(x=>x.id===id)){
-      console.error('Delete verification FAILED — SKU still in DB, retrying...');
-      await _doSaveSKUs();
+    // Verify: read back and confirm
+    const check=await dbGet(DB_KEYS.skus);
+    if(check&&check.find(x=>x.id===id)){
+      console.warn('Delete verify failed, direct overwrite...');
+      const fixed=check.filter(x=>x.id!==id);
+      await _enqueueWrite(()=>dbSet(DB_KEYS.skus,fixed));
     }
     audit('sku_delete',`${label} deleted`);
     toast(`✓ ${esc(label)} deleted from database`,'green');
   }catch(e){
+    _localDeletedIds.delete(id);
     skuDB.push(s);renderSKUs();renderBrands();updateAlerts();
     toast(`Delete failed: ${e.message}`,'red');
   }
@@ -3578,9 +3631,9 @@ async function archiveSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   const label=s.sku||s.styleId||id;
   s.archived=true;
-  // Auto-add STOCK OUT tag
   if(!s.tags) s.tags=[];
   if(!s.tags.includes('STOCK OUT')) s.tags.push('STOCK OUT');
+  _localChangedIds.add(id);
   invalidateCalcCache();
   try{
     await save('skus',{immediate:true});
@@ -3599,8 +3652,8 @@ async function unarchiveSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   const label=s.sku||s.styleId||id;
   s.archived=false;
-  // Auto-remove STOCK OUT tag
   if(s.tags) s.tags=s.tags.filter(t=>t!=='STOCK OUT');
+  _localChangedIds.add(id);
   invalidateCalcCache();
   try{
     await save('skus',{immediate:true});
@@ -7297,7 +7350,27 @@ async function handleRealtimeUpdate(key, newValue){
 function applyRealtimeData(type, value){
   try{
     switch(type){
-      case 'skus': skuDB=value; return true;
+      case 'skus':
+        // Merge: keep our local uncommitted changes, incorporate other user's changes
+        if(Array.isArray(value)){
+          const incomingMap=new Map(value.map(s=>[s.id,s]));
+          const localMap=new Map(skuDB.map(s=>[s.id,s]));
+          const merged=[];
+          // Keep our locally changed/added SKUs as-is
+          for(const s of skuDB){
+            if(_localChangedIds.has(s.id)||_localAddedIds.has(s.id)){
+              merged.push(s); // our change wins
+            } else {
+              merged.push(incomingMap.get(s.id)||s); // use incoming version
+            }
+          }
+          // Add SKUs from incoming that we don't have (other user added)
+          for(const[id,s]of incomingMap){
+            if(!localMap.has(id)&&!_localDeletedIds.has(id)) merged.push(s);
+          }
+          skuDB=merged;
+        } else { skuDB=value; }
+        return true;
       case 'brands': brands=value; return true;
       case 'users': users=value; applyDefaultUsers(); return true;
       case 'thresholds': THRESHOLDS=value; return true;
