@@ -1039,7 +1039,7 @@ body:has(#login-screen.active){overflow:hidden}
     <div class="tab tamz-t" onclick="switchCommTab('amazon',this)"><span class="tdot" style="background:var(--amz)"></span>Amazon (Fixed %)</div>
   </div>
   <div id="comm-myntra">
-    <div class="success mb12">Myntra charges by <strong>category + selling price slab</strong>. Set the <strong>level</strong> per category for logistics, edit commission cells, and Save.</div>
+    <div class="success mb12">Myntra charges by <strong>category + seller price slab</strong>. Set the <strong>level</strong> per category for logistics, edit commission cells, and Save.</div>
     <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Commission % — Category × Price Slab × Level</div><div class="flex gap8"><button class="btn bg bsm" onclick="openAddCategoryModal()">+ Add Category</button><button class="btn bp bsm" onclick="saveComm()">✓ Save & Apply</button></div></div>
     <div style="padding:0;overflow-x:auto"><table class="comm-table" id="comm-myntra-table"></table></div></div>
   </div>
@@ -1187,7 +1187,7 @@ body:has(#login-screen.active){overflow:hidden}
         <col style="width:75px"><!-- Markup -->
         <col style="width:88px"><!-- MRP -->
         <col style="width:80px"><!-- Discount -->
-        <col style="width:95px"><!-- Selling Price -->
+        <col style="width:95px"><!-- Seller Price -->
         <col style="width:95px"><!-- Customer Paid -->
         <col style="width:88px"><!-- Net Profit -->
         <col style="width:88px"><!-- If Delivered -->
@@ -1204,7 +1204,7 @@ body:has(#login-screen.active){overflow:hidden}
         <th class="sortable" onclick="sortSKUs('markup')" data-sort="markup">Markup % <span class="sort-arrow" id="sort-markup"></span></th>
         <th class="sortable" onclick="sortSKUs('mrp')" data-sort="mrp">MRP <span class="sort-arrow" id="sort-mrp"></span></th>
         <th class="sortable" onclick="sortSKUs('discount')" data-sort="discount">Discount % <span class="sort-arrow" id="sort-discount"></span></th>
-        <th class="sortable" onclick="sortSKUs('sp')" data-sort="sp">Selling Price <span class="sort-arrow" id="sort-sp"></span></th>
+        <th class="sortable" onclick="sortSKUs('sp')" data-sort="sp">Seller Price <span class="sort-arrow" id="sort-sp"></span></th>
         <th class="sortable" onclick="sortSKUs('custPaid')" data-sort="custPaid">Cust. Paid <span class="sort-arrow" id="sort-custPaid"></span></th>
         <th class="sortable" onclick="sortSKUs('profit')" data-sort="profit">Net Profit <span class="sort-arrow" id="sort-profit"></span></th>
         <th class="sortable" onclick="sortSKUs('ifDelivered')" data-sort="ifDelivered">If Delivered <span class="sort-arrow" id="sort-ifDelivered"></span></th>
@@ -3046,7 +3046,7 @@ function renderPricingIntel(){
   const active=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold);
   const calcs=active.map(s=>({s,c:calcSKU(s),b:brands.find(b=>b.id===s.brandId)}));
 
-  // 1. GST Bracket Analysis — based on Customer Paid (not Selling Price)
+  // 1. GST Bracket Analysis — based on Customer Paid (not Seller Price)
   const gst5=calcs.filter(({c})=>c.custPaid<2500);
   const gst18=calcs.filter(({c})=>c.custPaid>=2500);
   const nearThreshold=calcs.filter(({c})=>c.custPaid>=2200&&c.custPaid<=2800).sort((a,b)=>a.c.custPaid-b.c.custPaid);
