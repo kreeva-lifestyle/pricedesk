@@ -1884,30 +1884,70 @@ async function dbLoadAllSKUs(){
   const db=getDB();if(!db)return null;
   // Try pd_skus_v2 table first
   try{
-    const{data,error}=await db.from('pd_skus_v2').select('*');
-    if(!error&&data&&data.length>0){
-      _useSkuTable=true;
-      return data.map(_rowToSku);
-    }
-    if(!error&&data&&data.length===0){
-      // Table exists but empty — check if we need to migrate from blob
-      const blob=await dbGet(DB_KEYS.skus);
-      if(blob&&Array.isArray(blob)&&blob.length>0){
-        console.log(`Migrating ${blob.length} SKUs from JSON blob to pd_skus_v2...`);
-        const rows=blob.map(s=>_skuToRow(s));
-        // Batch insert in chunks of 50
-        for(let i=0;i<rows.length;i+=50){
-          const chunk=rows.slice(i,i+50);
-          const{error:uErr}=await db.from('pd_skus_v2').upsert(chunk,{onConflict:'id'});
-          if(uErr){console.warn('Migration chunk failed:',uErr.message);break;}
-        }
-        _useSkuTable=true;
-        console.log('✓ Migration complete');
-        return blob;
+    // Get count first to know if table exists and has data
+    const{count:tableCount,error:cErr}=await db.from('pd_skus_v2').select('id',{count:'exact',head:true});
+    if(cErr)throw cErr;
+
+    if(tableCount>0){
+      // Fetch ALL rows in pages of 1000 (Supabase hard limit per request)
+      let allRows=[];
+      for(let from=0;;from+=1000){
+        const{data,error}=await db.from('pd_skus_v2').select('*').range(from,from+999);
+        if(error)throw error;
+        if(!data||data.length===0)break;
+        allRows.push(...data);
+        if(data.length<1000)break; // last page
       }
       _useSkuTable=true;
-      return [];
+      console.log(`Loaded ${allRows.length} SKUs from pd_skus_v2 (table has ${tableCount})`);
+      const loaded=allRows.map(_rowToSku);
+
+      // Compare against blob — re-migrate any missing SKUs
+      const blob=await dbGet(DB_KEYS.skus);
+      if(blob&&Array.isArray(blob)&&blob.length>loaded.length){
+        const tableIds=new Set(loaded.map(s=>s.id));
+        const missing=blob.filter(s=>!tableIds.has(s.id));
+        if(missing.length){
+          console.warn(`Table has ${loaded.length} but blob has ${blob.length} — re-migrating ${missing.length} missing SKUs...`);
+          toast(`Restoring ${missing.length} missing SKUs...`,'blue');
+          const rows=missing.map(s=>_skuToRow(s));
+          let migrated=0;
+          for(let i=0;i<rows.length;i+=200){
+            const chunk=rows.slice(i,i+200);
+            const{error:uErr}=await db.from('pd_skus_v2').upsert(chunk,{onConflict:'id'});
+            if(uErr){console.warn('Re-migration chunk failed:',uErr.message);continue;}
+            migrated+=chunk.length;
+            if(migrated%1000===0) console.log(`  ...migrated ${migrated}/${missing.length}`);
+          }
+          console.log(`✓ Re-migrated ${migrated} missing SKUs`);
+          toast(`✓ Restored ${migrated} SKUs to database`,'green');
+          loaded.push(...missing);
+        }
+      }
+      return loaded;
     }
+
+    // Table exists but empty — full migration from blob
+    const blob=await dbGet(DB_KEYS.skus);
+    if(blob&&Array.isArray(blob)&&blob.length>0){
+      console.log(`Migrating ${blob.length} SKUs from JSON blob to pd_skus_v2...`);
+      toast(`Migrating ${blob.length} SKUs to new database — please wait...`,'blue');
+      const rows=blob.map(s=>_skuToRow(s));
+      let migrated=0;
+      for(let i=0;i<rows.length;i+=200){
+        const chunk=rows.slice(i,i+200);
+        const{error:uErr}=await db.from('pd_skus_v2').upsert(chunk,{onConflict:'id'});
+        if(uErr){console.warn('Migration chunk failed:',uErr.message);continue;}
+        migrated+=chunk.length;
+        if(migrated%1000===0) console.log(`  ...migrated ${migrated}/${rows.length}`);
+      }
+      _useSkuTable=true;
+      console.log(`✓ Migration complete — ${migrated} of ${blob.length} SKUs`);
+      toast(`✓ Migration complete — ${migrated} SKUs`,'green');
+      return blob;
+    }
+    _useSkuTable=true;
+    return [];
   }catch(e){console.warn('pd_skus_v2 not available:',e.message);}
   // Fallback: load from JSON blob
   _useSkuTable=false;
