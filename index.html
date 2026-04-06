@@ -1855,7 +1855,7 @@ async function dbSaveSKU(...skus){
     if(error)throw new Error(error.message);
     updateSyncBadge(true);
     // Notify sync
-    db.from('pd_sync').upsert({key:'pd_skus_v2',updated_at:new Date().toISOString()},{onConflict:'key'}).catch(()=>{});
+    db.from('pd_sync').upsert({key:'pd_skus_v2',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
   } else {
     // Fallback: JSON blob
     const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
@@ -1872,7 +1872,7 @@ async function dbDeleteSKU(id){
     const{error}=await db.from('pd_skus_v2').delete().eq('id',id);
     if(error)throw new Error(error.message);
     updateSyncBadge(true);
-    db.from('pd_sync').upsert({key:'pd_skus_v2',updated_at:new Date().toISOString()},{onConflict:'key'}).catch(()=>{});
+    db.from('pd_sync').upsert({key:'pd_skus_v2',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
   } else {
     const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
     await _enqueueWrite(()=>dbSet(DB_KEYS.skus,val));
@@ -1968,7 +1968,7 @@ async function _doSaveSKUs(){
       if(error)throw new Error(error.message);
     }
     updateSyncBadge(true);
-    db.from('pd_sync').upsert({key:'pd_skus_v2',updated_at:new Date().toISOString()},{onConflict:'key'}).catch(()=>{});
+    db.from('pd_sync').upsert({key:'pd_skus_v2',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
   } else {
     const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
     await _enqueueWrite(()=>dbSet(DB_KEYS.skus,val));
