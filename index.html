@@ -1742,6 +1742,7 @@ CREATE TABLE IF NOT EXISTS pd_skus_v2 (
   archived          BOOLEAN DEFAULT false,
   tags              JSONB DEFAULT '[]'::jsonb,
   note              TEXT DEFAULT '',
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
   updated_at        TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE pd_skus_v2 ENABLE ROW LEVEL SECURITY;
@@ -1830,7 +1831,9 @@ function _skuToRow(s){
     level:s.level||'Level 2', cost:s.cost||0, markup:s.markup||0,
     discount:s.discount||0, ignore_threshold:!!s.ignoreThreshold,
     archived:!!s.archived, tags:s.tags||[],
-    note:s.note||'', updated_at:new Date().toISOString()
+    note:s.note||'',
+    created_at:s.createdAt||new Date().toISOString(),
+    updated_at:s.updatedAt||new Date().toISOString()
   };
 }
 function _rowToSku(r){
@@ -1840,7 +1843,8 @@ function _rowToSku(r){
     level:r.level||'Level 2', cost:r.cost||0, markup:r.markup||0,
     discount:r.discount||0, ignoreThreshold:!!r.ignore_threshold,
     archived:!!r.archived, tags:r.tags||[],
-    note:r.note||''
+    note:r.note||'',
+    createdAt:r.created_at||'', updatedAt:r.updated_at||''
   };
 }
 
@@ -2730,6 +2734,7 @@ function updateAlerts(){
 function toggleIgnore(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   s.ignoreThreshold=!s.ignoreThreshold;
+  s.updatedAt=new Date().toISOString();
   invalidateCalcCache();
   renderSKUs();updateAlerts();renderBreachList();renderBrands();
   dbSaveSKU(s).catch(e=>toast('Save failed: '+e.message,'red'));
@@ -3261,8 +3266,8 @@ function saveBrand(eid){
   const name=el('bn-name')?.value.trim();const mp=el('bn-mp')?.value;const model=el('bn-model')?.value;
   const commVal=el('bn-comm')?.value;const comm=commVal===''?null:parseFloat(commVal);
   if(!name){toast('Brand name required','red');return;}
-  if(eid){const b=brands.find(x=>x.id===eid);if(b)Object.assign(b,{name,marketplace:mp,model,commOverride:comm});audit('brand_edit',`${name} updated (${model})`);toast(`✓ ${name} updated`,'green');}
-  else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm});audit('brand_add',`${name} added (${model})`);toast(`✓ ${name} added`,'green');}
+  if(eid){const b=brands.find(x=>x.id===eid);if(b)Object.assign(b,{name,marketplace:mp,model,commOverride:comm,updatedAt:new Date().toISOString()});audit('brand_edit',`${name} updated (${model})`);toast(`✓ ${name} updated`,'green');}
+  else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});audit('brand_add',`${name} added (${model})`);toast(`✓ ${name} added`,'green');}
   closeModal();renderBrands();populateFilters();renderSKUs();save('brands');
 }
 async function deleteBrand(id){const b=brands.find(x=>x.id===id);if(!confirm('Delete brand? SKUs assigned to this brand will still exist.'))return false;brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();await save('brands');audit('brand_delete',`${b?.name||id} deleted`);toast('Brand deleted','red');return true;}
@@ -3692,7 +3697,7 @@ function saveNew(){
   const newSKUs=[];
   selectedBrands.forEach((brandId,i)=>{
     const ts=Date.now()+i;
-    const s={id:'s'+ts,sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,ignoreThreshold:false,archived:false};
+    const s={id:'s'+ts,sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,ignoreThreshold:false,archived:false,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
     skuDB.push(s);
     newSKUs.push(s);
     count++;
@@ -3726,7 +3731,7 @@ function saveEdit(id){
   if(s.cost!==cost)changed.push(`cost ₹${s.cost}→₹${cost}`);
   if(s.markup!==mkp)changed.push(`markup ${s.markup}→${mkp}%`);
   if(s.discount!==disc)changed.push(`disc ${s.discount}→${disc}%`);
-  Object.assign(s,{sku:skuCode,styleId:sid||'',brandId:el('e-brand')?.value,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc});
+  Object.assign(s,{sku:skuCode,styleId:sid||'',brandId:el('e-brand')?.value,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc,updatedAt:new Date().toISOString()});
 
   // Snapshot AFTER changes and record impact
   if(hasChange){
@@ -3763,6 +3768,7 @@ async function archiveSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   const label=s.sku||s.styleId||id;
   s.archived=true;
+  s.updatedAt=new Date().toISOString();
   if(!s.tags) s.tags=[];
   if(!s.tags.includes('STOCK OUT')) s.tags.push('STOCK OUT');
   invalidateCalcCache();
@@ -3783,6 +3789,7 @@ async function unarchiveSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   const label=s.sku||s.styleId||id;
   s.archived=false;
+  s.updatedAt=new Date().toISOString();
   if(s.tags) s.tags=s.tags.filter(t=>t!=='STOCK OUT');
   invalidateCalcCache();
   try{
@@ -3988,10 +3995,10 @@ async function saveUser(eid){
   if(!name){toast('Name required','red');return;}
   if(!email||!email.includes('@')){toast('Valid email required','red');return;}
   if(eid){
-    const u=users.find(x=>x.id===eid);if(u)Object.assign(u,{name,email,role});toast(`✓ ${name} updated`,'green');
+    const u=users.find(x=>x.id===eid);if(u)Object.assign(u,{name,email,role,updatedAt:new Date().toISOString()});toast(`✓ ${name} updated`,'green');
   } else {
     if(users.find(u=>u.email===email)){toast('Email already exists','red');return;}
-    users.push({id:'u'+Date.now(),name,email,role,added:new Date().toISOString().slice(0,10)});toast(`✓ ${name} added`,'green');
+    users.push({id:'u'+Date.now(),name,email,role,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});toast(`✓ ${name} added`,'green');
   }
   closeModal();renderUsers();await save('users');
   if(eid) audit('user_edit',`${name} (${email}) updated`);
@@ -6873,6 +6880,7 @@ function saveSkuTags(){
   const pending=document.getElementById('tag-new-input')?.value.replace(/,/g,'').trim();
   if(pending&&!_tagModalTags.includes(pending)) _tagModalTags.push(pending);
   s.tags=[..._tagModalTags];
+  s.updatedAt=new Date().toISOString();
   closeModal();dbSaveSKU(s).catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
   audit('tags_edit',`${s.sku||s.styleId}: tags=[${s.tags.join(',')}]`);
   toast('Tags saved','green');
@@ -6881,6 +6889,7 @@ function saveSkuTags(){
 function removeTagFromSku(skuId,tag){
   const s=skuDB.find(x=>x.id===skuId);if(!s||!s.tags)return;
   s.tags=s.tags.filter(t=>t!==tag);
+  s.updatedAt=new Date().toISOString();
   dbSaveSKU(s).catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
 }
 
