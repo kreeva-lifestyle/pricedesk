@@ -4881,16 +4881,21 @@ async function deleteBackup(date){
     return midnightIST.getTime()-nowIST.getTime();
   }
   function runAutoBackup(){
-    const lastAuto=localStorage.getItem('pd_last_auto_backup');
     const today=new Date().toISOString().slice(0,10);
-    if(lastAuto===today) return; // already ran today
-    if(typeof db!=='undefined'&&db){
+    // Check if today's backup already exists in DB (not localStorage)
+    const db=getDB();
+    if(!db){setTimeout(()=>{runAutoBackup();},24*60*60*1000);return;}
+    db.from('pd_backups').select('backup_date').eq('backup_date',today).then(({data})=>{
+      if(data&&data.length>0){
+        console.log('Auto-backup: today\'s backup already exists');
+        setTimeout(()=>{runAutoBackup();},24*60*60*1000);
+        return;
+      }
       createManualBackup().then(()=>{
-        localStorage.setItem('pd_last_auto_backup',today);
         console.log('✓ Auto-backup completed for',today);
       }).catch(e=>console.warn('Auto-backup failed:',e));
-    }
-    setTimeout(()=>{runAutoBackup();},24*60*60*1000); // schedule next day
+      setTimeout(()=>{runAutoBackup();},24*60*60*1000);
+    }).catch(()=>{setTimeout(()=>{runAutoBackup();},24*60*60*1000);});
   }
   const ms=msUntilMidnightIST();
   console.log(`Auto-backup scheduled in ${Math.round(ms/60000)} minutes (midnight IST)`);
