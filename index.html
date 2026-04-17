@@ -4402,12 +4402,12 @@ const TITLES={dashboard:'Dashboard',pricing:'Pricing Tables',thresholds:'Thresho
 function nav(p){
   document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
-  // Reliable match via data-page attribute (fixes Users + all nav items)
   const navEl=document.querySelector(`.nav-item[data-page="${p}"]`);
   if(navEl) navEl.classList.add('active');
   const pg=el('page-'+p);if(pg)pg.classList.add('active');
   el('pageTitle').textContent=TITLES[p]||p;
-  // Persist current page so refresh stays on same page
+  // Update URL hash for shareable links
+  if(location.hash!=='#/'+p) history.pushState(null,TITLES[p]||p,'#/'+p);
   try{sessionStorage.setItem('pd_current_page',p);}catch(e){}
   if(p==='pricing'){
     populateFilters();
@@ -4431,6 +4431,11 @@ function nav(p){
   if(p==='settings'){ loadConfig(); populateSettingsPage(); loadBackupList(); }
   if(p==='logistics'){ renderGTTable(); renderRetTable(); renderCollTable(); populateLogisticsInputs(); }
 }
+// Browser back/forward button support
+window.addEventListener('popstate',()=>{
+  const p=location.hash.replace('#/','');
+  if(p&&TITLES[p]) nav(p);
+});
 
 // ── Global Search ──────────────────────────────────────
 let _gsIdx=-1; // keyboard highlight index
@@ -7693,8 +7698,11 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     // Session valid — hide loading overlay
     document.getElementById('app-loading').style.display='none';
     // Restore last active page so refresh stays on same page
-    const lastPage=sessionStorage.getItem('pd_current_page');
+    // Restore page from URL hash or sessionStorage
+    const hashPage=location.hash.replace('#/','');
+    const lastPage=hashPage&&TITLES[hashPage]?hashPage:sessionStorage.getItem('pd_current_page');
     if(lastPage&&lastPage!=='dashboard'&&TITLES[lastPage]) nav(lastPage);
+    else nav('dashboard');
   }
   // Init EmailJS if configured
   if(EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY' && typeof emailjs !== 'undefined'){
