@@ -1084,7 +1084,7 @@ body:has(#login-screen.active){overflow:hidden}
       <div id="mfwd-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Rate (₹)</label><input class="fi" type="number" id="mfwd-fix" value="230"></div></div>
       <div style="margin-top:14px">
         <div style="margin-top:12px">
-          <div style="font-size:12px;font-weight:600;margin-bottom:8px">Collection Fee / Fixed Fee (₹) — by Category × Customer Paid</div>
+          <div style="font-size:12px;font-weight:600;margin-bottom:8px">Collection Fee / Fixed Fee (₹) — by Category × Seller Price</div>
           <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:560px" id="coll-table">
             <thead><tr>
               <th>Category</th><th>0–300</th><th>300–500</th><th>500–700</th><th>700–800</th><th>800–1000</th><th>1000–2000</th><th style="color:var(--ac)">&gt;2000 ★</th>
@@ -2101,7 +2101,7 @@ async function loadFromStorage(){
             // Ensure collFee is always a lookup (not formula)
             if(row.var==='collFee'&&row.t!=='lookup'){
               row.t='lookup';row.fn='collFee';
-              row.desc='Collection fee by category × customer paid price band';
+              row.desc='Collection fee by category × seller price band';
             }
           }
         }
@@ -2116,7 +2116,7 @@ async function loadFromStorage(){
         // v8: ensure collFee uses lookup type
         if(Array.isArray(WF.myntra)){
           const collRow=WF.myntra.find(r=>r.var==='collFee');
-          if(collRow){collRow.t='lookup';collRow.fn='collFee';collRow.desc='Collection fee by category × customer paid price band';}
+          if(collRow){collRow.t='lookup';collRow.fn='collFee';collRow.desc='Collection fee by category × seller price band';}
         }
         // PPMP and CC stay as code defaults (new formula)
         WF._v = WF_VERSION;
@@ -2321,9 +2321,9 @@ function getMynFwd(level, sp){
   return slabs[6];
 }
 function getMynRet(level){return REVERSE_FEES[level]||218;}
-function getMynColl(cat, custPaid){
+function getMynColl(cat, sellerPrice){
   const slabs=COLL_FEE_DATA[cat]||[15,17,27,27,27,45,61];
-  const p=custPaid||0;
+  const p=sellerPrice||0;
   if(p<=300) return slabs[0];
   if(p<=500) return slabs[1];
   if(p<=700) return slabs[2];
@@ -4081,7 +4081,7 @@ const WF={myntra:[
   {id:7.1, t:'lookup',  l:'COMMISION %',                               fn:'commPct', var:'commPct', locked:true, fmt:'%', desc:'Auto-fetched from category and level', pct:true},
   {id:7.4, t:'formula', l:'COMMISION(AMT)',                             expr:'sellerPrice * commPct/100', var:'commAmt', sign:-1, desc:'Seller Price x Commission %'},
   {id:8.1, t:'lookup',  l:'REVERSE FEES',                              fn:'retFee', var:'retFee', locked:true, sign:-1, desc:'Auto-fetched from level'},
-  {id:8.2, t:'lookup',  l:'FIX FEES',                                  fn:'collFee', var:'collFee', locked:true, sign:-1, desc:'Collection fee by category × customer paid price band'},
+  {id:8.2, t:'lookup',  l:'FIX FEES',                                  fn:'collFee', var:'collFee', locked:true, sign:-1, desc:'Collection fee by category × seller price band'},
   {id:8.3, t:'formula', l:'TAX ON LOGISTIC',                           expr:'(retFee + collFee) * 0.18', var:'taxOnLogistic', sign:-1, desc:'18% tax on Reverse + Fix Fees', pct:true},
   {id:8.4, t:'formula', l:'REVERSE, FF, REVERSE TAX',                  expr:'retFee + collFee + taxOnLogistic', var:'totalLogistic', sign:-1, desc:'Reverse Fees + Fix Fees + Tax on Logistic'},
   {id:9.1, t:'formula', l:'EXPECTED PAYMENT',                          expr:'sellerPrice - tcs - tds - commAmt - totalLogistic', var:'expectedPayment', desc:'SP - TCS - TDS - Commission - Total Logistic'},
@@ -4377,7 +4377,7 @@ function addWFPreset(preset){
     gt_fwd:  {t:'lookup',  l:'GT Forward Charges — auto from price band table', var:'gtCharge',  fn:'gtCharge',  locked:true, desc:'Fetched from Logistics → GT Charges table based on Customer Paid price band'},
     rev_fee: {t:'lookup',  l:'Reverse Shipping — auto from level table',         var:'retFee',    fn:'retFee',    locked:true, desc:'Fetched from Logistics → Reverse Fees table based on level'},
     comm:    {t:'lookup',  l:'Commission % — auto from category slab',           var:'commPct',   fn:'commPct',   locked:true, desc:'Fetched from Commission Settings based on category × price slab'},
-    coll_fee:{t:'lookup',  l:'Collection Fee — auto by category × price band',   var:'collFee',   fn:'collFee',   locked:true, desc:'Looked up from category × customer paid price band (Logistics page)'},
+    coll_fee:{t:'lookup',  l:'Collection Fee — auto by category × price band',   var:'collFee',   fn:'collFee',   locked:true, desc:'Looked up from category × seller price band (Logistics page)'},
     // Other
     pkg:     {t:'input',   l:'Packaging Cost (₹)',    var:'packagingCost'},
     ads:     {t:'input',   l:'Ad Spend (₹)',           var:'adSpend'},
@@ -6064,7 +6064,7 @@ const WF_LOOKUPS = {
     return 0;
   },
   collFee:   ctx => {
-    if(ctx._mp==='myntra') return getMynColl(ctx.cat||'Kurta Sets', ctx.custPaid||0);
+    if(ctx._mp==='myntra') return getMynColl(ctx.cat||'Kurta Sets', ctx.sellerPrice||ctx.sp||0);
     return 0;
   },
   pgFee:     () => LOGISTICS_SETTINGS.myn_pg_fee||50.22,
@@ -6154,7 +6154,7 @@ function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){
   const tcs      = result.tcs      ?? taxableAmt*0.001;
   const tds      = result.tds      ?? taxableAmt*0.005;
   const ret      = result.retFee   ?? REVERSE_FEES[level] ?? 218;
-  const coll     = result.collFee  ?? getMynColl(cat, custPaid);
+  const coll     = result.collFee  ?? getMynColl(cat, sellerPrice);
   const pg       = result.pgFee    ?? LOGISTICS_SETTINGS.myn_pg_fee ?? 50.22;
   const retProv  = result.retProv  ?? 0;
   const payout   = result.expectedPayment ?? result.payout ?? (sellerPrice-commAmt-gstAmt-ret-coll-pg-retProv-tcs-tds);
