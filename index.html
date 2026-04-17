@@ -1835,16 +1835,16 @@ function debouncedSaveSKUs(){
 let _useSkuTable=false; // set to true after successful table detection
 
 function _skuToRow(s){
-  return{
+  const row={
     id:s.id, sku:s.sku||null, style_id:s.styleId||null,
     brand_id:s.brandId||null, category:s.category||null,
     level:s.level||'Level 2', cost:s.cost||0, markup:s.markup||0,
     discount:s.discount||0, ignore_threshold:!!s.ignoreThreshold,
     archived:!!s.archived, tags:s.tags||[],
     note:s.note||'',
-    created_at:s.createdAt||new Date().toISOString(),
     updated_at:s.updatedAt||new Date().toISOString()
   };
+  return row;
 }
 function _rowToSku(r){
   return{
@@ -1854,7 +1854,7 @@ function _rowToSku(r){
     discount:r.discount||0, ignoreThreshold:!!r.ignore_threshold,
     archived:!!r.archived, tags:r.tags||[],
     note:r.note||'',
-    createdAt:r.created_at||'', updatedAt:r.updated_at||''
+    updatedAt:r.updated_at||''
   };
 }
 
