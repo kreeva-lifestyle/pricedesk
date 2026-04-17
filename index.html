@@ -1083,21 +1083,23 @@ body:has(#login-screen.active){overflow:hidden}
       </div>
       <div id="mfwd-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Rate (₹)</label><input class="fi" type="number" id="mfwd-fix" value="230"></div></div>
       <div style="margin-top:14px">
-        <div style="margin-top:12px">
-          <div style="font-size:12px;font-weight:600;margin-bottom:8px">Collection Fee / Fixed Fee (₹) — by Category × Seller Price</div>
-          <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:560px" id="coll-table">
-            <thead><tr>
-              <th>Category</th><th>0–300</th><th>300–500</th><th>500–700</th><th>700–800</th><th>800–1000</th><th>1000–2000</th><th style="color:var(--ac)">&gt;2000 ★</th>
-            </tr></thead>
-            <tbody id="coll-table-body"></tbody>
-          </table></div>
-          <div class="st" style="margin-top:6px">★ Most common slab. Fee × 1.18 (incl. GST) is deducted from payout. Values editable.</div>
-          <button class="btn bp bsm" style="margin-top:8px" onclick="saveCollFees()">✓ Save Collection Fees</button>
-        </div>
         <div class="fg"><label class="fl">Payment Gateway (₹)</label><input class="fi" type="number" id="myn-pg" value="50.22"></div>
       </div>
     </div></div>
-    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">🔴 Return (Reverse Fees)</div></div><div class="cb">
+
+    <!-- Collection Fee / Fixed Fee — separate card -->
+    <div class="card" style="margin-top:16px"><div class="ch"><div style="font-size:13px;font-weight:600">💰 Collection Fee / Fixed Fee</div><div class="st">By Category × Seller Price slab</div></div><div class="cb">
+      <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:560px" id="coll-table">
+        <thead><tr>
+          <th>Category</th><th>0–300</th><th>300–500</th><th>500–700</th><th>700–800</th><th>800–1000</th><th>1000–2000</th><th style="color:var(--ac)">&gt;2000 ★</th>
+        </tr></thead>
+        <tbody id="coll-table-body"></tbody>
+      </table></div>
+      <div class="st" style="margin-top:6px">★ Most common slab. Fee × 1.18 (incl. GST) is deducted from payout.</div>
+      <button class="btn bp bsm" style="margin-top:10px" onclick="saveCollFees()">✓ Save Collection Fees</button>
+    </div></div>
+
+    <div class="card" style="margin-top:16px"><div class="ch"><div style="font-size:13px;font-weight:600">🔴 Return (Reverse Fees)</div></div><div class="cb">
       <div class="fg"><label class="fl">Mode</label><div class="flex gap12">
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="level" checked style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Level-based</label>
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Fixed</label>
