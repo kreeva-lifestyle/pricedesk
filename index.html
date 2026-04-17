@@ -2082,7 +2082,7 @@ async function loadFromStorage(){
       if(loaded.logistics.collFees) COLL_FEE_DATA       = loaded.logistics.collFees;
     }
     if(loaded.wireframe){
-      const WF_VERSION = 7; // Increment when wireframe structure changes
+      const WF_VERSION = 8; // v8: collection fee lookup by category × price band
       const PPMP_CC_VERSION = 6; // v6: new Ajio PPMP/CC formulas
       if(loaded.wireframe._v === WF_VERSION){
         // Same version — load all from saved data
@@ -2098,6 +2098,11 @@ async function loadFromStorage(){
                 row.defaultVal = row.defaultVal || 60;
               }
             }
+            // Ensure collFee is always a lookup (not formula)
+            if(row.var==='collFee'&&row.t!=='lookup'){
+              row.t='lookup';row.fn='collFee';
+              row.desc='Collection fee by category × customer paid price band';
+            }
           }
         }
       } else {
@@ -2107,6 +2112,11 @@ async function loadFromStorage(){
         // v7: ensure Gross Settlement row exists in Myntra wireframe
         if(Array.isArray(WF.myntra) && !WF.myntra.find(r=>r.var==='grossSettlement')){
           WF.myntra.push({id:10.2,t:'output',l:'GROSS SETTLEMENT',expr:'sellerPrice - commAmt - (collFee * 1.18)',var:'grossSettlement',desc:'Seller Price - Commission(AMT) - (Fix Fees + 18%)'});
+        }
+        // v8: ensure collFee uses lookup type
+        if(Array.isArray(WF.myntra)){
+          const collRow=WF.myntra.find(r=>r.var==='collFee');
+          if(collRow){collRow.t='lookup';collRow.fn='collFee';collRow.desc='Collection fee by category × customer paid price band';}
         }
         // PPMP and CC stay as code defaults (new formula)
         WF._v = WF_VERSION;
