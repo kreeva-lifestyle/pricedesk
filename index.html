@@ -3528,7 +3528,7 @@ function renderSKUs(){
       <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}${brand&&brand.model==='myntra'&&s.styleId?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:rgba(255,63,108,.12);color:var(--mn);font-size:11px;text-decoration:none;vertical-align:middle;margin-left:4px">↗</a>`:''}</td>
       <td><span class="tag tb" style="font-size:10px;white-space:nowrap">${esc(s.category)}</span></td>
       <td><div style="font-size:11px;font-weight:600;color:var(--tx)">${esc(brand?.name||'—')}</div><div style="font-size:9px;color:var(--ac);margin-top:1px">${({'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'})[brand?.model]||''}</div></td>
-      <td style="line-height:1.6">${!s.styleId?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
+      <td style="line-height:1.6">${!s.styleId&&brand&&brand.model==='myntra'?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
       <td class="mono">₹${Math.round(c.mrp).toLocaleString('en-IN')}</td>
@@ -6866,7 +6866,8 @@ function renderSKUPagination(total){
 const AUTO_TAGS=['No Style ID','STOCK OUT'];
 function getAutoTags(s){
   const at=[];
-  if(!s.styleId) at.push('No Style ID');
+  const brand=brands.find(b=>b.id===s.brandId);
+  if(!s.styleId&&brand&&brand.model==='myntra') at.push('No Style ID');
   if(s.archived) at.push('STOCK OUT');
   return at;
 }
