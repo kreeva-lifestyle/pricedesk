@@ -2656,9 +2656,9 @@ async function deleteCategory(cat){
     affected.forEach(s=>{s.category=fallback;s.level=CAT_LEVEL[fallback]||'Level 2';});
     if(affected.length) await dbSaveSKU(...affected);
   }
-  delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];
+  delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];delete COLL_FEE_DATA[cat];
   for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
-  buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
+  invalidateCalcCache();buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
   audit('category_delete',`Category "${cat}" deleted${usedCount?` (${usedCount} SKUs moved to ${CATS[0]})`:''}`);
   toast(`"${cat}" removed — `,`red`);
   // Show reinstate toast
@@ -3704,7 +3704,11 @@ function toggleSkuMenu(event,id){
 function hideSkuMenus(){document.querySelectorAll('.sku-menu').forEach(m=>m.style.display='none');}
 document.addEventListener('click',hideSkuMenus);
 
-function startEdit(id){editId=id;renderSKUs();setTimeout(()=>el('e-sid')?.focus(),50);}
+function startEdit(id){
+  const s=skuDB.find(x=>x.id===id);
+  if(s&&s.archived){toast('Cannot edit archived SKU — restore it first','red');return;}
+  editId=id;renderSKUs();setTimeout(()=>el('e-sid')?.focus(),50);
+}
 function cancelEdit(){editId=null;renderSKUs();}
 
 
@@ -5890,7 +5894,7 @@ function renderGTTable(){
     const vals = GT_DATA[lvl] || [0,1,0,0,0,0,0];
     return `<tr>${['<td><div class="flex gap8"><strong>'+esc(lvl)+`</strong><button class="btn br bxs" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td>`,
       ...vals.map((v,i) => `<td><input class="ci" style="width:58px;${i===6?'border-color:var(--ac)':''}"
-        value="${v}" oninput="GT_DATA['${escAttr(lvl)}'][${i}]=+this.value">`+'</td>')
+        value="${v}" oninput="GT_DATA['${escAttr(lvl)}'][${i}]=+this.value;invalidateCalcCache()">`+'</td>')
     ].join('')}</tr>`;
   }).join('');
 }
@@ -5902,7 +5906,7 @@ function renderRetTable(){
     const v = REVERSE_FEES[lvl] || 0;
     return `<tr><td><strong>${esc(lvl)}</strong></td>
       <td><input class="ci" style="width:80px" value="${v}"
-        oninput="REVERSE_FEES['${escAttr(lvl)}']=+this.value"></td>
+        oninput="REVERSE_FEES['${escAttr(lvl)}']=+this.value;invalidateCalcCache()"></td>
       <td class="st">Half: ₹${(v/2).toFixed(1)}</td></tr>`;
   }).join('');
 }
@@ -5914,7 +5918,7 @@ function renderCollTable(){
     // Ensure COLL_FEE_DATA has this category
     if(!COLL_FEE_DATA[cat]) COLL_FEE_DATA[cat]=[...vals];
     return`<tr><td style="white-space:nowrap"><strong style="font-size:11px">${esc(cat)}</strong></td>${
-      vals.map((v,i)=>`<td><input class="ci" style="width:48px;${i===6?'border-color:var(--ac)':''}" value="${v}" oninput="COLL_FEE_DATA['${escAttr(cat)}'][${i}]=+this.value"></td>`).join('')
+      vals.map((v,i)=>`<td><input class="ci" style="width:48px;${i===6?'border-color:var(--ac)':''}" value="${v}" oninput="COLL_FEE_DATA['${escAttr(cat)}'][${i}]=+this.value;invalidateCalcCache()"></td>`).join('')
     }</tr>`;
   }).join('');
 }
@@ -7459,13 +7463,15 @@ function applyUserPrefs(){
 // (tiny rows: key + timestamp). When a change is detected, we fetch
 // the full data from app_data — instant notifications, zero WAL bloat.
 let _realtimeChannel = null;
+let _pollInterval = null;
 
 function setupRealtime(){
   const db = getDB();
   if(!db || !db.channel){
     console.warn('Realtime not available');
     // Fallback to polling if Realtime unavailable
-    setInterval(_pollForChanges, 30000);
+    if(_pollInterval) clearInterval(_pollInterval);
+    _pollInterval = setInterval(_pollForChanges, 30000);
     return;
   }
   if(_realtimeChannel){
