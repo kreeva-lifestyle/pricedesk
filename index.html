@@ -5404,7 +5404,7 @@ async function validateSessionToken(userId, localToken){
     const valid=remote.token === localToken;
     _sessionCache={val:valid,ts:Date.now()};
     return valid;
-  } catch(e){ return true; }
+  } catch(e){ console.warn('Session validation failed (allowing access):', e.message); return true; }
 }
 
 function startSessionCheck(){
@@ -7672,67 +7672,81 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   // Check table exists before loading
   const tableOk = await ensureTable();
   if(!tableOk){ console.warn('app_data table missing — showing setup guide'); }
-  await loadFromStorage();
-  // Load user prefs first (needed for page size), then mark data ready
-  await loadUserPrefs();
-  _dataReady=true;
-  applyUserPrefs();
-  // Auto-archive SKUs tagged "STOCK OUT" that aren't archived yet
-  const stockOutToArchive=skuDB.filter(s=>!s.archived&&s.tags&&s.tags.includes('STOCK OUT'));
-  if(stockOutToArchive.length){
-    stockOutToArchive.forEach(s=>{s.archived=true;});
-    invalidateCalcCache();
-    console.log(`Auto-archiving ${stockOutToArchive.length} SKUs tagged STOCK OUT...`);
-    try{
-      await _doSaveSKUs();
-      console.log('✓ STOCK OUT auto-archive saved');
-    }catch(e){console.warn('Auto-archive save failed:',e);}
+
+  // Check for password reset link first
+  const urlParams = new URLSearchParams(window.location.search);
+  let resetToken = urlParams.get('reset');
+  if(!resetToken && window.location.hash.startsWith('#reset=')){
+    resetToken = window.location.hash.slice(7);
   }
-  // Defer non-critical data load (audit log, import log, history) to after UI renders
+  if(resetToken){
+    console.log('Reset token detected:', resetToken.slice(0,8)+'…');
+    await loadFromStorage();
+    document.getElementById('app-loading').style.display='none';
+    document.getElementById('login-screen').classList.remove('active');
+    showResetPasswordPage(resetToken);
+  } else if(!(await checkSession())){
+    // Session invalid — show login BEFORE loading any data
+    document.getElementById('app-loading').style.display='none';
+    document.getElementById('login-screen').classList.add('active');
+    // Still load data in background (needed for login to work — users array)
+    await loadFromStorage();
+  } else {
+    // Session valid — load data, then show app
+    document.getElementById('app-loading').querySelector('div')?.setAttribute('style','font-size:13px;color:var(--tx3);margin-top:8px');
+    const loadingMsg=document.getElementById('app-loading').querySelector('div')||document.getElementById('app-loading');
+    const setLoadMsg=(msg)=>{if(loadingMsg)loadingMsg.textContent=msg;};
+
+    setLoadMsg('Loading SKUs...');
+    await loadFromStorage();
+
+    setLoadMsg('Loading preferences...');
+    await loadUserPrefs();
+    applyUserPrefs();
+
+    // Auto-archive STOCK OUT SKUs BEFORE marking data ready
+    const stockOutToArchive=skuDB.filter(s=>!s.archived&&s.tags&&s.tags.includes('STOCK OUT'));
+    if(stockOutToArchive.length){
+      setLoadMsg(`Archiving ${stockOutToArchive.length} out-of-stock SKUs...`);
+      stockOutToArchive.forEach(s=>{s.archived=true;});
+      invalidateCalcCache();
+      try{
+        await _doSaveSKUs();
+        console.log(`✓ Auto-archived ${stockOutToArchive.length} STOCK OUT SKUs`);
+      }catch(e){console.warn('Auto-archive save failed:',e);}
+    }
+
+    // NOW mark data ready — all migrations complete
+    _dataReady=true;
+
+    // Render UI
+    populateFilters();
+    populateTagFilter();
+    renderBrandSummary();
+    renderWFPreviews();
+    updateAlerts();
+    renderUsers();
+    renderDashTasks();
+    renderGTTable();
+    renderRetTable();
+    renderCollTable();
+    populateLogisticsInputs();
+
+    // Hide loading, show app
+    document.getElementById('app-loading').style.display='none';
+    const hashPage=location.hash.replace('#/','');
+    const lastPage=hashPage&&TITLES[hashPage]?hashPage:sessionStorage.getItem('pd_current_page');
+    if(lastPage&&lastPage!=='dashboard'&&TITLES[lastPage]) nav(lastPage);
+    else nav('dashboard');
+  }
+
+  // Defer non-critical data loads
   setTimeout(async()=>{
     await loadSkuHistory();
     await loadTasks();
     await loadAuditLog();
     await loadImportLog();
   },100);
-  populateFilters();
-  populateTagFilter();
-  renderBrandSummary();
-  renderWFPreviews();
-  updateAlerts();
-  renderUsers();
-  renderDashTasks();
-  // Render editable tables (they use live data from GT_DATA / REVERSE_FEES)
-  renderGTTable();
-  renderRetTable();
-  renderCollTable();
-  populateLogisticsInputs();
-  // Check for password reset link (?reset=TOKEN or #reset=TOKEN)
-  const urlParams = new URLSearchParams(window.location.search);
-  let resetToken = urlParams.get('reset');
-  // Fallback: some email clients use hash instead of query
-  if(!resetToken && window.location.hash.startsWith('#reset=')){
-    resetToken = window.location.hash.slice(7);
-  }
-  if(resetToken){
-    // Hide login screen and show reset password form
-    console.log('Reset token detected:', resetToken.slice(0,8)+'…');
-    document.getElementById('login-screen').classList.remove('active');
-    showResetPasswordPage(resetToken);
-  } else if(!(await checkSession())){
-    // Session invalid — show login screen
-    document.getElementById('app-loading').style.display='none';
-    document.getElementById('login-screen').classList.add('active');
-  } else {
-    // Session valid — hide loading overlay
-    document.getElementById('app-loading').style.display='none';
-    // Restore last active page so refresh stays on same page
-    // Restore page from URL hash or sessionStorage
-    const hashPage=location.hash.replace('#/','');
-    const lastPage=hashPage&&TITLES[hashPage]?hashPage:sessionStorage.getItem('pd_current_page');
-    if(lastPage&&lastPage!=='dashboard'&&TITLES[lastPage]) nav(lastPage);
-    else nav('dashboard');
-  }
   // Init EmailJS if configured
   if(EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY' && typeof emailjs !== 'undefined'){
     emailjs.init(EMAIL_CONFIG.publicKey);
