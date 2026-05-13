@@ -4460,6 +4460,7 @@ function nav(p){
 }
 // Browser back/forward button support
 window.addEventListener('popstate',()=>{
+  if(!currentUser) return; // don't navigate if logged out
   const p=location.hash.replace('#/','');
   if(p&&TITLES[p]) nav(p);
 });
@@ -5619,23 +5620,31 @@ async function doResetPassword(token){
 }
 
 async function doLogout(){
-  // Clear session token from DB before logging out
-  if(currentUser) await clearSessionToken(currentUser.id);
+  if(currentUser) await clearSessionToken(currentUser.id).catch(()=>{});
+  // Stop realtime sync
+  const db=getDB();
+  if(db&&_realtimeChannel){try{db.removeChannel(_realtimeChannel);}catch(e){}_realtimeChannel=null;}
+  if(_pollInterval){clearInterval(_pollInterval);_pollInterval=null;}
   _forceLogout();
 }
 
 function _forceLogout(){
   currentUser = null;
+  _dataReady = false;
+  _sessionCache = {val:null,ts:0};
   sessionStorage.removeItem(SESSION_KEY);
   clearTimeout(_sessionTimer);
   clearTimeout(_warnTimer);
   clearInterval(_countdownInterval);
   clearInterval(_sessionCheckTimer);
+  if(_skuSaveTimer){clearTimeout(_skuSaveTimer);_skuSaveTimer=null;}
   document.getElementById('session-warn').style.display='none';
   document.getElementById('login-screen').classList.add('active');
   document.getElementById('login-email').value='';
   document.getElementById('login-pass').value='';
   document.getElementById('login-err').style.display='none';
+  // Reset URL to root
+  history.replaceState(null,'',window.location.pathname);
 }
 
 function startSessionTimer(){
@@ -5720,8 +5729,7 @@ async function checkSession(){
     const sess = JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');
     if(sess && (Date.now()-sess.loginTime < SESSION_TIMEOUT)){
       const user = users.find(u=>u.id===sess.userId);
-      if(user){
-        // Validate session token against DB (single-device check)
+      if(user && !user.revoked){
         if(sess.sessionToken){
           const valid = await validateSessionToken(user.id, sess.sessionToken);
           if(!valid){
@@ -5730,15 +5738,13 @@ async function checkSession(){
           }
         }
         currentUser = user;
-        document.getElementById('login-screen').classList.remove('active');
-        const loadEl=document.getElementById('app-loading');if(loadEl)loadEl.style.display='none';
         updateSidebarUser(user);
         startSessionTimer();
         startSessionCheck();
         return true;
       }
     }
-  } catch(e){}
+  } catch(e){ console.warn('Session check error:', e.message); }
   return false;
 }
 
