@@ -5467,10 +5467,14 @@ async function doLogin(){
   startSessionCheck();
   if(isFirstLogin) sendWelcomeEmail(user);
   audit('login',`${user.name} logged in`);
-  setupRealtime(); // Start live sync
+  setupRealtime();
+  // Render UI after login (data was loaded during init)
+  invalidateCalcCache();
+  populateFilters();populateTagFilter();renderBrandSummary();updateAlerts();
+  renderGTTable();renderRetTable();renderCollTable();populateLogisticsInputs();
   // Navigate to user's preferred default page
   const defaultPage=getUserPref('defaultPage','dashboard');
-  if(defaultPage&&defaultPage!=='dashboard') nav(defaultPage);
+  nav(defaultPage||'dashboard');
   toast(`Welcome back, ${esc(user.name.split(' ')[0])}!`,'green');
   }finally{ _resetLoginBtn(); }
 }
@@ -7689,8 +7693,11 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     // Session invalid — show login BEFORE loading any data
     document.getElementById('app-loading').style.display='none';
     document.getElementById('login-screen').classList.add('active');
-    // Still load data in background (needed for login to work — users array)
+    // Load data in background (needed for login to work — users array)
     await loadFromStorage();
+    await loadUserPrefs();
+    applyUserPrefs();
+    _dataReady=true;
   } else {
     // Session valid — load data, then show app
     document.getElementById('app-loading').querySelector('div')?.setAttribute('style','font-size:13px;color:var(--tx3);margin-top:8px');
