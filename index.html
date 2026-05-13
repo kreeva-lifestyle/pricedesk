@@ -2074,17 +2074,17 @@ async function loadFromStorage(){
     loaded.skus = await dbLoadAllSKUs();
     // Batch 2: Core config (2-3 at a time max)
     const batch2a = ['brands','users','thresholds'];
-    const r2a = await Promise.all(batch2a.map(t => dbGet(DB_KEYS[t])));
+    const r2a = await Promise.all(batch2a.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
     batch2a.forEach((t,i) => { loaded[t] = r2a[i]; });
     const batch2b = ['categories','levels','cat_levels','alert'];
-    const r2b = await Promise.all(batch2b.map(t => dbGet(DB_KEYS[t])));
+    const r2b = await Promise.all(batch2b.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
     batch2b.forEach((t,i) => { loaded[t] = r2b[i]; });
     // Batch 3: Commission + logistics (2-3 at a time)
     const batch3a = ['comm_myntra','comm_ppmp','comm_cc'];
-    const r3a = await Promise.all(batch3a.map(t => dbGet(DB_KEYS[t])));
+    const r3a = await Promise.all(batch3a.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
     batch3a.forEach((t,i) => { loaded[t] = r3a[i]; });
     const batch3b = ['comm_amazon','logistics','wireframe','email_cfg'];
-    const r3b = await Promise.all(batch3b.map(t => dbGet(DB_KEYS[t])));
+    const r3b = await Promise.all(batch3b.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
     batch3b.forEach((t,i) => { loaded[t] = r3b[i]; });
 
     // Apply each type if data exists
@@ -2711,6 +2711,7 @@ async function _reinstateCategory(name){
 // THRESHOLD (in ₹)
 // ═══════════════════════════════════════════════════════
 function renderThresholds(){
+  invalidateCalcCache();
   const tl=el('thr-list');if(!tl)return;
   tl.innerHTML=CATS.map(cat=>{
     const breachedSKUs=skuDB.filter(s=>!s.archived&&s.category===cat&&!s.ignoreThreshold&&calcSKU(s).isBreach);
