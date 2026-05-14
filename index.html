@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PriceDesk">
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='96' fill='%230f1117'/><text x='256' y='380' font-size='320' text-anchor='middle' fill='%23f5a623' font-family='sans-serif' font-weight='bold'>₹</text></svg>">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230f1117'/%3E%3Crect x='4' y='4' width='92' height='92' rx='17' fill='none' stroke='%23f5a623' stroke-width='2' opacity='.4'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='%23f5a623' font-family='system-ui,sans-serif' font-weight='700'%3E₹%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='108' fill='%230f1117'/%3E%3Crect x='24' y='24' width='464' height='464' rx='88' fill='none' stroke='%23f5a623' stroke-width='3' opacity='.3'/%3E%3Ctext x='256' y='340' font-size='240' text-anchor='middle' fill='%23f5a623' font-family='system-ui,sans-serif' font-weight='700'%3E₹%3C/text%3E%3Ctext x='256' y='430' font-size='64' text-anchor='middle' fill='%23ffffff' font-family='system-ui,sans-serif' font-weight='600' opacity='.7'%3EPD%3C/text%3E%3C/svg%3E">
 <title>PriceDesk — Marketplace Pricing Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,7 +31,8 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .nav-item{display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;color:var(--tx2);font-size:13px;font-weight:500;transition:all .12s;border-left:3px solid transparent}
 .nav-item:hover{background:var(--s2);color:var(--tx)}
 .nav-item.active{background:var(--s2);color:var(--ac);border-left-color:var(--ac)}
-.ni{width:16px;text-align:center;font-size:13px;line-height:1;display:inline-block}
+.ni{width:16px;height:16px;text-align:center;font-size:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.ni svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .sb-btm{padding:14px 16px;border-top:1px solid var(--bd);margin-top:auto}
 .ava{width:28px;height:28px;border-radius:50%;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000;flex-shrink:0}
 .main{margin-left:230px;flex:1;display:flex;flex-direction:column;min-width:0}
@@ -853,25 +854,25 @@ body:has(#login-screen.active){overflow:hidden}
   <div class="logo"><div class="logo-text">PriceDesk</div><div class="logo-sub">Marketplace Pricing</div></div>
   <nav class="nav">
     <div class="nav-sec">Main</div>
-    <div class="nav-item active" data-page="dashboard" onclick="nav('dashboard')"><span class="ni">⊡</span> Dashboard</div>
-    <div class="nav-item" data-page="pricing" onclick="nav('pricing')"><span class="ni">◈</span> Pricing Tables</div>
-    <div class="nav-item" data-page="thresholds" onclick="nav('thresholds')"><span class="ni">△</span> Thresholds</div>
+    <div class="nav-item active" data-page="dashboard" onclick="nav('dashboard')"><span class="ni"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span> Dashboard</div>
+    <div class="nav-item" data-page="pricing" onclick="nav('pricing')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span> Pricing Tables</div>
+    <div class="nav-item" data-page="thresholds" onclick="nav('thresholds')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Thresholds</div>
     <div class="nav-sec">Configuration</div>
-    <div class="nav-item" data-page="brands" onclick="nav('brands')"><span class="ni">◎</span> Brands</div>
-    <div class="nav-item" data-page="commission" onclick="nav('commission')"><span class="ni">%</span> Commission Settings</div>
-    <div class="nav-item" data-page="logistics" onclick="nav('logistics')"><span class="ni">⇅</span> Logistics</div>
+    <div class="nav-item" data-page="brands" onclick="nav('brands')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span> Brands</div>
+    <div class="nav-item" data-page="commission" onclick="nav('commission')"><span class="ni"><svg viewBox="0 0 24 24"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span> Commission Settings</div>
+    <div class="nav-item" data-page="logistics" onclick="nav('logistics')"><span class="ni"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span> Logistics</div>
     <div class="nav-sec">Products</div>
-    <div class="nav-item" data-page="skus" onclick="nav('skus')"><span class="ni">⊟</span> SKUs</div>
-    <div class="nav-item" data-page="archive" onclick="nav('archive')"><span class="ni">▣</span> Archive <span id="nav-archive-count" style="margin-left:auto;font-size:10px;font-weight:600;background:rgba(245,87,92,.15);color:var(--re);border-radius:10px;padding:1px 7px;min-width:20px;text-align:center;display:none"></span></div>
+    <div class="nav-item" data-page="skus" onclick="nav('skus')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span> SKUs</div>
+    <div class="nav-item" data-page="archive" onclick="nav('archive')"><span class="ni"><svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg></span> Archive <span id="nav-archive-count" style="margin-left:auto;font-size:10px;font-weight:600;background:rgba(245,87,92,.15);color:var(--re);border-radius:10px;padding:1px 7px;min-width:20px;text-align:center;display:none"></span></div>
     <div class="nav-sec">Admin</div>
-    <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni">☰</span> Wireframe Builder</div>
-    <div class="nav-item" data-page="activity" onclick="nav('activity')"><span class="ni">▤</span> Activity Log</div>
-    <div class="nav-item" data-page="users" onclick="nav('users')"><span class="ni">◉</span> User Access</div>
-    <div class="nav-item" data-page="settings" onclick="nav('settings')"><span class="ni">⚙</span> App Settings</div>
+    <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span> Wireframe Builder</div>
+    <div class="nav-item" data-page="activity" onclick="nav('activity')"><span class="ni"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Activity Log</div>
+    <div class="nav-item" data-page="users" onclick="nav('users')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></span> User Access</div>
+    <div class="nav-item" data-page="settings" onclick="nav('settings')"><span class="ni"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span> App Settings</div>
   </nav>
   <div class="sb-btm">
     <div class="flex gap8" style="margin-bottom:10px"><div class="ava" id="sb-ava">A</div><div><div style="font-size:12px;color:var(--tx2)" id="sb-uname">Admin User</div><div style="font-size:10px;color:var(--tx3)" id="sb-role">Administrator</div></div></div>
-    <button onclick="doLogout()" style="width:100%;background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:5px;color:var(--re);font-size:12px;padding:7px 0;cursor:pointer;font-weight:600">⏏ Sign Out</button>
+    <button onclick="doLogout()" style="width:100%;background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:5px;color:var(--re);font-size:12px;padding:7px 0;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sign Out</button>
   </div>
 </div>
 
@@ -3627,9 +3628,9 @@ function renderSKUs(){
       <td>
         <div style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
           ${statusIcon}
-          <button class="btn bg bxs sku-act" onclick="showCalcModal('${escAttr(s.id)}')" title="View calculation">🧮<span class="act-label"> Calc</span></button>
-          <button class="btn bg bxs sku-act" onclick="showSkuHistoryModal('${escAttr(s.id)}')" title="Price history">📊<span class="act-label"> History</span></button>
-          <button class="btn bg bxs sku-act" onclick="openTagsModal('${escAttr(s.id)}')" title="Tags & notes">🏷<span class="act-label"> Tags</span></button>
+          <button class="btn bg bxs sku-act" onclick="showCalcModal('${escAttr(s.id)}')" title="View calculation"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="16" y2="18"/></svg><span class="act-label"> Calc</span></button>
+          <button class="btn bg bxs sku-act" onclick="showSkuHistoryModal('${escAttr(s.id)}')" title="Price history"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span class="act-label"> History</span></button>
+          <button class="btn bg bxs sku-act" onclick="openTagsModal('${escAttr(s.id)}')" title="Tags & notes"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg><span class="act-label"> Tags</span></button>
           <button class="btn bg bxs sku-act" onclick="toggleSkuMenu(event,'${escAttr(s.id)}')" title="More actions" style="font-weight:700">⋮</button>
         </div>
         <div class="sku-menu" id="sku-menu-${escAttr(s.id)}" style="display:none;position:absolute;right:10px;margin-top:-2px;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:50;min-width:140px;overflow:hidden">
@@ -7874,10 +7875,10 @@ function closeSidebar(){
 </script>
 
 <!-- AI Chat -->
-<button id="ai-chat-btn" onclick="toggleAIChat()" title="Ask PriceDesk AI">✦</button>
+<button id="ai-chat-btn" onclick="toggleAIChat()" title="Ask PriceDesk AI"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>
 <div id="ai-chat-panel">
   <div id="ai-chat-header">
-    <span style="font-size:18px">✦</span> PriceDesk AI
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> PriceDesk AI
     <span style="margin-left:auto;cursor:pointer;opacity:.7;font-size:18px" onclick="toggleAIChat()">×</span>
   </div>
   <div id="ai-chat-messages">
