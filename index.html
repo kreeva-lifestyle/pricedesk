@@ -1887,15 +1887,17 @@ async function dbSaveSKU(...skus){
   const db=getDB();if(!db)throw new Error('No DB');
   _lastWriteTs=Date.now();
   updateSyncBadge(false);
-  if(_useSkuTable){
-    const rows=skus.map(_skuToRow);
+  const rows=skus.map(_skuToRow);
+  // Always try table first, fall back to blob if table fails
+  try{
     const{error}=await db.from('pd_skus_v2').upsert(rows,{onConflict:'id'});
-    if(error)throw new Error(error.message);
+    if(error)throw error;
+    _useSkuTable=true;
     updateSyncBadge(true);
-    // Notify sync
+    console.log(`✓ Saved ${rows.length} SKU(s) to pd_skus_v2`);
     db.from('pd_sync').upsert({key:'pd_skus_v2',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
-  } else {
-    // Fallback: JSON blob
+  }catch(tableErr){
+    console.warn('Table save failed, using blob fallback:',tableErr.message||tableErr);
     const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
     await _enqueueWrite(()=>dbSet(DB_KEYS.skus,val));
   }
@@ -1906,12 +1908,15 @@ async function dbDeleteSKU(id){
   const db=getDB();if(!db)throw new Error('No DB');
   _lastWriteTs=Date.now();
   updateSyncBadge(false);
-  if(_useSkuTable){
+  try{
     const{error}=await db.from('pd_skus_v2').delete().eq('id',id);
-    if(error)throw new Error(error.message);
+    if(error)throw error;
+    _useSkuTable=true;
     updateSyncBadge(true);
+    console.log(`✓ Deleted SKU ${id} from pd_skus_v2`);
     db.from('pd_sync').upsert({key:'pd_skus_v2',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
-  } else {
+  }catch(tableErr){
+    console.warn('Table delete failed, using blob fallback:',tableErr.message||tableErr);
     const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
     await _enqueueWrite(()=>dbSet(DB_KEYS.skus,val));
   }
@@ -3781,7 +3786,7 @@ function saveNew(){
   toast(`✓ ${skuCode||sid||'SKU'} added — saving...`, 'green');
 }
 
-function saveEdit(id){
+async function saveEdit(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
   const skuCode=el('e-sku')?.value.trim()||'';
   const sid=el('e-sid')?.value.trim(),cost=parseFloat(el('e-cost')?.value)||0,mkp=parseFloat(el('e-mkp')?.value)||0,disc=parseFloat(el('e-disc')?.value)||0;
@@ -3814,11 +3819,15 @@ function saveEdit(id){
     trackSkuSnapshot(id,beforeSnap,afterSnap);
   }
   editId=null;renderSKUs();renderBrands();updateAlerts();
-  // Save only the edited SKU (atomic per-row)
-  dbSaveSKU(s).then(()=>toast('✓ Saved to database','green')).catch(e=>toast('Save failed: '+e.message,'red'));
+  // Save the edited SKU — await to confirm persistence
+  try{
+    await dbSaveSKU(s);
+    toast(`✓ ${skuCode||sid||'SKU'} saved to database`,'green');
+  }catch(e){
+    toast(`Save failed: ${e.message} — please retry`,'red');
+  }
   saveSkuHistory().catch(e=>console.warn('History save failed:',e));
   if(changed.length) audit('sku_edit',`${skuCode||sid||'SKU'}: ${changed.join(', ')}`);
-  toast(`✓ ${skuCode||sid||'SKU'} updated — saving...`,'green');
 }
 
 async function delSKU(id){
