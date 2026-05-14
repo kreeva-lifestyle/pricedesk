@@ -2585,7 +2585,7 @@ function renderAmazon(){ renderDynamicCalc('amazon'); }
 
 function onCatChange(mp){
   const sel=el('cat-sel-'+mp);if(!sel)return;
-  const cat=sel.value||'Kurta Sets';
+  const cat=sel.value||(CATS[0]||'Kurta Sets');
   if(CD[mp]){
     CD[mp].cat=cat;
     // Auto-set level from category mapping
@@ -6123,7 +6123,7 @@ const WF_LOOKUPS = {
   gstRate: ctx => (ctx.sellerPrice||ctx.sp||0) > 2499 ? 0.18 : 0.05,
   commPct: ctx => {
     const sp = ctx.sellerPrice||ctx.sp||0;
-    if(ctx._mp==='myntra') return getMyntraComm(ctx.cat||'Kurta Sets', sp);
+    if(ctx._mp==='myntra') return getMyntraComm(ctx.cat||(CATS[0]||'Kurta Sets'), sp);
     if(ctx._mp==='ajio-ppmp') return COMM_AJIO_PPMP[ctx.cat]||18.88;
     if(ctx._mp==='ajio-cc') return COMM_AJIO_CC[ctx.cat]||18.88;
     if(ctx._mp==='amazon') return COMM_AMAZON[ctx.cat]||17;
@@ -6135,7 +6135,7 @@ const WF_LOOKUPS = {
     return 0;
   },
   collFee:   ctx => {
-    if(ctx._mp==='myntra') return getMynColl(ctx.cat||'Kurta Sets', ctx.sellerPrice||ctx.sp||0);
+    if(ctx._mp==='myntra') return getMynColl(ctx.cat||(CATS[0]||'Kurta Sets'), ctx.sellerPrice||ctx.sp||0);
     return 0;
   },
   pgFee:     () => LOGISTICS_SETTINGS.myn_pg_fee||50.22,
@@ -6155,11 +6155,11 @@ function runWFEngine(marketplace, inputs){
     _mp: marketplace,
     getMynFwd: (lvl, sp) => getMynFwd(lvl||inputs.level||'Level 2', sp),
     getMynRet: (lvl) => getMynRet(lvl||inputs.level||'Level 2'),
-    getMyntraComm: (cat, sp) => getMyntraComm(cat||inputs.cat||'Kurta Sets', sp),
+    getMyntraComm: (cat, sp) => getMyntraComm(cat||inputs.cat||(CATS[0]||'Kurta Sets'), sp),
     autoGST: autoGST,
     REVERSE_FEES, LOGISTICS_SETTINGS, Math,
     level: inputs.level||'Level 2',
-    cat: inputs.cat||'Kurta Sets',
+    cat: inputs.cat||(CATS[0]||'Kurta Sets'),
   };
 
   for(const row of rows){
