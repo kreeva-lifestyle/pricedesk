@@ -3,7 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f1117">
+<meta name="application-name" content="PriceDesk">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PriceDesk">
+<link rel="manifest" href="manifest.json">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='96' fill='%230f1117'/><text x='256' y='380' font-size='320' text-anchor='middle' fill='%23f5a623' font-family='sans-serif' font-weight='bold'>₹</text></svg>">
 <title>PriceDesk — Marketplace Pricing Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -200,6 +207,7 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .tg2{border-left:3px solid var(--gr)}.tr2{border-left:3px solid var(--re)}
 @keyframes su{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+@keyframes loadBar{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:3px}
 .playout{display:grid;grid-template-columns:260px 1fr;gap:16px}
 .wfrow{display:flex;align-items:center;gap:9px;padding:7px 11px;background:var(--s2);border:1px solid var(--bd);border-radius:5px;margin-bottom:6px;cursor:default;transition:border-color .12s,background .12s}
@@ -536,6 +544,23 @@ body:has(#login-screen.active){overflow:hidden}
 
   /* Marketplace tabs: smaller */
   .sku-mp-tab{padding:7px 10px;font-size:10px}
+
+  /* Collection fee table: compact */
+  #coll-table th,#coll-table td{padding:4px 3px;font-size:10px}
+  #coll-table .ci{width:38px;font-size:10px;padding:3px 4px}
+
+  /* Logistics cards: stack */
+  #log-myntra .g2,#log-ajio .g2,#log-amazon .g2{grid-template-columns:1fr}
+
+  /* User cards: single column */
+  #page-users .g3{grid-template-columns:1fr}
+
+  /* Activity page: stack */
+  #page-activity .g2{grid-template-columns:1fr}
+
+  /* AI chat: bottom safe area */
+  #ai-chat-btn{bottom:16px;right:12px;width:44px;height:44px;font-size:18px}
+  #ai-chat-panel{bottom:70px;right:4px;left:4px;width:auto;max-width:none;height:calc(100vh - 90px)}
 }
 /* ── AI Chat Panel ────────────────────────────────── */
 #ai-chat-btn{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;cursor:pointer;font-size:22px;box-shadow:0 4px 20px rgba(124,58,237,.4);z-index:200;display:flex;align-items:center;justify-content:center;transition:transform .15s}
@@ -566,7 +591,14 @@ body:has(#login-screen.active){overflow:hidden}
 <body>
 
 <!-- ═══ LOADING OVERLAY (shown while checking session) ═══ -->
-<div id="app-loading"><div style="text-align:center"><div style="font-size:22px;font-weight:700;color:var(--ac);margin-bottom:8px">PriceDesk</div><div>Loading...</div></div></div>
+<div id="app-loading">
+  <div style="text-align:center">
+    <div style="font-size:28px;font-weight:700;color:var(--ac);margin-bottom:4px;font-family:var(--mono)">PriceDesk</div>
+    <div style="font-size:10px;color:var(--tx3);letter-spacing:2px;text-transform:uppercase;margin-bottom:20px">Marketplace Pricing</div>
+    <div style="width:180px;height:3px;background:var(--s2);border-radius:2px;margin:0 auto 14px;overflow:hidden"><div style="width:40%;height:100%;background:var(--ac);border-radius:2px;animation:loadBar 1.5s ease infinite"></div></div>
+    <div id="app-loading-msg" style="font-size:12px;color:var(--tx3)">Connecting...</div>
+  </div>
+</div>
 <!-- ═══ LOGIN SCREEN ═══ -->
 <div id="login-screen">
   <!-- Ambient glow orbs -->
@@ -7735,8 +7767,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     _dataReady=true;
   } else {
     // Session valid — load data, then show app
-    document.getElementById('app-loading').querySelector('div')?.setAttribute('style','font-size:13px;color:var(--tx3);margin-top:8px');
-    const loadingMsg=document.getElementById('app-loading').querySelector('div')||document.getElementById('app-loading');
+    const loadingMsg=document.getElementById('app-loading-msg');
     const setLoadMsg=(msg)=>{if(loadingMsg)loadingMsg.textContent=msg;};
 
     setLoadMsg('Loading SKUs...');
@@ -7931,6 +7962,10 @@ async function sendAIChat(){
   }
   sendBtn.disabled=false;
   msgs.scrollTop=msgs.scrollHeight;
+}
+// Service Worker registration
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js').then(()=>console.log('SW registered')).catch(()=>{});
 }
 </script>
 </body>
