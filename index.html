@@ -2749,6 +2749,7 @@ function renderThresholds(){
 let _breachPage=1;
 const BREACH_PAGE_SIZE=10;
 function renderBreachList(){
+  invalidateCalcCache();
   const t=el('thr-breach-list');if(!t)return;
   const breached=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
   if(!breached.length){_breachPage=1;t.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:12px">✓ No active breaches</div>`;return;}
@@ -2830,6 +2831,7 @@ function toggleIgnore(id){
 // BRANDS
 // ═══════════════════════════════════════════════════════
 function renderBrands(){
+  invalidateCalcCache();
   const grid=el('brand-grid');if(!grid)return;
   el('brand-count').textContent=`${brands.length} brand${brands.length!==1?'s':''} configured`;
   el('dash-brands').textContent=brands.length;
