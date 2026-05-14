@@ -2067,8 +2067,13 @@ async function save(type, opts){
   };
   const val = dataMap[type];
   if(val === undefined){ console.warn('Unknown save type:', type); return; }
-  // Queue the write so only one upsert runs at a time
-  await _enqueueWrite(()=>dbSet(DB_KEYS[type], val));
+  try{
+    await _enqueueWrite(()=>dbSet(DB_KEYS[type], val));
+  }catch(e){
+    console.error(`Save failed for ${type}:`, e.message);
+    toast(`Save failed: ${e.message}`,'red');
+    throw e;
+  }
 }
 
 // ── Load ALL data types from DB ───────────────────────
@@ -2862,6 +2867,7 @@ function renderBrands(){
 
 function renderBrandSummary(){
   const t=el('brand-summary-body');if(!t)return;
+  invalidateCalcCache();
   const mpTags={'myntra':'tm','ajio-ppmp':'taj','ajio-cc':'tg','amazon':'tamz'};
   const modelLabels={'myntra':'Standard','ajio-ppmp':'PPMP','ajio-cc':'CC','amazon':'Fixed'};
   t.innerHTML=brands.map(b=>{
@@ -3128,6 +3134,7 @@ function renderDashboardWidgets(){
 let _gstAboveRows=[], _gstBelowRows=[]; // stored for export
 function renderPricingIntel(){
   const body=el('pricing-intel-body');if(!body)return;
+  invalidateCalcCache();
   const active=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold);
   const calcs=active.map(s=>({s,c:calcSKU(s),b:brands.find(b=>b.id===s.brandId)}));
 
@@ -3348,7 +3355,7 @@ function saveBrand(eid){
   if(!name){toast('Brand name required','red');return;}
   if(eid){const b=brands.find(x=>x.id===eid);if(b)Object.assign(b,{name,marketplace:mp,model,commOverride:comm,updatedAt:new Date().toISOString()});audit('brand_edit',`${name} updated (${model})`);toast(`✓ ${name} updated`,'green');}
   else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});audit('brand_add',`${name} added (${model})`);toast(`✓ ${name} added`,'green');}
-  closeModal();renderBrands();populateFilters();renderSKUs();save('brands');
+  closeModal();renderBrands();populateFilters();renderSKUs();save('brands').catch(e=>toast('Brand save failed: '+e.message,'red'));
 }
 async function deleteBrand(id){const b=brands.find(x=>x.id===id);if(!confirm('Delete brand? SKUs assigned to this brand will still exist.'))return false;brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();await save('brands');audit('brand_delete',`${b?.name||id} deleted`);toast('Brand deleted','red');return true;}
 
@@ -3362,7 +3369,7 @@ function populateFilters(){
     if(fid==='f-brand'){
       // Only show brands matching active marketplace tab
       const filtered=_skuMPTab ? brands.filter(b=>b.model===_skuMPTab) : brands;
-      e.innerHTML='<option value="">All Brands</option>'+filtered.map(b=>`<option value="${b.id}" ${b.id===cur?'selected':''}>${b.name}</option>`).join('');
+      e.innerHTML='<option value="">All Brands</option>'+filtered.map(b=>`<option value="${b.id}" ${b.id===cur?'selected':''}>${esc(b.name)}</option>`).join('');
     }
     else e.innerHTML='<option value="">All Categories</option>'+CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');
   });
@@ -3608,7 +3615,7 @@ function onCatSelectChange(prefix){
 }
 
 function renderEditRow(s){
-  const brandOpts=brands.map(b=>`<option value="${b.id}" ${b.id===s.brandId?'selected':''}>${b.name}</option>`).join('');
+  const brandOpts=brands.map(b=>`<option value="${b.id}" ${b.id===s.brandId?'selected':''}>${esc(b.name)}</option>`).join('');
   const catOpts=CATS.map(c=>`<option ${c===s.category?'selected':''}>${c}</option>`).join('');
   const c=calcSKU(s);
   return`<tr class="er" id="er-${s.id}">
@@ -3899,6 +3906,7 @@ async function unarchiveSKU(id){
 
 let _archivePage=1;
 function renderArchivedSKUs(){
+  invalidateCalcCache();
   const q=(el('archive-search')?.value||'').toLowerCase();
   const archived=skuDB.filter(s=>s.archived&&(!q||s.styleId?.toLowerCase().includes(q)||(s.sku||'').toLowerCase().includes(q)));
   const countEl=el('archive-count');
@@ -5137,7 +5145,7 @@ function addAlertEmail(raw){
     const chip=document.createElement('span');
     chip.className='tag-chip';
     chip.dataset.email=email;
-    chip.innerHTML=`${email}<span class="tc-x" onclick="this.parentElement.remove()">×</span>`;
+    chip.innerHTML=`${esc(email)}<span class="tc-x" onclick="this.parentElement.remove()">×</span>`;
     const input=document.getElementById('alert-email-input');
     input.parentElement.insertBefore(chip,input);
   });
@@ -5150,7 +5158,7 @@ function renderAlertEmailChips(emailStr){
     const chip=document.createElement('span');
     chip.className='tag-chip';
     chip.dataset.email=email;
-    chip.innerHTML=`${email}<span class="tc-x" onclick="this.parentElement.remove()">×</span>`;
+    chip.innerHTML=`${esc(email)}<span class="tc-x" onclick="this.parentElement.remove()">×</span>`;
     wrap.insertBefore(chip,input);
   });
 }
