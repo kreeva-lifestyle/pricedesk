@@ -22,7 +22,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh;display:flex;-webkit-text-size-adjust:100%;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear */
-.sidebar{width:230px;height:100vh;background:var(--s);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;z-index:100;overflow-y:auto}
+.sidebar{width:230px;height:100vh;background:rgba(24,28,38,.78);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;position:fixed;top:0;left:0;z-index:100;overflow-y:auto}
 .logo{padding:18px;border-bottom:1px solid var(--bd)}
 .logo-text{font-size:17px;font-weight:700;color:var(--ac);font-family:var(--mono)}
 .logo-sub{font-size:10px;color:var(--tx3);letter-spacing:2px;text-transform:uppercase;margin-top:2px}
@@ -35,7 +35,7 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .sb-btm{padding:14px 16px;border-top:1px solid var(--bd);margin-top:auto}
 .ava{width:28px;height:28px;border-radius:50%;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000;flex-shrink:0}
 .main{margin-left:230px;flex:1;display:flex;flex-direction:column;min-width:0}
-.topbar{background:var(--s);border-bottom:1px solid var(--bd);padding:12px 26px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;gap:8px}
+.topbar{background:rgba(24,28,38,.72);backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);border-bottom:1px solid rgba(255,255,255,.06);padding:12px 26px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;gap:8px}
 .pt{font-size:15px;font-weight:600}
 .content{padding:22px 26px;flex:1;overflow-x:hidden}
 .page{display:none}.page.active{display:block;animation:fi .18s ease}
@@ -56,7 +56,7 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .br{background:rgba(245,87,92,.15);color:var(--re);border:1px solid rgba(245,87,92,.3)}.br:hover{background:rgba(245,87,92,.25)}
 .bsm{padding:5px 10px;font-size:12px}.bxs{padding:4px 8px;font-size:11px}
 /* CARDS */
-.card{background:var(--s);border:1px solid var(--bd);border-radius:var(--r)}
+.card{background:rgba(24,28,38,.6);backdrop-filter:blur(10px) saturate(150%);-webkit-backdrop-filter:blur(10px) saturate(150%);border:1px solid rgba(255,255,255,.05);border-radius:var(--r)}
 .ch{padding:13px 17px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
 .cb{padding:17px}
 /* GRIDS */
@@ -75,7 +75,7 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .dash-block.drag-over-bottom{box-shadow:0 3px 0 0 var(--ac)}
 .mb0{margin-bottom:0!important}
 /* STAT CARDS */
-.sc{background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:15px 17px}
+.sc{background:rgba(24,28,38,.55);backdrop-filter:blur(8px) saturate(150%);-webkit-backdrop-filter:blur(8px) saturate(150%);border:1px solid rgba(255,255,255,.05);border-radius:var(--r);padding:15px 17px}
 .sl{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:7px}
 .sv{font-family:var(--mono);font-size:22px;font-weight:600}
 .ss{font-size:11px;color:var(--tx3);margin-top:3px}
@@ -164,6 +164,11 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .ico-breach{font-size:15px;cursor:help;filter:drop-shadow(0 0 4px rgba(245,87,92,.6))}
 .ico-ignore{font-size:15px;cursor:pointer;opacity:.6}.ico-ignore:hover{opacity:1}
 .ico-healthy{font-size:14px;opacity:.5}
+/* Action button labels — hidden on mobile, shown on desktop */
+.act-label{display:inline}
+/* Offline banner */
+#offline-bar{position:fixed;top:0;left:0;right:0;z-index:9999;background:rgba(245,87,92,.95);backdrop-filter:blur(8px);color:#fff;text-align:center;padding:8px 16px;font-size:12px;font-weight:600;transform:translateY(-100%);transition:transform .3s ease;display:flex;align-items:center;justify-content:center;gap:8px}
+#offline-bar.show{transform:translateY(0)}
 /* SKU ACTION BUTTONS — uniform sizing */
 .sku-act{font-size:10px!important;padding:4px 8px!important;line-height:1.2!important;white-space:nowrap!important;min-height:0!important;height:24px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important}
 .sku-menu-item{padding:7px 14px;font-size:12px;cursor:pointer;color:var(--tx2);transition:background .1s}
@@ -177,7 +182,7 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .sku-mp-tab{padding:8px 18px;font-size:12px;font-weight:600;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
 .sku-mp-tab:hover{color:var(--tx)}
 .sku-mp-tab.active{color:var(--ac);border-bottom-color:var(--ac)}
-.filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:var(--s);border:1px solid var(--bd);border-radius:var(--r)}
+.filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:rgba(24,28,38,.55);backdrop-filter:blur(10px) saturate(150%);-webkit-backdrop-filter:blur(10px) saturate(150%);border:1px solid rgba(255,255,255,.05);border-radius:var(--r)}
 .filter-select{background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:12px;padding:5px 9px;cursor:pointer;min-width:120px}
 .filter-select:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 2px rgba(245,166,35,.15)}
 .filter-sep{width:1px;height:20px;background:var(--bd2);margin:0 2px}
@@ -203,7 +208,7 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .flex{display:flex;align-items:center}.flexb{display:flex;align-items:center;justify-content:space-between}
 .gap8{gap:8px}.gap12{gap:12px}.gap16{gap:16px}
 .mb8{margin-bottom:8px}.mb12{margin-bottom:12px}.mb16{margin-bottom:16px}.mb20{margin-bottom:20px}
-.toast{position:fixed;bottom:22px;right:22px;background:var(--s);border:1px solid var(--bd2);border-radius:var(--r);padding:11px 17px;font-size:13px;z-index:999;display:flex;align-items:center;gap:9px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:su .18s ease;max-width:calc(100vw - 32px)}
+.toast{position:fixed;bottom:22px;right:22px;background:rgba(24,28,38,.8);backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);border:1px solid rgba(255,255,255,.08);border-radius:var(--r);padding:11px 17px;font-size:13px;z-index:999;display:flex;align-items:center;gap:9px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:su .18s ease;max-width:calc(100vw - 32px)}
 .tg2{border-left:3px solid var(--gr)}.tr2{border-left:3px solid var(--re)}
 @keyframes su{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
@@ -382,6 +387,10 @@ body:has(#login-screen.active){overflow:hidden}
   /* Global search: compact on mobile */
   #global-search{width:130px!important;font-size:12px!important;padding:6px 10px 6px 26px!important}
   #global-search-results{min-width:280px!important;right:0!important;left:auto!important}
+
+  /* Action buttons: icon-only on mobile */
+  .act-label{display:none}
+  .sku-act,.ss .btn{min-width:0!important;padding:4px 6px!important}
 
   /* Calc table */
   .ct td{padding:6px 9px;font-size:12px}
@@ -589,6 +598,8 @@ body:has(#login-screen.active){overflow:hidden}
 <script defer src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
+<!-- ═══ OFFLINE BANNER ═══ -->
+<div id="offline-bar">⚠ You're offline — changes won't save until connection is restored</div>
 
 <!-- ═══ LOADING OVERLAY (shown while checking session) ═══ -->
 <div id="app-loading">
@@ -3616,10 +3627,10 @@ function renderSKUs(){
       <td>
         <div style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
           ${statusIcon}
-          <button class="btn bg bxs sku-act" onclick="showCalcModal('${escAttr(s.id)}')" title="View full calculation breakdown">Calc</button>
-          <button class="btn bg bxs sku-act" onclick="showSkuHistoryModal('${escAttr(s.id)}')" title="View price change history">History</button>
-          <button class="btn bg bxs sku-act" onclick="openTagsModal('${escAttr(s.id)}')" title="Notes & Tags">Tags</button>
-          <button class="btn bg bxs sku-act" onclick="toggleSkuMenu(event,'${escAttr(s.id)}')" title="More actions" style="font-weight:700;letter-spacing:1px">⋮</button>
+          <button class="btn bg bxs sku-act" onclick="showCalcModal('${escAttr(s.id)}')" title="View calculation">🧮<span class="act-label"> Calc</span></button>
+          <button class="btn bg bxs sku-act" onclick="showSkuHistoryModal('${escAttr(s.id)}')" title="Price history">📊<span class="act-label"> History</span></button>
+          <button class="btn bg bxs sku-act" onclick="openTagsModal('${escAttr(s.id)}')" title="Tags & notes">🏷<span class="act-label"> Tags</span></button>
+          <button class="btn bg bxs sku-act" onclick="toggleSkuMenu(event,'${escAttr(s.id)}')" title="More actions" style="font-weight:700">⋮</button>
         </div>
         <div class="sku-menu" id="sku-menu-${escAttr(s.id)}" style="display:none;position:absolute;right:10px;margin-top:-2px;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:50;min-width:140px;overflow:hidden">
           <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${escAttr(s.id)}')">✎ Edit SKU</div>
@@ -3971,8 +3982,8 @@ function renderArchivedSKUs(){
         <td class="mono">${s.discount||0}%</td>
         <td class="mono" style="color:${c.profitRs>=0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</td>
         <td><div class="flex gap8">
-          <button class="btn bp bxs sku-act" onclick="unarchiveSKU('${escAttr(s.id)}')" title="Restore to active">↩ Restore</button>
-          <button class="btn br bxs sku-act" onclick="delSKU('${escAttr(s.id)}')" title="Permanently delete">✕</button>
+          <button class="btn bp bxs sku-act" onclick="unarchiveSKU('${escAttr(s.id)}')" title="Restore to active">↩<span class="act-label"> Restore</span></button>
+          <button class="btn br bxs sku-act" onclick="delSKU('${escAttr(s.id)}')" title="Delete permanently">✕</button>
         </div></td>
       </tr>`;
     }).join('');
@@ -7967,6 +7978,19 @@ async function sendAIChat(){
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/sw.js').then(()=>console.log('SW registered')).catch(()=>{});
 }
+// Offline/Online detection
+const _offlineBar=document.getElementById('offline-bar');
+function _updateOnlineStatus(){
+  if(navigator.onLine){
+    _offlineBar?.classList.remove('show');
+  } else {
+    _offlineBar?.classList.add('show');
+    toast('You are offline — changes won\'t save','red');
+  }
+}
+window.addEventListener('online',_updateOnlineStatus);
+window.addEventListener('offline',_updateOnlineStatus);
+if(!navigator.onLine) _offlineBar?.classList.add('show');
 </script>
 </body>
 </html>
