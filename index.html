@@ -851,7 +851,7 @@ body:has(#login-screen.active){overflow:hidden}
 
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 
-<div class="sidebar" id="sidebar">
+<div class="sidebar" id="sidebar" style="display:none">
   <div class="logo"><div class="logo-text">PriceDesk</div><div class="logo-sub">Marketplace Pricing</div></div>
   <nav class="nav">
     <div class="nav-sec">Main</div>
@@ -877,7 +877,7 @@ body:has(#login-screen.active){overflow:hidden}
   </div>
 </div>
 
-<div class="main">
+<div class="main" id="app-main" style="display:none">
   <div class="topbar">
     <div class="flex gap12">
       <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">
@@ -5536,6 +5536,8 @@ async function doLogin(){
   sessionStorage.setItem(SESSION_KEY, JSON.stringify({userId:user.id, loginTime:Date.now(), sessionToken}));
   await registerSessionToken(user.id, sessionToken);
   document.getElementById('login-screen').classList.remove('active');
+  document.getElementById('sidebar').style.display='';
+  document.getElementById('app-main').style.display='';
   updateSidebarUser(user);
   startSessionTimer();
   startSessionCheck();
@@ -7819,6 +7821,8 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     populateLogisticsInputs();
 
     // Hide loading, show app
+    document.getElementById('sidebar').style.display='';
+    document.getElementById('app-main').style.display='';
     document.getElementById('app-loading').style.display='none';
     const hashPage=location.hash.replace('#/','');
     const lastPage=hashPage&&TITLES[hashPage]?hashPage:sessionStorage.getItem('pd_current_page');
