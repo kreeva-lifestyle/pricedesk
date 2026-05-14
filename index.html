@@ -1962,9 +1962,14 @@ async function dbLoadAllSKUs(){
             migrated+=chunk.length;
             if(migrated%1000===0) console.log(`  ...migrated ${migrated}/${missing.length}`);
           }
-          console.log(`✓ Re-migrated ${migrated} missing SKUs`);
+          console.log(`✓ Re-migrated ${migrated} of ${missing.length} missing SKUs`);
           toast(`✓ Restored ${migrated} SKUs to database`,'green');
-          loaded.push(...missing);
+          if(migrated===missing.length) loaded.push(...missing);
+          else {
+            // Only add SKUs that were successfully migrated (re-fetch from table)
+            const{data:fresh}=await db.from('pd_skus_v2').select('*').in('id',missing.map(s=>s.id));
+            if(fresh) loaded.push(...fresh.map(_rowToSku));
+          }
         }
       }
       return loaded;
@@ -3004,6 +3009,7 @@ function saveDashOrder(){
 document.addEventListener('DOMContentLoaded',()=>setTimeout(initDashDrag,100));
 
 function renderDashboardWidgets(){
+  invalidateCalcCache();
   const loader=el('dash-loader');
   const dashContent=el('dash-content');
   if(loader) loader.style.display='none';
@@ -3780,6 +3786,7 @@ function saveNew(){
     newSKUs.push(s);
     count++;
   });
+  invalidateCalcCache();
   editId=null;renderSKUs();renderBrands();updateAlerts();
   dbSaveSKU(...newSKUs).then(()=>toast(`✓ ${skuCode||sid||'SKU'} saved to database`,'green')).catch(e=>toast('Save failed: '+e.message,'red'));
   audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
@@ -3818,6 +3825,7 @@ async function saveEdit(id){
     const afterSnap={cost,markup:mkp,discount:disc,profit:afterCalc.profitRs,ifDelivered:afterCalc.ifDelivered,grossSettlement:afterCalc.grossSettlement||0,sp:afterCalc.sp};
     trackSkuSnapshot(id,beforeSnap,afterSnap);
   }
+  invalidateCalcCache();
   editId=null;renderSKUs();renderBrands();updateAlerts();
   // Save the edited SKU — await to confirm persistence
   try{
@@ -3841,7 +3849,7 @@ async function delSKU(id){
     audit('sku_delete',`${label} deleted`);
     toast(`✓ ${esc(label)} deleted from database`,'green');
   }catch(e){
-    skuDB.push(s);renderSKUs();renderBrands();updateAlerts();
+    skuDB.push(s);invalidateCalcCache();renderSKUs();renderBrands();updateAlerts();
     toast(`Delete failed: ${e.message}`,'red');
   }
 }
@@ -7702,6 +7710,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   if(resetToken){
     console.log('Reset token detected:', resetToken.slice(0,8)+'…');
     await loadFromStorage();
+    _dataReady=true;
     document.getElementById('app-loading').style.display='none';
     document.getElementById('login-screen').classList.remove('active');
     showResetPasswordPage(resetToken);
@@ -7898,7 +7907,7 @@ async function sendAIChat(){
     const data=await resp.json();
     document.getElementById('ai-typing')?.remove();
     if(data.error){
-      msgs.innerHTML+=`<div class="ai-msg error">${data.error}</div>`;
+      msgs.innerHTML+=`<div class="ai-msg error">${(data.error||'').replace(/</g,'&lt;')}</div>`;
     } else {
       const html=data.reply
         .replace(/</g,'&lt;')
@@ -7908,7 +7917,7 @@ async function sendAIChat(){
     }
   }catch(e){
     document.getElementById('ai-typing')?.remove();
-    msgs.innerHTML+=`<div class="ai-msg error">Failed to connect: ${e.message}</div>`;
+    msgs.innerHTML+=`<div class="ai-msg error">Failed to connect: ${(e.message||'').replace(/</g,'&lt;')}</div>`;
   }
   sendBtn.disabled=false;
   msgs.scrollTop=msgs.scrollHeight;
