@@ -2325,6 +2325,97 @@ async function dbLoadAllThresholds(){
   return null;
 }
 
+// ── Unified Commission table operations (all 4 marketplaces in one table) ──
+let _useCommTable=false;
+
+function _commToRows(myntra, ppmp, cc, amazon){
+  const rows=[];
+  const ts=new Date().toISOString();
+  for(const[cat,slabs]of Object.entries(myntra||{})){
+    if(!Array.isArray(slabs))continue;
+    slabs.forEach((rate,i)=>rows.push({marketplace:'myntra',category:cat,slab_index:i,rate:rate||0,updated_at:ts}));
+  }
+  for(const[cat,rate]of Object.entries(ppmp||{})){
+    rows.push({marketplace:'ajio-ppmp',category:cat,slab_index:0,rate:rate||0,updated_at:ts});
+  }
+  for(const[cat,rate]of Object.entries(cc||{})){
+    rows.push({marketplace:'ajio-cc',category:cat,slab_index:0,rate:rate||0,updated_at:ts});
+  }
+  for(const[cat,rate]of Object.entries(amazon||{})){
+    rows.push({marketplace:'amazon',category:cat,slab_index:0,rate:rate||0,updated_at:ts});
+  }
+  return rows;
+}
+
+function _rowsToComm(rows){
+  const myntra={},ppmp={},cc={},amazon={};
+  for(const r of rows){
+    if(r.marketplace==='myntra'){
+      if(!myntra[r.category])myntra[r.category]=[0,0,18.88,18.88,18.88];
+      myntra[r.category][r.slab_index]=r.rate;
+    }else if(r.marketplace==='ajio-ppmp'){
+      ppmp[r.category]=r.rate;
+    }else if(r.marketplace==='ajio-cc'){
+      cc[r.category]=r.rate;
+    }else if(r.marketplace==='amazon'){
+      amazon[r.category]=r.rate;
+    }
+  }
+  return{myntra,ppmp,cc,amazon};
+}
+
+async function dbSaveCommissions(myntra, ppmp, cc, amazon){
+  const db=getDB();if(!db)throw new Error('No DB');
+  _lastWriteTs=Date.now();
+  const rows=_commToRows(myntra, ppmp, cc, amazon);
+  try{
+    const{error}=await db.from('pd_commissions').upsert(rows,{onConflict:'marketplace,category,slab_index'});
+    if(error)throw error;
+    _useCommTable=true;
+    console.log(`✓ Saved ${rows.length} commission rows to pd_commissions`);
+    db.from('pd_sync').upsert({key:'pd_commissions',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
+  }catch(tableErr){
+    console.warn('Commission table save failed, using blob fallback:',tableErr.message||tableErr);
+    await _enqueueWrite(()=>dbSet(DB_KEYS.comm_myntra, myntra));
+    await _enqueueWrite(()=>dbSet(DB_KEYS.comm_ppmp, ppmp));
+    await _enqueueWrite(()=>dbSet(DB_KEYS.comm_cc, cc));
+    await _enqueueWrite(()=>dbSet(DB_KEYS.comm_amazon, amazon));
+  }
+}
+
+async function dbLoadAllCommissions(){
+  const db=getDB();if(!db)return null;
+  try{
+    const{count,error:cErr}=await db.from('pd_commissions').select('marketplace',{count:'exact',head:true});
+    if(cErr)throw cErr;
+    if(count>0){
+      const{data,error}=await db.from('pd_commissions').select('*');
+      if(error)throw error;
+      _useCommTable=true;
+      console.log(`Loaded ${data.length} commission rows from pd_commissions table`);
+      return _rowsToComm(data);
+    }
+    // Migrate from blobs
+    const [bMyn,bPP,bCC,bAmz]=await Promise.all([
+      dbGet(DB_KEYS.comm_myntra),dbGet(DB_KEYS.comm_ppmp),
+      dbGet(DB_KEYS.comm_cc),dbGet(DB_KEYS.comm_amazon)
+    ]);
+    if(bMyn||bPP||bCC||bAmz){
+      console.log('Migrating commissions from blobs to pd_commissions...');
+      const rows=_commToRows(bMyn||{},bPP||{},bCC||{},bAmz||{});
+      if(rows.length){
+        const{error:uErr}=await db.from('pd_commissions').upsert(rows,{onConflict:'marketplace,category,slab_index'});
+        if(!uErr){_useCommTable=true;console.log(`✓ Commission migration complete — ${rows.length} rows`);}
+      }
+      return{myntra:bMyn,ppmp:bPP,cc:bCC,amazon:bAmz};
+    }
+    _useCommTable=true;
+    return null;
+  }catch(e){console.warn('pd_commissions table not available:',e.message);}
+  _useCommTable=false;
+  return null;
+}
+
 // ── Audit log table operations (append-only, replaces capped JSONB array) ──
 let _useAuditTable=false;
 
@@ -2515,6 +2606,17 @@ async function save(type, opts){
       }
     }catch(e){/* fall through to blob save */}
   }
+  // Commissions: use unified table if available
+  if(type==='comm_myntra'||type==='comm_ppmp'||type==='comm_cc'||type==='comm_amazon'){
+    _lastWriteTs=Date.now();
+    try{
+      if(_useCommTable){
+        await dbSaveCommissions(COMM_MYNTRA, COMM_AJIO_PPMP, COMM_AJIO_CC, COMM_AMAZON);
+        updateSyncBadge(true);
+        return;
+      }
+    }catch(e){/* fall through to blob save */}
+  }
   updateSyncBadge(false);
   const dataMap = {
     brands:      brands,
@@ -2572,11 +2674,19 @@ async function loadFromStorage(){
     const batch2b = ['levels','alert'];
     const r2b = await Promise.all(batch2b.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
     batch2b.forEach((t,i) => { loaded[t] = r2b[i]; });
-    // Batch 3: Commission + logistics (2-3 at a time)
-    const batch3a = ['comm_myntra','comm_ppmp','comm_cc'];
-    const r3a = await Promise.all(batch3a.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
-    batch3a.forEach((t,i) => { loaded[t] = r3a[i]; });
-    const batch3b = ['comm_amazon','logistics','wireframe','email_cfg'];
+    // Batch 3: Commissions (from unified table or blobs) + logistics
+    const commResult = await dbLoadAllCommissions();
+    if(commResult){
+      loaded.comm_myntra = commResult.myntra;
+      loaded.comm_ppmp = commResult.ppmp;
+      loaded.comm_cc = commResult.cc;
+      loaded.comm_amazon = commResult.amazon;
+    } else {
+      const batch3a = ['comm_myntra','comm_ppmp','comm_cc','comm_amazon'];
+      const r3a = await Promise.all(batch3a.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
+      batch3a.forEach((t,i) => { loaded[t] = r3a[i]; });
+    }
+    const batch3b = ['logistics','wireframe','email_cfg'];
     const r3b = await Promise.all(batch3b.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
     batch3b.forEach((t,i) => { loaded[t] = r3b[i]; });
 
@@ -7911,7 +8021,8 @@ function setupRealtime(){
         if(!key || key === DB_KEYS.sessions || key === 'pd_skus_v2'
           || (key === DB_KEYS.brands && _useBrandTable)
           || ((key === DB_KEYS.categories || key === DB_KEYS.cat_levels) && _useCategoryTable)
-          || (key === DB_KEYS.thresholds && _useThresholdTable)) return;
+          || (key === DB_KEYS.thresholds && _useThresholdTable)
+          || ((key === DB_KEYS.comm_myntra || key === DB_KEYS.comm_ppmp || key === DB_KEYS.comm_cc || key === DB_KEYS.comm_amazon) && _useCommTable)) return;
         console.log(`⚡ Sync: ${key} changed`);
         dbGet(key).then(val=>{
           if(val) handleRealtimeUpdate(key, val);
