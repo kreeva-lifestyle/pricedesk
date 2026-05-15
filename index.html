@@ -168,7 +168,8 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 /* Action button labels — hidden on mobile, shown on desktop */
 .act-label{display:inline}
 /* Offline banner */
-#app-loading{position:fixed;inset:0;z-index:9998;background:var(--bg);display:flex;align-items:center;justify-content:center}
+#app-loading{position:fixed;inset:0;z-index:9998;background:var(--bg);display:none;align-items:center;justify-content:center}
+#app-loading.active{display:flex}
 #offline-bar{position:fixed;top:0;left:0;right:0;z-index:9999;background:rgba(245,87,92,.95);backdrop-filter:blur(8px);color:#fff;text-align:center;padding:8px 16px;font-size:12px;font-weight:600;transform:translateY(-100%);transition:transform .3s ease;display:flex;align-items:center;justify-content:center;gap:8px}
 #offline-bar.show{transform:translateY(0)}
 /* SKU ACTION BUTTONS — uniform sizing */
@@ -604,7 +605,7 @@ body:has(#login-screen.active){overflow:hidden}
 <div id="offline-bar">⚠ You're offline — changes won't save until connection is restored</div>
 
 <!-- ═══ LOADING OVERLAY (shown while checking session) ═══ -->
-<div id="app-loading">
+<div id="app-loading" class="active">
   <div style="text-align:center">
     <div style="font-size:28px;font-weight:700;color:var(--ac);margin-bottom:4px;font-family:var(--mono)">PriceDesk</div>
     <div style="font-size:10px;color:var(--tx3);letter-spacing:2px;text-transform:uppercase;margin-bottom:20px">Marketplace Pricing</div>
@@ -5435,7 +5436,7 @@ async function confirmClearData(){
 const SESSION_KEY = 'pricedesk_session';
 const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour
 const WARN_BEFORE    = 5  * 60 * 1000;  // warn 5 min before
-const SESSION_CHECK_INTERVAL = 300000;  // check every 5 minutes (reduced DB load)
+// Session check removed (single-device enforcement disabled)
 let _sessionTimer = null, _warnTimer = null, _countdownInterval = null;
 let _sessionCheckTimer = null;
 let currentUser = null;
@@ -5445,63 +5446,12 @@ function generateSessionToken(){
   return 'st_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);
 }
 
-async function registerSessionToken(userId, token){
-  const db = getDB(); if(!db) return;
-  try{
-    const sessions = await dbGet(DB_KEYS.sessions) || {};
-    // Cleanup: remove sessions older than 24 hours
-    const cutoff=Date.now()-86400000;
-    for(const uid of Object.keys(sessions)){if(sessions[uid].ts&&sessions[uid].ts<cutoff)delete sessions[uid];}
-    sessions[userId] = { token, ts: Date.now(), ua: navigator.userAgent.slice(0,80) };
-    await dbSet(DB_KEYS.sessions, sessions);
-  } catch(e){ console.warn('registerSessionToken error:', e); }
-}
+async function registerSessionToken(){}
+async function clearSessionToken(){}
 
-async function clearSessionToken(userId){
-  const db = getDB(); if(!db) return;
-  try{
-    const sessions = await dbGet(DB_KEYS.sessions) || {};
-    delete sessions[userId];
-    await dbSet(DB_KEYS.sessions, sessions);
-  } catch(e){ console.warn('clearSessionToken error:', e); }
-}
+async function validateSessionToken(){return true;}
 
-let _sessionCache={val:null,ts:0};
-async function validateSessionToken(userId, localToken){
-  const db = getDB(); if(!db) return true;
-  // Use cached result if less than 2 minutes old
-  if(_sessionCache.val!==null&&Date.now()-_sessionCache.ts<240000) return _sessionCache.val; // 4-min cache
-  try{
-    const sessions = await dbGet(DB_KEYS.sessions) || {};
-    const remote = sessions[userId];
-    if(!remote){_sessionCache={val:true,ts:Date.now()};return true;}
-    const valid=remote.token === localToken;
-    _sessionCache={val:valid,ts:Date.now()};
-    return valid;
-  } catch(e){ console.warn('Session validation failed (allowing access):', e.message); return true; }
-}
-
-function startSessionCheck(){
-  clearInterval(_sessionCheckTimer);
-  _sessionCheckTimer = setInterval(async ()=>{
-    if(!currentUser) return;
-    const sess = JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');
-    if(!sess?.sessionToken) return;
-    const valid = await validateSessionToken(currentUser.id, sess.sessionToken);
-    if(!valid){
-      clearInterval(_sessionCheckTimer);
-      _forceLogout();
-      // Show persistent alert instead of toast
-      const msg = document.createElement('div');
-      msg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--s);border:2px solid var(--re);border-radius:12px;padding:28px 32px;z-index:99999;text-align:center;max-width:380px;box-shadow:0 8px 40px rgba(0,0,0,.6)';
-      msg.innerHTML = `<div style="font-size:28px;margin-bottom:12px">🔒</div>
-        <div style="font-size:15px;font-weight:600;color:var(--tx);margin-bottom:8px">Signed out</div>
-        <div style="font-size:13px;color:var(--tx2);margin-bottom:18px">Your account was logged in from another device. Only one active session is allowed per user.</div>
-        <button class="btn bp" onclick="this.parentElement.remove()" style="width:100%">OK</button>`;
-      document.body.appendChild(msg);
-    }
-  }, SESSION_CHECK_INTERVAL);
-}
+function startSessionCheck(){}
 
 async function doLogin(){
   const email = document.getElementById('login-email')?.value.trim().toLowerCase();
@@ -5532,9 +5482,7 @@ async function doLogin(){
   if(isFirstLogin || needsUpgrade){ user.passwordHash = await secureHash(pass); await save('users'); }
   // Start session with unique token for single-device enforcement
   currentUser = user;
-  const sessionToken = generateSessionToken();
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify({userId:user.id, loginTime:Date.now(), sessionToken}));
-  await registerSessionToken(user.id, sessionToken);
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({userId:user.id, loginTime:Date.now()}));
   document.getElementById('login-screen').classList.remove('active');
   document.getElementById('sidebar').style.display='';
   document.getElementById('app-main').style.display='';
@@ -5693,8 +5641,7 @@ async function doResetPassword(token){
   }, 2000);
 }
 
-async function doLogout(){
-  if(currentUser) await clearSessionToken(currentUser.id).catch(()=>{});
+function doLogout(){
   // Stop realtime sync
   const db=getDB();
   if(db&&_realtimeChannel){try{db.removeChannel(_realtimeChannel);}catch(e){}_realtimeChannel=null;}
@@ -5705,7 +5652,7 @@ async function doLogout(){
 function _forceLogout(){
   currentUser = null;
   _dataReady = false;
-  _sessionCache = {val:null,ts:0};
+
   sessionStorage.removeItem(SESSION_KEY);
   clearTimeout(_sessionTimer);
   clearTimeout(_warnTimer);
@@ -7751,7 +7698,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     const lo=document.getElementById('app-loading');
     if(lo&&lo.style.display!=='none'){
       console.warn('Loading timeout — force-hiding overlay');
-      lo.style.display='none';lo.style.pointerEvents='none';
+      lo.classList.remove('active');
       document.getElementById('sidebar').style.display='';
       document.getElementById('app-main').style.display='';
     }
@@ -7778,12 +7725,12 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     console.log('Reset token detected:', resetToken.slice(0,8)+'…');
     await loadFromStorage();
     _dataReady=true;
-    const _lo1=document.getElementById('app-loading');if(_lo1){_lo1.style.display='none';_lo1.style.pointerEvents='none';}
+    document.getElementById('app-loading')?.classList.remove('active');
     document.getElementById('login-screen').classList.remove('active');
     showResetPasswordPage(resetToken);
   } else if(!(await checkSession())){
     // Session invalid — show login BEFORE loading any data
-    const _lo2=document.getElementById('app-loading');if(_lo2){_lo2.style.display='none';_lo2.style.pointerEvents='none';}
+    document.getElementById('app-loading')?.classList.remove('active');
     document.getElementById('login-screen').classList.add('active');
     // Load data in background (needed for login to work — users array)
     await loadFromStorage();
@@ -7837,7 +7784,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     }finally{
       // ALWAYS hide loading and show app — even if errors occurred
       const lo=document.getElementById('app-loading');
-      if(lo){lo.style.display='none';lo.style.pointerEvents='none';}
+      if(lo)lo.classList.remove('active');
       document.getElementById('sidebar').style.display='';
       document.getElementById('app-main').style.display='';
       const hashPage=location.hash.replace('#/','');
