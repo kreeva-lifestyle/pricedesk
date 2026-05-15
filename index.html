@@ -1809,7 +1809,85 @@ CREATE TABLE IF NOT EXISTS pd_skus_v2 (
 ALTER TABLE pd_skus_v2 ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all_skus" ON pd_skus_v2 FOR ALL USING (true) WITH CHECK (true);
 -- Realtime: safe because each row is tiny
-ALTER PUBLICATION supabase_realtime ADD TABLE pd_skus_v2;`;
+ALTER PUBLICATION supabase_realtime ADD TABLE pd_skus_v2;
+
+-- ═══ NORMALIZED TABLES: replace app_data JSONB blobs ═══
+
+-- Brands: per-row storage (replaces pd_brands key in app_data)
+CREATE TABLE IF NOT EXISTS pd_brands (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  marketplace     TEXT,
+  model           TEXT NOT NULL DEFAULT 'myntra',
+  comm_override   NUMERIC,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE pd_brands ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_brands" ON pd_brands FOR ALL USING (true) WITH CHECK (true);
+ALTER PUBLICATION supabase_realtime ADD TABLE pd_brands;
+
+-- Categories: per-row (replaces pd_categories + pd_cat_levels in app_data)
+CREATE TABLE IF NOT EXISTS pd_categories (
+  name        TEXT PRIMARY KEY,
+  level       TEXT NOT NULL DEFAULT 'Level 2',
+  sort_order  INTEGER DEFAULT 0,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE pd_categories ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_categories" ON pd_categories FOR ALL USING (true) WITH CHECK (true);
+ALTER PUBLICATION supabase_realtime ADD TABLE pd_categories;
+
+-- Commissions: unified table for all marketplaces
+CREATE TABLE IF NOT EXISTS pd_commissions (
+  marketplace TEXT NOT NULL,
+  category    TEXT NOT NULL,
+  slab_index  INTEGER DEFAULT 0,
+  rate        NUMERIC NOT NULL DEFAULT 0,
+  updated_at  TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (marketplace, category, slab_index)
+);
+ALTER TABLE pd_commissions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_commissions" ON pd_commissions FOR ALL USING (true) WITH CHECK (true);
+ALTER PUBLICATION supabase_realtime ADD TABLE pd_commissions;
+
+-- Thresholds: per-category profit thresholds
+CREATE TABLE IF NOT EXISTS pd_thresholds (
+  category    TEXT PRIMARY KEY,
+  min_profit  NUMERIC NOT NULL DEFAULT 0,
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE pd_thresholds ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_thresholds" ON pd_thresholds FOR ALL USING (true) WITH CHECK (true);
+ALTER PUBLICATION supabase_realtime ADD TABLE pd_thresholds;
+
+-- Audit log: append-only (replaces pd_audit_log JSONB array in app_data)
+CREATE TABLE IF NOT EXISTS pd_audit_log (
+  id          BIGSERIAL PRIMARY KEY,
+  ts          TIMESTAMPTZ DEFAULT NOW(),
+  user_name   TEXT,
+  user_id     TEXT,
+  action      TEXT NOT NULL,
+  details     TEXT,
+  extra       JSONB
+);
+ALTER TABLE pd_audit_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_audit" ON pd_audit_log FOR ALL USING (true) WITH CHECK (true);
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON pd_audit_log (ts DESC);
+
+-- SKU history: per-change tracking (replaces pd_sku_history JSONB in app_data)
+CREATE TABLE IF NOT EXISTS pd_sku_history (
+  id          BIGSERIAL PRIMARY KEY,
+  sku_id      TEXT NOT NULL,
+  field       TEXT NOT NULL,
+  old_val     TEXT,
+  new_val     TEXT,
+  user_name   TEXT,
+  ts          TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE pd_sku_history ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_sku_history" ON pd_sku_history FOR ALL USING (true) WITH CHECK (true);
+CREATE INDEX IF NOT EXISTS idx_sku_history_sku ON pd_sku_history (sku_id, ts DESC);`;
   setModal(`<div class="mhdr"><div class="mtl">🗄 Database Setup — Run this SQL</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div class="info mb12">Run this in your Supabase SQL Editor:</div>
@@ -2029,6 +2107,98 @@ async function dbLoadAllSKUs(){
   return await dbGet(DB_KEYS.skus);
 }
 
+// ── Per-row Brand database operations (mirrors pd_skus_v2 pattern) ──
+let _useBrandTable=false;
+
+function _brandToRow(b){
+  return{
+    id:b.id, name:b.name||'', marketplace:b.marketplace||null,
+    model:b.model||'myntra', comm_override:b.commOverride!=null?b.commOverride:null,
+    updated_at:new Date().toISOString()
+  };
+}
+function _rowToBrand(r){
+  return{
+    id:r.id, name:r.name||'', marketplace:r.marketplace||'',
+    model:r.model||'myntra', commOverride:r.comm_override!=null?r.comm_override:null
+  };
+}
+
+async function dbSaveBrands(brandsArr){
+  const db=getDB();if(!db)throw new Error('No DB');
+  _lastWriteTs=Date.now();
+  const rows=brandsArr.map(_brandToRow);
+  try{
+    const{error}=await db.from('pd_brands').upsert(rows,{onConflict:'id'});
+    if(error)throw error;
+    _useBrandTable=true;
+    console.log(`✓ Saved ${rows.length} brand(s) to pd_brands`);
+    db.from('pd_sync').upsert({key:'pd_brands',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
+  }catch(tableErr){
+    console.warn('Brand table save failed, using blob fallback:',tableErr.message||tableErr);
+    await _enqueueWrite(()=>dbSet(DB_KEYS.brands, brandsArr));
+  }
+}
+
+async function dbDeleteBrand(id){
+  const db=getDB();if(!db)throw new Error('No DB');
+  _lastWriteTs=Date.now();
+  try{
+    const{error}=await db.from('pd_brands').delete().eq('id',id);
+    if(error)throw error;
+    _useBrandTable=true;
+    console.log(`✓ Deleted brand ${id} from pd_brands`);
+    db.from('pd_sync').upsert({key:'pd_brands',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
+  }catch(tableErr){
+    console.warn('Brand table delete failed, using blob fallback:',tableErr.message||tableErr);
+    await _enqueueWrite(()=>dbSet(DB_KEYS.brands, brands));
+  }
+}
+
+async function dbLoadAllBrands(){
+  const db=getDB();if(!db)return null;
+  try{
+    const{count:tableCount,error:cErr}=await db.from('pd_brands').select('id',{count:'exact',head:true});
+    if(cErr)throw cErr;
+    if(tableCount>0){
+      const{data,error}=await db.from('pd_brands').select('*');
+      if(error)throw error;
+      _useBrandTable=true;
+      console.log(`Loaded ${data.length} brands from pd_brands table`);
+      const loaded=data.map(_rowToBrand);
+      // Compare against blob — re-migrate any missing brands
+      const blob=await dbGet(DB_KEYS.brands);
+      if(blob&&Array.isArray(blob)&&blob.length>loaded.length){
+        const tableIds=new Set(loaded.map(b=>b.id));
+        const missing=blob.filter(b=>!tableIds.has(b.id));
+        if(missing.length){
+          console.warn(`Brand table has ${loaded.length} but blob has ${blob.length} — re-migrating ${missing.length}`);
+          const rows=missing.map(_brandToRow);
+          const{error:uErr}=await db.from('pd_brands').upsert(rows,{onConflict:'id'});
+          if(!uErr) loaded.push(...missing);
+        }
+      }
+      return loaded;
+    }
+    // Table exists but empty — full migration from blob
+    const blob=await dbGet(DB_KEYS.brands);
+    if(blob&&Array.isArray(blob)&&blob.length>0){
+      console.log(`Migrating ${blob.length} brands from JSON blob to pd_brands...`);
+      const rows=blob.map(_brandToRow);
+      const{error:uErr}=await db.from('pd_brands').upsert(rows,{onConflict:'id'});
+      if(!uErr){
+        _useBrandTable=true;
+        console.log(`✓ Brand migration complete — ${blob.length} brands`);
+      }
+      return blob;
+    }
+    _useBrandTable=true;
+    return [];
+  }catch(e){console.warn('pd_brands table not available:',e.message);}
+  _useBrandTable=false;
+  return await dbGet(DB_KEYS.brands);
+}
+
 // Legacy wrapper for compatibility (used by debounced edit save)
 async function _doSaveSKUs(){
   _lastWriteTs=Date.now();
@@ -2075,6 +2245,17 @@ async function save(type, opts){
     }
     return debouncedSaveSKUs();
   }
+  // Brands: use per-row table if available
+  if(type==='brands'){
+    _lastWriteTs=Date.now();
+    try{
+      if(_useBrandTable){
+        await dbSaveBrands(brands);
+        updateSyncBadge(true);
+        return;
+      }
+    }catch(e){/* fall through to blob save */}
+  }
   updateSyncBadge(false);
   const dataMap = {
     brands:      brands,
@@ -2114,8 +2295,9 @@ async function loadFromStorage(){
     const loaded = {};
     // Batch 1: SKUs — try per-row table first, fall back to JSON blob
     loaded.skus = await dbLoadAllSKUs();
-    // Batch 2: Core config (2-3 at a time max)
-    const batch2a = ['brands','users','thresholds'];
+    // Batch 2: Core config (brands from table, rest from app_data)
+    loaded.brands = await dbLoadAllBrands();
+    const batch2a = ['users','thresholds'];
     const r2a = await Promise.all(batch2a.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
     batch2a.forEach((t,i) => { loaded[t] = r2a[i]; });
     const batch2b = ['categories','levels','cat_levels','alert'];
@@ -3262,7 +3444,7 @@ function saveBrand(eid){
   else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});audit('brand_add',`${name} added (${model})`);toast(`✓ ${name} added`,'green');}
   closeModal();renderBrands();populateFilters();renderSKUs();save('brands').catch(e=>toast('Brand save failed: '+e.message,'red'));
 }
-async function deleteBrand(id){const b=brands.find(x=>x.id===id);if(!confirm('Delete brand? SKUs assigned to this brand will still exist.'))return false;brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();await save('brands');audit('brand_delete',`${b?.name||id} deleted`);toast('Brand deleted','red');return true;}
+async function deleteBrand(id){const b=brands.find(x=>x.id===id);if(!confirm('Delete brand? SKUs assigned to this brand will still exist.'))return false;brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();if(_useBrandTable){await dbDeleteBrand(id);}else{await save('brands');}audit('brand_delete',`${b?.name||id} deleted`);toast('Brand deleted','red');return true;}
 
 // ═══════════════════════════════════════════════════════
 // SKU SHEET
@@ -4821,10 +5003,19 @@ async function createManualBackup(){
       if(batchErr) throw new Error('Failed to read batch: '+batchErr.message);
       allData.push(...(rows||[]));
     }
+    // Also backup pd_skus_v2 rows (paginated)
+    let allSkus=[];
+    for(let from=0;;from+=1000){
+      const{data:skuPage,error:skuErr}=await db.from('pd_skus_v2').select('*').range(from,from+999);
+      if(skuErr||!skuPage||skuPage.length===0)break;
+      allSkus.push(...skuPage);
+      if(skuPage.length<1000)break;
+    }
     const backupDate = new Date().toISOString().slice(0,10);
+    const backupPayload = {app_data:allData, pd_skus_v2:allSkus};
     // Upsert into pd_backups
     const {error:writeErr} = await db.from('pd_backups').upsert(
-      {backup_date:backupDate, data:allData, created_at:new Date().toISOString()},
+      {backup_date:backupDate, data:backupPayload, created_at:new Date().toISOString()},
       {onConflict:'backup_date'}
     );
     if(writeErr) throw new Error('Failed to save backup: '+writeErr.message);
@@ -4851,16 +5042,25 @@ async function restoreBackup(date){
     const {data:backup, error:readErr} = await db.from('pd_backups')
       .select('data').eq('backup_date',date).single();
     if(readErr||!backup) throw new Error('Backup not found: '+(readErr?.message||''));
-    // Restore each row to app_data
-    const rows = backup.data;
-    if(!Array.isArray(rows)||!rows.length) throw new Error('Backup is empty');
+    // Handle both old format (array) and new format (object with app_data + pd_skus_v2)
+    const raw = backup.data;
+    const rows = Array.isArray(raw) ? raw : (raw.app_data || []);
+    const skuRows = Array.isArray(raw) ? null : (raw.pd_skus_v2 || null);
+    if(!rows.length && !skuRows?.length) throw new Error('Backup is empty');
     for(const row of rows){
       await db.from('app_data').upsert(
         {key:row.key, value:row.value, updated_at:new Date().toISOString()},
         {onConflict:'key'}
       );
     }
-    toast(`✓ Restored ${rows.length} items from ${date} — reloading...`,'green');
+    if(skuRows&&skuRows.length){
+      for(let i=0;i<skuRows.length;i+=200){
+        const chunk=skuRows.slice(i,i+200);
+        await db.from('pd_skus_v2').upsert(chunk,{onConflict:'id'});
+      }
+    }
+    const skuMsg=skuRows?` + ${skuRows.length} SKUs`:'';
+    toast(`✓ Restored ${rows.length} items${skuMsg} from ${date} — reloading...`,'green');
     setTimeout(()=>location.reload(), 1500);
   }catch(e){
     toast('Restore failed: '+e.message,'red');
@@ -5333,9 +5533,11 @@ async function doLogin(){
   } else {
     if(pass !== defaultPass){ showLoginErr('Invalid email or password.'); return; }
   }
-  // Set user password hash on first login (upgrade to SHA-256)
+  // Upgrade to salted SHA-256 on first login or if using unsalted hash
   const isFirstLogin = !storedHash;
-  const needsUpgrade = storedHash && !storedHash.startsWith('sha256:');
+  const needsUpgrade = storedHash && (
+    !storedHash.startsWith('sha256:') || storedHash.split(':').length < 3
+  );
   if(isFirstLogin || needsUpgrade){ user.passwordHash = await secureHash(pass); await save('users'); }
   // Start session with unique token for single-device enforcement
   currentUser = user;
@@ -5582,19 +5784,36 @@ function _legacyHash(str){
   for(let i=0;i<str.length;i++){ hash = ((hash<<5)-hash)+str.charCodeAt(i); hash|=0; }
   return 'h'+Math.abs(hash).toString(36);
 }
-// SHA-256 hash using Web Crypto API
+// SHA-256 hash using Web Crypto API (with per-user salt)
 async function secureHash(str){
   try{
-    const data = new TextEncoder().encode(str);
+    const salt = crypto.getRandomValues(new Uint8Array(16)).reduce((s,b)=>s+b.toString(16).padStart(2,'0'),'');
+    const data = new TextEncoder().encode(salt + str);
     const buf = await crypto.subtle.digest('SHA-256', data);
-    return 'sha256:'+Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const hash = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    return 'sha256:'+salt+':'+hash;
   }catch(e){ return _legacyHash(str); }
 }
-// Verify password against stored hash (supports both legacy and SHA-256)
+async function _hashWithSalt(str, salt){
+  const data = new TextEncoder().encode(salt + str);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+// Verify password against stored hash (supports legacy, unsalted SHA-256, and salted SHA-256)
 async function verifyPassword(pass, storedHash){
   if(!storedHash) return false;
   if(storedHash.startsWith('sha256:')){
-    return storedHash === await secureHash(pass);
+    const parts = storedHash.split(':');
+    if(parts.length===3){
+      // salted: sha256:<salt>:<hash>
+      const computed = await _hashWithSalt(pass, parts[1]);
+      return parts[2] === computed;
+    }
+    // unsalted legacy: sha256:<hash> — upgrade on next login via doLogin()
+    const data = new TextEncoder().encode(pass);
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    const unsalted = 'sha256:'+Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    return storedHash === unsalted;
   }
   return storedHash === _legacyHash(pass);
 }
@@ -7396,7 +7615,7 @@ function setupRealtime(){
       (payload) => {
         if(Date.now() - _lastWriteTs < 10000) return;
         const key = payload.new?.key;
-        if(!key || key === DB_KEYS.sessions || key === 'pd_skus_v2') return;
+        if(!key || key === DB_KEYS.sessions || key === 'pd_skus_v2' || (key === DB_KEYS.brands && _useBrandTable)) return;
         console.log(`⚡ Sync: ${key} changed`);
         dbGet(key).then(val=>{
           if(val) handleRealtimeUpdate(key, val);
@@ -7431,9 +7650,37 @@ function setupRealtime(){
         skuDB=skuDB.filter(x=>x.id!==id);invalidateCalcCache();renderSKUs();
       }
     )
+    // Channel 3: pd_brands for per-row brand changes
+    .on('postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'pd_brands' },
+      (payload) => {
+        if(Date.now() - _lastWriteTs < 10000) return;
+        const r=payload.new;if(!r)return;
+        const b=_rowToBrand(r);
+        if(!brands.find(x=>x.id===b.id)){brands.push(b);invalidateCalcCache();populateFilters();toast('⚡ New brand from another device','blue');}
+      }
+    )
+    .on('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'pd_brands' },
+      (payload) => {
+        if(Date.now() - _lastWriteTs < 10000) return;
+        const r=payload.new;if(!r)return;
+        const b=_rowToBrand(r);
+        const idx=brands.findIndex(x=>x.id===b.id);
+        if(idx>=0){brands[idx]=b;invalidateCalcCache();populateFilters();}
+      }
+    )
+    .on('postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'pd_brands' },
+      (payload) => {
+        if(Date.now() - _lastWriteTs < 10000) return;
+        const id=payload.old?.id;if(!id)return;
+        brands=brands.filter(x=>x.id!==id);invalidateCalcCache();populateFilters();
+      }
+    )
     .subscribe((status)=>{
       if(status==='SUBSCRIBED'){
-        console.log('⚡ Realtime sync active via pd_sync');
+        console.log('⚡ Realtime sync active via pd_sync + pd_brands');
         updateRealtimeBadge(true);
       } else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){
         console.warn('⚡ Realtime error:', status);

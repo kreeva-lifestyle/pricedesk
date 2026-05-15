@@ -39,12 +39,37 @@ jobs:
           ROW_COUNT=$(echo "$BODY" | jq 'length')
           echo "Fetched $ROW_COUNT rows from app_data"
 
+          # 1b. Read all SKUs from pd_skus_v2 (paginated, 1000 per request)
+          echo "Fetching all SKUs from pd_skus_v2..."
+          ALL_SKUS="[]"
+          OFFSET=0
+          while true; do
+            SKU_RESP=$(curl -s -w "\n%{http_code}" \
+              "${SUPABASE_URL}/rest/v1/pd_skus_v2?select=*&order=id&offset=${OFFSET}&limit=1000" \
+              -H "apikey: ${SUPABASE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_KEY}")
+            SKU_CODE=$(echo "$SKU_RESP" | tail -1)
+            SKU_BODY=$(echo "$SKU_RESP" | sed '$d')
+            if [ "$SKU_CODE" != "200" ]; then
+              echo "Warning: Failed to fetch SKUs at offset $OFFSET (HTTP $SKU_CODE)"
+              break
+            fi
+            PAGE_COUNT=$(echo "$SKU_BODY" | jq 'length')
+            if [ "$PAGE_COUNT" -eq 0 ]; then break; fi
+            ALL_SKUS=$(echo "$ALL_SKUS" "$SKU_BODY" | jq -s '.[0] + .[1]')
+            OFFSET=$((OFFSET + 1000))
+            if [ "$PAGE_COUNT" -lt 1000 ]; then break; fi
+          done
+          SKU_TOTAL=$(echo "$ALL_SKUS" | jq 'length')
+          echo "Fetched $SKU_TOTAL SKUs from pd_skus_v2"
+
           # 2. Insert backup into pd_backups table
           echo "Creating backup for $BACKUP_DATE..."
           BACKUP_PAYLOAD=$(jq -n \
             --arg date "$BACKUP_DATE" \
             --argjson data "$BODY" \
-            '{backup_date: $date, data: $data, created_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))}')
+            --argjson skus "$ALL_SKUS" \
+            '{backup_date: $date, data: {app_data: $data, pd_skus_v2: $skus}, created_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))}')
 
           UPSERT_RESPONSE=$(curl -s -w "\n%{http_code}" \
             "${SUPABASE_URL}/rest/v1/pd_backups" \
@@ -63,7 +88,7 @@ jobs:
             exit 1
           fi
 
-          echo "✓ Backup saved for $BACKUP_DATE ($ROW_COUNT data rows)"
+          echo "✓ Backup saved for $BACKUP_DATE ($ROW_COUNT config rows, $SKU_TOTAL SKUs)"
 
           # 3. Delete backups older than 7 days
           CUTOFF_DATE=$(date -u -d '7 days ago' '+%Y-%m-%d')
