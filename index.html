@@ -7696,7 +7696,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   // Safety: force-hide loading overlay after 30s no matter what
   setTimeout(()=>{
     const lo=document.getElementById('app-loading');
-    if(lo&&lo.style.display!=='none'){
+    if(lo&&lo.classList.contains('active')){
       console.warn('Loading timeout — force-hiding overlay');
       lo.classList.remove('active');
       document.getElementById('sidebar').style.display='';
