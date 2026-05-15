@@ -1872,7 +1872,8 @@ CREATE TABLE IF NOT EXISTS pd_audit_log (
   extra       JSONB
 );
 ALTER TABLE pd_audit_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all_audit" ON pd_audit_log FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "audit_insert_only" ON pd_audit_log FOR INSERT WITH CHECK (true);
+CREATE POLICY "audit_select_only" ON pd_audit_log FOR SELECT USING (true);
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON pd_audit_log (ts DESC);
 
 -- SKU history: per-change tracking (replaces pd_sku_history JSONB in app_data)
@@ -2811,6 +2812,8 @@ async function loadFromStorage(){
     users = users.filter(u=>!(u.name==='Admin User'&&u.email==='admin@yourcompany.com'));
     if(users.length<_preLen) save('users');
     applyDefaultUsers();
+    // Strip password hashes from client-side users (hashes stay in DB, verified server-side)
+    if(_useServerAuth){ users.forEach(u=>{delete u.passwordHash;}); }
 
     const anyData = Object.values(loaded).some(v=>v!==null);
     if(anyData){
@@ -5942,6 +5945,24 @@ async function validateSessionToken(){return true;}
 
 function startSessionCheck(){}
 
+let _useServerAuth=false;
+
+async function _tryServerLogin(email, pass){
+  try{
+    const resp=await fetch(`${SUPABASE_URL}/functions/v1/login`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_ANON}`,'apikey':SUPABASE_ANON},
+      body:JSON.stringify({email,password:pass})
+    });
+    const data=await resp.json();
+    if(!resp.ok) return{ok:false, error:data.error||'Login failed'};
+    _useServerAuth=true;
+    return{ok:true, user:data.user, isFirstLogin:data.isFirstLogin};
+  }catch(e){
+    return{ok:false, fallback:true};
+  }
+}
+
 async function doLogin(){
   const email = document.getElementById('login-email')?.value.trim().toLowerCase();
   const pass  = document.getElementById('login-pass')?.value;
@@ -5949,31 +5970,51 @@ async function doLogin(){
   if(!email||!pass){ showLoginErr('Please fill in both fields.'); return; }
   if(btn){btn.classList.add('loading');btn.textContent='Signing in...';}
   try{
-  // Rate limiting — block after 5 failed attempts
-  const rateCheck = checkLoginRate(email);
-  if(!rateCheck.allowed){ showLoginErr(`Too many attempts. Try again in ${rateCheck.waitSec}s.`); return; }
-  // Find user — use generic error to avoid email enumeration
-  const user = users.find(u => u.email.toLowerCase()===email);
-  if(!user){ showLoginErr('Invalid email or password.'); return; }
-  if(user.revoked){ showLoginErr('Your access has been revoked. Contact your admin.'); return; }
-  // Password check — stored as hash or plain (first login uses default password)
-  const storedHash = user.passwordHash || null;
-  const defaultPass = 'pricedesk123'; // default for new users
-  if(storedHash){
-    const valid = await verifyPassword(pass, storedHash);
-    if(!valid){ showLoginErr('Invalid email or password.'); return; }
+  // Try server-side login first (Edge Function)
+  const serverResult=await _tryServerLogin(email, pass);
+  let user=null, isFirstLogin=false;
+
+  if(serverResult.ok){
+    // Server auth succeeded — user data has NO passwordHash
+    user=serverResult.user;
+    isFirstLogin=serverResult.isFirstLogin;
+    // Merge with local users array for UI (strip hashes from local copy)
+    const localUser=users.find(u=>u.id===user.id);
+    if(localUser){
+      Object.assign(localUser, user);
+      delete localUser.passwordHash;
+      user=localUser;
+    } else {
+      users.push(user);
+    }
+  } else if(serverResult.fallback){
+    // Edge Function not available — fall back to client-side auth
+    const rateCheck = checkLoginRate(email);
+    if(!rateCheck.allowed){ showLoginErr(`Too many attempts. Try again in ${rateCheck.waitSec}s.`); return; }
+    user = users.find(u => u.email.toLowerCase()===email);
+    if(!user){ showLoginErr('Invalid email or password.'); return; }
+    if(user.revoked){ showLoginErr('Your access has been revoked. Contact your admin.'); return; }
+    const storedHash = user.passwordHash || null;
+    const defaultPass = 'pricedesk123';
+    if(storedHash){
+      const valid = await verifyPassword(pass, storedHash);
+      if(!valid){ showLoginErr('Invalid email or password.'); return; }
+    } else {
+      if(pass !== defaultPass){ showLoginErr('Invalid email or password.'); return; }
+    }
+    isFirstLogin = !storedHash;
+    const needsUpgrade = storedHash && (
+      !storedHash.startsWith('sha256:') || storedHash.split(':').length < 3
+    );
+    if(isFirstLogin || needsUpgrade){ user.passwordHash = await secureHash(pass); await save('users'); }
   } else {
-    if(pass !== defaultPass){ showLoginErr('Invalid email or password.'); return; }
+    // Server returned an error (wrong password, locked, etc.)
+    showLoginErr(serverResult.error);
+    return;
   }
-  // Upgrade to salted SHA-256 on first login or if using unsalted hash
-  const isFirstLogin = !storedHash;
-  const needsUpgrade = storedHash && (
-    !storedHash.startsWith('sha256:') || storedHash.split(':').length < 3
-  );
-  if(isFirstLogin || needsUpgrade){ user.passwordHash = await secureHash(pass); await save('users'); }
-  // Start session with unique token for single-device enforcement
+
   currentUser = user;
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify({userId:user.id, loginTime:Date.now()}));
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({userId:user.id, loginTime:Date.now(), serverAuth:_useServerAuth}));
   document.getElementById('login-screen').classList.remove('active');
   document.getElementById('sidebar').style.display='';
   document.getElementById('app-main').style.display='';
@@ -5981,13 +6022,11 @@ async function doLogin(){
   startSessionTimer();
   startSessionCheck();
   if(isFirstLogin) sendWelcomeEmail(user);
-  audit('login',`${user.name} logged in`);
+  audit('login',`${user.name} logged in${_useServerAuth?' (server)':''}`);
   setupRealtime();
-  // Render UI after login (data was loaded during init)
   invalidateCalcCache();
   populateFilters();populateTagFilter();renderBrandSummary();updateAlerts();
   renderGTTable();renderRetTable();renderCollTable();populateLogisticsInputs();
-  // Navigate to user's preferred default page
   const defaultPage=getUserPref('defaultPage','dashboard');
   nav(defaultPage||'dashboard');
   toast(`Welcome back, ${esc(user.name.split(' ')[0])}!`,'green');
@@ -6034,28 +6073,56 @@ async function doForgotPassword(){
     if(errEl){errEl.textContent='Enter a valid email address.';errEl.style.display='block';}
     return;
   }
-  // Always show generic success to avoid email enumeration
   const genericMsg = 'If an account exists with that email, a password reset link has been sent.';
+  const baseUrl = window.location.origin + window.location.pathname;
+
+  // Try server-side reset first
+  try{
+    const resp=await fetch(`${SUPABASE_URL}/functions/v1/reset-password`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_ANON}`,'apikey':SUPABASE_ANON},
+      body:JSON.stringify({action:'request',email})
+    });
+    const data=await resp.json();
+    if(resp.ok&&data.token){
+      const resetLink = baseUrl + '?reset=' + data.token;
+      if(emailReady()&&data.userName){
+        sendEmail(EMAIL_CONFIG.templateReset,{
+          to_name:data.userName, to_email:data.userEmail||email,
+          reset_link:resetLink, login_url:baseUrl, reset_token:data.token
+        });
+        if(okEl){okEl.textContent='✓ Reset link sent to your email. Check your inbox.';okEl.style.display='block';}
+      } else {
+        if(okEl){okEl.innerHTML=`✓ Reset link:<br><a href="${esc(resetLink)}" style="color:var(--ac);word-break:break-all;font-size:11px">${esc(resetLink)}</a><br><span style="font-size:11px;color:var(--tx3)">Email not configured — copy this link manually.</span>`;okEl.style.display='block';}
+      }
+      if(errEl) errEl.style.display='none';
+      if(emailReady()) setTimeout(()=>document.getElementById('forgot-overlay')?.remove(), 8000);
+      return;
+    }
+    // Server returned ok but no token (user not found) — show generic
+    if(resp.ok){
+      if(okEl){okEl.textContent=genericMsg;okEl.style.display='block';}
+      if(errEl) errEl.style.display='none';
+      return;
+    }
+  }catch(e){/* Edge Function not available, fall back to client-side */}
+
+  // Fallback: client-side reset token handling
   const user = users.find(u=>u.email.toLowerCase()===email);
   if(!user){
     if(okEl){okEl.textContent=genericMsg;okEl.style.display='block';}
     if(errEl) errEl.style.display='none';
     return;
   }
-  // Generate reset token and store in Supabase (expires in 30 min)
   const token = generateResetToken();
   const tokens = await dbGet(DB_KEYS.reset_tokens) || {};
   tokens[token] = { userId: user.id, email: user.email, expires: Date.now() + 30*60*1000 };
   await dbSet(DB_KEYS.reset_tokens, tokens);
-  // Build reset link
-  const baseUrl = window.location.origin + window.location.pathname;
   const resetLink = baseUrl + '?reset=' + token;
-  // Send email with link
   if(emailReady()){
     sendEmail(EMAIL_CONFIG.templateReset,{
       to_name: user.name, to_email: user.email,
-      reset_link: resetLink, login_url: baseUrl,
-      reset_token: token
+      reset_link: resetLink, login_url: baseUrl, reset_token: token
     });
     if(okEl){okEl.textContent='✓ Reset link sent to your email. Check your inbox.';okEl.style.display='block';}
   } else {
@@ -6106,14 +6173,33 @@ async function doResetPassword(token){
     if(errEl){errEl.textContent='Passwords do not match.';errEl.style.display='block';}
     return;
   }
-  // Validate token from Supabase
+  // Try server-side reset first
+  try{
+    const resp=await fetch(`${SUPABASE_URL}/functions/v1/reset-password`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_ANON}`,'apikey':SUPABASE_ANON},
+      body:JSON.stringify({action:'reset',token,newPassword:pass1})
+    });
+    const data=await resp.json();
+    if(resp.ok){
+      if(errEl) errEl.style.display='none';
+      if(okEl){okEl.textContent='✓ Password updated successfully! Redirecting to sign in…';okEl.style.display='block';}
+      setTimeout(()=>{window.location.href=window.location.origin+window.location.pathname;},2000);
+      return;
+    }
+    if(data.error&&!data.error.includes('not set')){
+      if(errEl){errEl.textContent=data.error;errEl.style.display='block';}
+      return;
+    }
+  }catch(e){/* Edge Function not available, fall back */}
+
+  // Fallback: client-side token validation
   const tokens = await dbGet(DB_KEYS.reset_tokens) || {};
   const entry = tokens[token];
   if(!entry || Date.now() > entry.expires){
     if(errEl){errEl.textContent='This reset link has expired or is invalid. Please request a new one.';errEl.style.display='block';}
     return;
   }
-  // Find user and update password
   const user = users.find(u=>u.id===entry.userId);
   if(!user){
     if(errEl){errEl.textContent='User account not found. Contact your admin.';errEl.style.display='block';}
@@ -6121,15 +6207,11 @@ async function doResetPassword(token){
   }
   user.passwordHash = await secureHash(pass1);
   await save('users');
-  // Remove used token
   delete tokens[token];
   await dbSet(DB_KEYS.reset_tokens, tokens);
   if(errEl) errEl.style.display='none';
   if(okEl){okEl.textContent='✓ Password updated successfully! Redirecting to sign in…';okEl.style.display='block';}
-  // Redirect to login after 2 seconds
-  setTimeout(()=>{
-    window.location.href = window.location.origin + window.location.pathname;
-  }, 2000);
+  setTimeout(()=>{window.location.href=window.location.origin+window.location.pathname;},2000);
 }
 
 function doLogout(){
