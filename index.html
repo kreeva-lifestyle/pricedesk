@@ -2187,8 +2187,14 @@ async function dbLoadAllBrands(){
       const rows=blob.map(_brandToRow);
       const{error:uErr}=await db.from('pd_brands').upsert(rows,{onConflict:'id'});
       if(!uErr){
-        _useBrandTable=true;
-        console.log(`✓ Brand migration complete — ${blob.length} brands`);
+        // Verify migration by checking count
+        const{count:verifyCount}=await db.from('pd_brands').select('id',{count:'exact',head:true}).catch(()=>({count:0}));
+        if(verifyCount>=blob.length){
+          _useBrandTable=true;
+          console.log(`✓ Brand migration verified — ${verifyCount} brands in table`);
+        } else {
+          console.warn(`Brand migration incomplete: expected ${blob.length}, got ${verifyCount}. Using blob.`);
+        }
       }
       return blob;
     }
@@ -2262,7 +2268,15 @@ async function dbLoadAllCategories(){
       console.log(`Migrating ${blobCats.length} categories from blob to pd_categories...`);
       const rows=blobCats.map((name,i)=>_catToRow(name,catLvl[name],i));
       const{error:uErr}=await db.from('pd_categories').upsert(rows,{onConflict:'name'});
-      if(!uErr){_useCategoryTable=true;console.log('✓ Category migration complete');}
+      if(!uErr){
+        const{count:verifyCount}=await db.from('pd_categories').select('name',{count:'exact',head:true}).catch(()=>({count:0}));
+        if(verifyCount>=blobCats.length){
+          _useCategoryTable=true;
+          console.log(`✓ Category migration verified — ${verifyCount} categories`);
+        } else {
+          console.warn(`Category migration incomplete: expected ${blobCats.length}, got ${verifyCount}. Using blob.`);
+        }
+      }
       return{cats:blobCats,catLevel:catLvl};
     }
     _useCategoryTable=true;
@@ -2315,7 +2329,15 @@ async function dbLoadAllThresholds(){
         category:cat, min_profit:min||0, updated_at:new Date().toISOString()
       }));
       const{error:uErr}=await db.from('pd_thresholds').upsert(rows,{onConflict:'category'});
-      if(!uErr){_useThresholdTable=true;console.log('✓ Threshold migration complete');}
+      if(!uErr){
+        const{count:verifyCount}=await db.from('pd_thresholds').select('category',{count:'exact',head:true}).catch(()=>({count:0}));
+        if(verifyCount>=Object.keys(blob).length){
+          _useThresholdTable=true;
+          console.log(`✓ Threshold migration verified — ${verifyCount} thresholds`);
+        } else {
+          console.warn(`Threshold migration incomplete: expected ${Object.keys(blob).length}, got ${verifyCount}. Using blob.`);
+        }
+      }
       return blob;
     }
     _useThresholdTable=true;
@@ -2351,14 +2373,21 @@ function _rowsToComm(rows){
   const myntra={},ppmp={},cc={},amazon={};
   for(const r of rows){
     if(r.marketplace==='myntra'){
-      if(!myntra[r.category])myntra[r.category]=[0,0,18.88,18.88,18.88];
-      myntra[r.category][r.slab_index]=r.rate;
+      if(!myntra[r.category])myntra[r.category]=new Array(5).fill(null);
+      if(r.slab_index>=0&&r.slab_index<5) myntra[r.category][r.slab_index]=r.rate;
     }else if(r.marketplace==='ajio-ppmp'){
       ppmp[r.category]=r.rate;
     }else if(r.marketplace==='ajio-cc'){
       cc[r.category]=r.rate;
     }else if(r.marketplace==='amazon'){
       amazon[r.category]=r.rate;
+    }
+  }
+  // Validate Myntra slabs: if ANY slab is null (missing row), data is incomplete
+  for(const[cat,slabs]of Object.entries(myntra)){
+    if(slabs.some(v=>v===null)){
+      console.error(`Commission data incomplete for Myntra/${cat}: missing slab(s). Falling back to blob.`);
+      return null;
     }
   }
   return{myntra,ppmp,cc,amazon};
@@ -2391,9 +2420,16 @@ async function dbLoadAllCommissions(){
     if(count>0){
       const{data,error}=await db.from('pd_commissions').select('*');
       if(error)throw error;
+      const result=_rowsToComm(data);
+      if(!result){
+        // Data incomplete — fall back to blob (don't trust partial table data)
+        console.warn('Commission table data incomplete, falling back to blob');
+        _useCommTable=false;
+        throw new Error('incomplete');
+      }
       _useCommTable=true;
       console.log(`Loaded ${data.length} commission rows from pd_commissions table`);
-      return _rowsToComm(data);
+      return result;
     }
     // Migrate from blobs
     const [bMyn,bPP,bCC,bAmz]=await Promise.all([
@@ -2405,7 +2441,17 @@ async function dbLoadAllCommissions(){
       const rows=_commToRows(bMyn||{},bPP||{},bCC||{},bAmz||{});
       if(rows.length){
         const{error:uErr}=await db.from('pd_commissions').upsert(rows,{onConflict:'marketplace,category,slab_index'});
-        if(!uErr){_useCommTable=true;console.log(`✓ Commission migration complete — ${rows.length} rows`);}
+        if(!uErr){
+          // Verify: read back and validate lossless conversion
+          const{data:verify}=await db.from('pd_commissions').select('*').catch(()=>({data:null}));
+          const roundTrip=verify?_rowsToComm(verify):null;
+          if(roundTrip){
+            _useCommTable=true;
+            console.log(`✓ Commission migration verified — ${rows.length} rows`);
+          } else {
+            console.warn('Commission migration verification failed. Using blob.');
+          }
+        }
       }
       return{myntra:bMyn,ppmp:bPP,cc:bCC,amazon:bAmz};
     }
@@ -2446,14 +2492,17 @@ async function dbLoadAuditLog(limit=500){
       const blob=await dbGet(DB_KEYS.audit_log);
       if(blob&&Array.isArray(blob)&&blob.length>0){
         console.log(`Migrating ${blob.length} audit entries from blob to pd_audit_log...`);
+        let migrated=0;
         for(let i=0;i<blob.length;i+=50){
           const chunk=blob.slice(i,i+50).map(e=>({
             ts:e.ts, user_name:e.user||null, user_id:e.userId||null,
             action:e.action, details:e.details||null, extra:e.extra||null
           }));
-          await db.from('pd_audit_log').insert(chunk);
+          const{error:chunkErr}=await db.from('pd_audit_log').insert(chunk);
+          if(chunkErr){console.warn(`Audit chunk ${i} failed:`,chunkErr.message);continue;}
+          migrated+=chunk.length;
         }
-        console.log('✓ Audit log migration complete');
+        console.log(`✓ Audit log migration: ${migrated}/${blob.length} entries`);
       }
     }
     const{data,error}=await db.from('pd_audit_log').select('*').order('ts',{ascending:false}).limit(limit);
@@ -2765,6 +2814,7 @@ async function loadFromStorage(){
 
     const anyData = Object.values(loaded).some(v=>v!==null);
     if(anyData){
+      invalidateCalcCache();
       updateSyncBadge(true);
       console.log('✓ All data loaded from Supabase');
       document.getElementById('db-setup-banner')?.remove();
@@ -3282,7 +3332,9 @@ async function deleteCategory(cat){
     if(affected.length) await dbSaveSKU(...affected);
   }
   delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];delete COLL_FEE_DATA[cat];
-  if(_useCategoryTable) dbDeleteCategory(cat).catch(()=>{});
+  if(_useCategoryTable){
+    try{await dbDeleteCategory(cat);}catch(e){console.warn('Category table delete failed, will sync via save:',e.message);}
+  }
   for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
   invalidateCalcCache();buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
   audit('category_delete',`Category "${cat}" deleted${usedCount?` (${usedCount} SKUs moved to ${CATS[0]})`:''}`);
@@ -7642,9 +7694,12 @@ function audit(action, details, extra){
   if(extra) entry.extra=extra;
   auditLogData.unshift(entry);
   if(auditLogData.length>AUDIT_MAX) auditLogData=auditLogData.slice(0,AUDIT_MAX);
-  // Use table if available, otherwise save entire array to blob
+  // Use table if available, fall back to blob if insert fails
   if(_useAuditTable){
-    dbInsertAudit(entry).catch(e=>console.warn('Audit table insert failed:',e));
+    dbInsertAudit(entry).catch(e=>{
+      console.warn('Audit table insert failed, saving to blob:',e);
+      saveAuditLog().catch(()=>{});
+    });
   } else {
     saveAuditLog().catch(e=>console.warn('Audit save failed:',e));
   }
@@ -7721,9 +7776,12 @@ async function saveSkuHistory(){ if(!_useSkuHistoryTable) await dbSet(DB_KEYS.sk
 
 function trackSkuChange(skuId, field, oldVal, newVal){
   if(oldVal===newVal) return;
-  // Write to table if available
+  // Write to table if available, fall back to blob if insert fails
   if(_useSkuHistoryTable){
-    dbInsertSkuHistory(skuId, field, String(oldVal), String(newVal), currentUser?.name).catch(()=>{});
+    dbInsertSkuHistory(skuId, field, String(oldVal), String(newVal), currentUser?.name).catch(e=>{
+      console.warn('SKU history table insert failed, saving to blob:',e);
+      saveSkuHistory().catch(()=>{});
+    });
   }
   // Always keep in-memory copy for current session
   if(!skuHistoryData[skuId]) skuHistoryData[skuId]=[];
