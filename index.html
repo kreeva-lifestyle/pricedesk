@@ -7746,6 +7746,16 @@ function updateRealtimeBadge(connected){
 // INIT
 // ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',async ()=>{
+  // Safety: force-hide loading overlay after 30s no matter what
+  setTimeout(()=>{
+    const lo=document.getElementById('app-loading');
+    if(lo&&lo.style.display!=='none'){
+      console.warn('Loading timeout — force-hiding overlay');
+      lo.style.display='none';lo.style.pointerEvents='none';
+      document.getElementById('sidebar').style.display='';
+      document.getElementById('app-main').style.display='';
+    }
+  },30000);
   // Wait for Supabase CDN to load (up to 10s)
   for(let i=0;i<20&&(typeof window.supabase==='undefined'||!window.supabase.createClient);i++){
     await new Promise(r=>setTimeout(r,500));
@@ -7768,12 +7778,12 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     console.log('Reset token detected:', resetToken.slice(0,8)+'…');
     await loadFromStorage();
     _dataReady=true;
-    document.getElementById('app-loading').style.display='none';
+    const _lo1=document.getElementById('app-loading');if(_lo1){_lo1.style.display='none';_lo1.style.pointerEvents='none';}
     document.getElementById('login-screen').classList.remove('active');
     showResetPasswordPage(resetToken);
   } else if(!(await checkSession())){
     // Session invalid — show login BEFORE loading any data
-    document.getElementById('app-loading').style.display='none';
+    const _lo2=document.getElementById('app-loading');if(_lo2){_lo2.style.display='none';_lo2.style.pointerEvents='none';}
     document.getElementById('login-screen').classList.add('active');
     // Load data in background (needed for login to work — users array)
     await loadFromStorage();
@@ -7785,6 +7795,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     const loadingMsg=document.getElementById('app-loading-msg');
     const setLoadMsg=(msg)=>{if(loadingMsg)loadingMsg.textContent=msg;};
 
+    try{
     setLoadMsg('Loading SKUs...');
     await loadFromStorage();
 
@@ -7820,14 +7831,20 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     renderCollTable();
     populateLogisticsInputs();
 
-    // Hide loading, show app
-    document.getElementById('sidebar').style.display='';
-    document.getElementById('app-main').style.display='';
-    document.getElementById('app-loading').style.display='none';
-    const hashPage=location.hash.replace('#/','');
-    const lastPage=hashPage&&TITLES[hashPage]?hashPage:sessionStorage.getItem('pd_current_page');
-    if(lastPage&&lastPage!=='dashboard'&&TITLES[lastPage]) nav(lastPage);
-    else nav('dashboard');
+    }catch(loadErr){
+      console.error('Loading error:',loadErr);
+      toast('Some data may not have loaded — please refresh if needed','red');
+    }finally{
+      // ALWAYS hide loading and show app — even if errors occurred
+      const lo=document.getElementById('app-loading');
+      if(lo){lo.style.display='none';lo.style.pointerEvents='none';}
+      document.getElementById('sidebar').style.display='';
+      document.getElementById('app-main').style.display='';
+      const hashPage=location.hash.replace('#/','');
+      const lastPage=hashPage&&TITLES[hashPage]?hashPage:sessionStorage.getItem('pd_current_page');
+      if(lastPage&&lastPage!=='dashboard'&&TITLES[lastPage]) nav(lastPage);
+      else nav('dashboard');
+    }
   }
 
   // Defer non-critical data loads
