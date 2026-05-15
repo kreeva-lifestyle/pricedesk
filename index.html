@@ -40,7 +40,7 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .pt{font-size:15px;font-weight:600}
 .content{padding:22px 26px;flex:1;overflow-x:hidden}
 .page{display:none}.page.active{display:block;animation:fi .18s ease}
-#page-dashboard{padding-left:30px}
+
 @keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 /* BUTTONS */
 .btn{padding:7px 15px;border-radius:4px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--sans);transition:all .12s;display:inline-flex;align-items:center;gap:5px;letter-spacing:.2px}
@@ -65,15 +65,8 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
 /* DASHBOARD DRAG-AND-DROP */
-.dash-block{position:relative;margin-bottom:16px;border-radius:var(--r);transition:box-shadow .2s,opacity .2s,transform .15s}
+.dash-block{position:relative;margin-bottom:16px;border-radius:var(--r)}
 .dash-block:last-child{margin-bottom:0}
-.dash-drag-handle{position:absolute;top:8px;left:-28px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--tx3);cursor:grab;opacity:0;transition:opacity .2s;border-radius:4px;user-select:none;z-index:2}
-.dash-block:hover .dash-drag-handle{opacity:.6}
-.dash-drag-handle:hover{opacity:1!important;background:rgba(255,255,255,.06);color:var(--ac)}
-.dash-drag-handle:active{cursor:grabbing}
-.dash-block.dragging{opacity:.4;box-shadow:0 0 0 2px var(--ac);transform:scale(.98)}
-.dash-block.drag-over-top{box-shadow:0 -3px 0 0 var(--ac)}
-.dash-block.drag-over-bottom{box-shadow:0 3px 0 0 var(--ac)}
 .mb0{margin-bottom:0!important}
 /* STAT CARDS */
 .sc{background:var(--s);border:1px solid rgba(255,255,255,.05);border-radius:var(--r);padding:15px 17px}
@@ -340,12 +333,8 @@ body:has(#login-screen.active){overflow:hidden}
   /* Content padding reduced, prevent overflow */
   .content{padding:14px 12px;overflow-x:hidden;max-width:100%}
 
-  /* Dashboard: disable drag-and-drop on mobile */
-  #page-dashboard{padding-left:0}
-  .dash-drag-handle{display:none!important}
-  .dash-block{cursor:default}
-  .dash-block.dragging{opacity:1;box-shadow:none;transform:none}
-  .dash-block.drag-over-top,.dash-block.drag-over-bottom{box-shadow:none}
+  /* Dashboard: no drag on mobile */
+  
 
   /* Grids: 4→2→1 cols */
   .g4{grid-template-columns:repeat(2,1fr);gap:10px}
@@ -917,8 +906,7 @@ body:has(#login-screen.active){overflow:hidden}
   </div>
 
   <div id="dash-content" style="display:none">
-  <div class="dash-block" data-dash-id="stats" draggable="true">
-    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+  <div class="dash-block" data-dash-id="stats">
     <div class="g4 mb0">
       <div class="sc"><div class="sl">Total SKUs</div><div class="sv" style="color:var(--bl)" id="dash-sku">0</div><div class="ss">Across all brands</div></div>
       <div class="sc"><div class="sl">Active Brands</div><div class="sv" style="color:var(--pu)" id="dash-brands">0</div></div>
@@ -928,13 +916,11 @@ body:has(#login-screen.active){overflow:hidden}
     <div style="margin-top:8px;font-size:10px;color:var(--tx3);padding:0 4px">All dashboard metrics (GST split, category breakdown, profit tables, pricing intelligence) exclude <strong style="color:var(--ac)">archived</strong> and <strong style="color:var(--ac)">ignored threshold</strong> SKUs.</div>
   </div>
 
-  <div class="dash-block" data-dash-id="alerts" draggable="true">
-    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+  <div class="dash-block" data-dash-id="alerts">
     <div id="dash-alerts"></div>
   </div>
 
-  <div class="dash-block" data-dash-id="gst-cat" draggable="true">
-    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+  <div class="dash-block" data-dash-id="gst-cat">
     <div class="g2 mb0">
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600">GST Bracket Split</div></div>
@@ -947,8 +933,7 @@ body:has(#login-screen.active){overflow:hidden}
     </div>
   </div>
 
-  <div class="dash-block" data-dash-id="top-bottom" draggable="true">
-    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+  <div class="dash-block" data-dash-id="top-bottom">
     <div class="g2 mb0">
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600;color:var(--gr)">Top 5 Most Profitable SKUs</div></div>
@@ -961,16 +946,14 @@ body:has(#login-screen.active){overflow:hidden}
     </div>
   </div>
 
-  <div class="dash-block" data-dash-id="cat-profit" draggable="true">
-    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+  <div class="dash-block" data-dash-id="cat-profit">
     <div class="card mb0">
       <div class="ch"><div style="font-size:13px;font-weight:600">Category Profit Summary</div></div>
       <div class="cb" style="padding:0;overflow-x:auto"><table class="dt" style="font-size:12px"><thead><tr><th>Category</th><th>SKUs</th><th>Avg Profit (₹)</th><th>Avg Margin %</th><th>Breaches</th><th>Health</th></tr></thead><tbody id="dash-cat-profit"></tbody></table></div>
     </div>
   </div>
 
-  <div class="dash-block" data-dash-id="tasks" draggable="true">
-    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+  <div class="dash-block" data-dash-id="tasks">
     <div class="card mb0">
       <div class="ch"><div style="font-size:13px;font-weight:600">Team Tasks</div>
         <button class="btn bp bxs" onclick="openAddTaskModal()">+ Add Task</button>
@@ -979,8 +962,7 @@ body:has(#login-screen.active){overflow:hidden}
     </div>
   </div>
 
-  <div class="dash-block" data-dash-id="brand-summary" draggable="true">
-    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+  <div class="dash-block" data-dash-id="brand-summary">
     <div class="card mb0" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
       <div class="ch"><div style="font-size:13px;font-weight:600">Profit by Brand & Commission Model</div></div>
       <table class="dt" style="min-width:600px"><thead><tr><th>Brand</th><th>Marketplace</th><th>Model</th><th>SKUs</th><th>Avg Commission</th><th>Avg Net Profit (₹)</th><th>Status</th></tr></thead><tbody id="brand-summary-body"></tbody></table>
@@ -988,8 +970,7 @@ body:has(#login-screen.active){overflow:hidden}
   </div>
 
   <!-- ═══ PRICING INTELLIGENCE ═══ -->
-  <div class="dash-block" data-dash-id="pricing-intel" draggable="true">
-    <div class="dash-drag-handle" title="Drag to reorder">⠿</div>
+  <div class="dash-block" data-dash-id="pricing-intel">
     <div class="card mb0">
       <div class="ch"><div style="font-size:13px;font-weight:600">Pricing Intelligence</div></div>
       <div class="cb" id="pricing-intel-body" style="padding:0"></div>
@@ -2938,130 +2919,6 @@ function renderBrandSummary(){
 }
 
 // ═══════════════════════════════════════════════════════
-// DASHBOARD DRAG-AND-DROP REORDER
-// ═══════════════════════════════════════════════════════
-const DASH_ORDER_KEY='pricedesk_dash_order';
-let _dashDragEl=null;
-let _dashHandleActive=false;
-
-function initDashDrag(){
-  const container=document.getElementById('dash-content')||document.getElementById('page-dashboard');
-  if(!container)return;
-  // Disable drag-and-drop entirely on mobile
-  if(window.innerWidth<=768){container.querySelectorAll('.dash-block').forEach(b=>b.setAttribute('draggable','false'));return;}
-  // Restore saved order
-  const saved=JSON.parse(localStorage.getItem(DASH_ORDER_KEY)||'null');
-  if(saved&&Array.isArray(saved)){
-    const blocks=[...container.querySelectorAll('.dash-block')];
-    const map={};blocks.forEach(b=>map[b.dataset.dashId]=b);
-    saved.forEach(id=>{if(map[id]){container.appendChild(map[id]);delete map[id];}});
-    Object.values(map).forEach(b=>container.appendChild(b));
-  }
-  // All blocks start as not draggable — only the handle enables it
-  container.querySelectorAll('.dash-block').forEach(block=>{
-    block.setAttribute('draggable','false');
-    const handle=block.querySelector('.dash-drag-handle');
-    // Handle mousedown enables drag on this block
-    handle.addEventListener('mousedown',()=>{
-      _dashHandleActive=true;
-      block.setAttribute('draggable','true');
-    });
-    // Any non-handle mousedown keeps it non-draggable
-    block.addEventListener('mousedown',e=>{
-      if(!e.target.closest('.dash-drag-handle')){
-        _dashHandleActive=false;
-        block.setAttribute('draggable','false');
-      }
-    });
-    block.addEventListener('dragstart',e=>{
-      if(!_dashHandleActive){e.preventDefault();return;}
-      _dashDragEl=block;
-      block.classList.add('dragging');
-      e.dataTransfer.effectAllowed='move';
-      e.dataTransfer.setData('text/plain',block.dataset.dashId);
-    });
-    block.addEventListener('dragend',()=>{
-      block.classList.remove('dragging');
-      block.setAttribute('draggable','false');
-      _dashHandleActive=false;
-      container.querySelectorAll('.dash-block').forEach(b=>b.classList.remove('drag-over-top','drag-over-bottom'));
-      _dashDragEl=null;
-    });
-    block.addEventListener('dragover',e=>{
-      e.preventDefault();
-      if(!_dashDragEl||_dashDragEl===block)return;
-      e.dataTransfer.dropEffect='move';
-      const rect=block.getBoundingClientRect();
-      const mid=rect.top+rect.height/2;
-      block.classList.remove('drag-over-top','drag-over-bottom');
-      if(e.clientY<mid) block.classList.add('drag-over-top');
-      else block.classList.add('drag-over-bottom');
-    });
-    block.addEventListener('dragleave',()=>{
-      block.classList.remove('drag-over-top','drag-over-bottom');
-    });
-    block.addEventListener('drop',e=>{
-      e.preventDefault();
-      block.classList.remove('drag-over-top','drag-over-bottom');
-      if(!_dashDragEl||_dashDragEl===block)return;
-      const rect=block.getBoundingClientRect();
-      const mid=rect.top+rect.height/2;
-      if(e.clientY<mid) container.insertBefore(_dashDragEl,block);
-      else container.insertBefore(_dashDragEl,block.nextSibling);
-      saveDashOrder();
-    });
-  });
-  // Touch support for mobile
-  let _touchBlock=null,_touchClone=null,_touchStartY=0;
-  container.querySelectorAll('.dash-drag-handle').forEach(handle=>{
-    handle.addEventListener('touchstart',e=>{
-      _touchBlock=handle.closest('.dash-block');
-      _touchStartY=e.touches[0].clientY;
-      _touchBlock.classList.add('dragging');
-      e.preventDefault();
-    },{passive:false});
-  });
-  document.addEventListener('touchmove',e=>{
-    if(!_touchBlock)return;
-    e.preventDefault();
-    const ty=e.touches[0].clientY;
-    const blocks=[...container.querySelectorAll('.dash-block')];
-    blocks.forEach(b=>b.classList.remove('drag-over-top','drag-over-bottom'));
-    for(const b of blocks){
-      if(b===_touchBlock)continue;
-      const rect=b.getBoundingClientRect();
-      if(ty>=rect.top&&ty<=rect.bottom){
-        const mid=rect.top+rect.height/2;
-        if(ty<mid) b.classList.add('drag-over-top');
-        else b.classList.add('drag-over-bottom');
-        break;
-      }
-    }
-  },{passive:false});
-  document.addEventListener('touchend',()=>{
-    if(!_touchBlock)return;
-    const blocks=[...container.querySelectorAll('.dash-block')];
-    const over=blocks.find(b=>b.classList.contains('drag-over-top')||b.classList.contains('drag-over-bottom'));
-    if(over&&over!==_touchBlock){
-      if(over.classList.contains('drag-over-top')) container.insertBefore(_touchBlock,over);
-      else container.insertBefore(_touchBlock,over.nextSibling);
-      saveDashOrder();
-    }
-    blocks.forEach(b=>b.classList.remove('drag-over-top','drag-over-bottom'));
-    _touchBlock.classList.remove('dragging');
-    _touchBlock=null;
-  });
-}
-
-function saveDashOrder(){
-  const container=document.getElementById('dash-content')||document.getElementById('page-dashboard');
-  const order=[...container.querySelectorAll('.dash-block')].map(b=>b.dataset.dashId);
-  localStorage.setItem(DASH_ORDER_KEY,JSON.stringify(order));
-}
-
-// Initialize on load
-document.addEventListener('DOMContentLoaded',()=>setTimeout(initDashDrag,100));
-
 function renderDashboardWidgets(){
   invalidateCalcCache();
   const loader=el('dash-loader');
@@ -4358,7 +4215,7 @@ function renderWFBuilder(){
     </div>`;
     // All rows are draggable for reordering
     return `<div class="wfrow ${cls}" style="margin-bottom:6px;flex-wrap:wrap${isLocked?';border-left:2px solid rgba(78,142,247,.35)':''}"
-      draggable="true"
+     
       ondragstart="wfDragStart(event,${idx})"
       ondragover="wfDragOver(event)"
       ondragleave="wfDragLeave(event)"
