@@ -2199,6 +2199,243 @@ async function dbLoadAllBrands(){
   return await dbGet(DB_KEYS.brands);
 }
 
+// ── Per-row Category database operations (combines CATS + CAT_LEVEL) ──
+let _useCategoryTable=false;
+
+function _catToRow(name, level, idx){
+  return{name, level:level||'Level 2', sort_order:idx!=null?idx:0};
+}
+function _rowToCatEntry(r){
+  return{name:r.name, level:r.level||'Level 2', sort_order:r.sort_order||0};
+}
+
+async function dbSaveCategories(catsArr, catLevelMap){
+  const db=getDB();if(!db)throw new Error('No DB');
+  _lastWriteTs=Date.now();
+  const rows=catsArr.map((name,i)=>_catToRow(name, catLevelMap[name], i));
+  try{
+    const{error}=await db.from('pd_categories').upsert(rows,{onConflict:'name'});
+    if(error)throw error;
+    _useCategoryTable=true;
+    console.log(`✓ Saved ${rows.length} categories to pd_categories`);
+    db.from('pd_sync').upsert({key:'pd_categories',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
+  }catch(tableErr){
+    console.warn('Category table save failed, using blob fallback:',tableErr.message||tableErr);
+    await _enqueueWrite(()=>dbSet(DB_KEYS.categories, catsArr));
+    await _enqueueWrite(()=>dbSet(DB_KEYS.cat_levels, catLevelMap));
+  }
+}
+
+async function dbDeleteCategory(name){
+  const db=getDB();if(!db)throw new Error('No DB');
+  _lastWriteTs=Date.now();
+  try{
+    const{error}=await db.from('pd_categories').delete().eq('name',name);
+    if(error)throw error;
+    _useCategoryTable=true;
+    db.from('pd_sync').upsert({key:'pd_categories',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
+  }catch(tableErr){
+    console.warn('Category table delete failed, using blob fallback:',tableErr.message||tableErr);
+  }
+}
+
+async function dbLoadAllCategories(){
+  const db=getDB();if(!db)return null;
+  try{
+    const{count:tableCount,error:cErr}=await db.from('pd_categories').select('name',{count:'exact',head:true});
+    if(cErr)throw cErr;
+    if(tableCount>0){
+      const{data,error}=await db.from('pd_categories').select('*').order('sort_order');
+      if(error)throw error;
+      _useCategoryTable=true;
+      console.log(`Loaded ${data.length} categories from pd_categories table`);
+      const cats=data.map(r=>r.name);
+      const catLevel={};
+      data.forEach(r=>{catLevel[r.name]=r.level||'Level 2';});
+      return{cats,catLevel};
+    }
+    // Table empty — try migration from blob
+    const blobCats=await dbGet(DB_KEYS.categories);
+    const blobLevels=await dbGet(DB_KEYS.cat_levels);
+    if(blobCats&&Array.isArray(blobCats)&&blobCats.length>0){
+      const catLvl=blobLevels||{};
+      console.log(`Migrating ${blobCats.length} categories from blob to pd_categories...`);
+      const rows=blobCats.map((name,i)=>_catToRow(name,catLvl[name],i));
+      const{error:uErr}=await db.from('pd_categories').upsert(rows,{onConflict:'name'});
+      if(!uErr){_useCategoryTable=true;console.log('✓ Category migration complete');}
+      return{cats:blobCats,catLevel:catLvl};
+    }
+    _useCategoryTable=true;
+    return null;
+  }catch(e){console.warn('pd_categories table not available:',e.message);}
+  _useCategoryTable=false;
+  return null;
+}
+
+// ── Per-row Threshold database operations ──
+let _useThresholdTable=false;
+
+async function dbSaveThresholds(thresholdObj){
+  const db=getDB();if(!db)throw new Error('No DB');
+  _lastWriteTs=Date.now();
+  const rows=Object.entries(thresholdObj).map(([cat,min])=>({
+    category:cat, min_profit:min||0, updated_at:new Date().toISOString()
+  }));
+  try{
+    const{error}=await db.from('pd_thresholds').upsert(rows,{onConflict:'category'});
+    if(error)throw error;
+    _useThresholdTable=true;
+    console.log(`✓ Saved ${rows.length} thresholds to pd_thresholds`);
+    db.from('pd_sync').upsert({key:'pd_thresholds',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
+  }catch(tableErr){
+    console.warn('Threshold table save failed, using blob fallback:',tableErr.message||tableErr);
+    await _enqueueWrite(()=>dbSet(DB_KEYS.thresholds, thresholdObj));
+  }
+}
+
+async function dbLoadAllThresholds(){
+  const db=getDB();if(!db)return null;
+  try{
+    const{count:tableCount,error:cErr}=await db.from('pd_thresholds').select('category',{count:'exact',head:true});
+    if(cErr)throw cErr;
+    if(tableCount>0){
+      const{data,error}=await db.from('pd_thresholds').select('*');
+      if(error)throw error;
+      _useThresholdTable=true;
+      const obj={};
+      data.forEach(r=>{obj[r.category]=r.min_profit||0;});
+      console.log(`Loaded ${data.length} thresholds from pd_thresholds table`);
+      return obj;
+    }
+    // Migrate from blob
+    const blob=await dbGet(DB_KEYS.thresholds);
+    if(blob&&typeof blob==='object'&&Object.keys(blob).length>0){
+      console.log('Migrating thresholds from blob to pd_thresholds...');
+      const rows=Object.entries(blob).map(([cat,min])=>({
+        category:cat, min_profit:min||0, updated_at:new Date().toISOString()
+      }));
+      const{error:uErr}=await db.from('pd_thresholds').upsert(rows,{onConflict:'category'});
+      if(!uErr){_useThresholdTable=true;console.log('✓ Threshold migration complete');}
+      return blob;
+    }
+    _useThresholdTable=true;
+    return null;
+  }catch(e){console.warn('pd_thresholds table not available:',e.message);}
+  _useThresholdTable=false;
+  return null;
+}
+
+// ── Audit log table operations (append-only, replaces capped JSONB array) ──
+let _useAuditTable=false;
+
+async function dbInsertAudit(entry){
+  const db=getDB();if(!db)return;
+  try{
+    const row={
+      ts:entry.ts, user_name:entry.user||null, user_id:entry.userId||null,
+      action:entry.action, details:entry.details||null, extra:entry.extra||null
+    };
+    const{error}=await db.from('pd_audit_log').insert(row);
+    if(error)throw error;
+    _useAuditTable=true;
+  }catch(e){
+    console.warn('Audit table insert failed:',e.message);
+    _useAuditTable=false;
+  }
+}
+
+async function dbLoadAuditLog(limit=500){
+  const db=getDB();if(!db)return null;
+  try{
+    const{count,error:cErr}=await db.from('pd_audit_log').select('id',{count:'exact',head:true});
+    if(cErr)throw cErr;
+    _useAuditTable=true;
+    if(count===0){
+      // Migrate from blob
+      const blob=await dbGet(DB_KEYS.audit_log);
+      if(blob&&Array.isArray(blob)&&blob.length>0){
+        console.log(`Migrating ${blob.length} audit entries from blob to pd_audit_log...`);
+        for(let i=0;i<blob.length;i+=50){
+          const chunk=blob.slice(i,i+50).map(e=>({
+            ts:e.ts, user_name:e.user||null, user_id:e.userId||null,
+            action:e.action, details:e.details||null, extra:e.extra||null
+          }));
+          await db.from('pd_audit_log').insert(chunk);
+        }
+        console.log('✓ Audit log migration complete');
+      }
+    }
+    const{data,error}=await db.from('pd_audit_log').select('*').order('ts',{ascending:false}).limit(limit);
+    if(error)throw error;
+    return data.map(r=>({
+      ts:r.ts, user:r.user_name||'System', userId:r.user_id||'',
+      action:r.action, details:r.details||'', extra:r.extra||undefined
+    }));
+  }catch(e){console.warn('pd_audit_log table not available:',e.message);}
+  _useAuditTable=false;
+  return null;
+}
+
+// ── SKU history table operations (per-change tracking) ──
+let _useSkuHistoryTable=false;
+
+async function dbInsertSkuHistory(skuId, field, oldVal, newVal, userName){
+  const db=getDB();if(!db)return;
+  try{
+    const{error}=await db.from('pd_sku_history').insert({
+      sku_id:skuId, field, old_val:String(oldVal??''), new_val:String(newVal??''),
+      user_name:userName||null, ts:new Date().toISOString()
+    });
+    if(error)throw error;
+    _useSkuHistoryTable=true;
+  }catch(e){
+    console.warn('SKU history table insert failed:',e.message);
+    _useSkuHistoryTable=false;
+  }
+}
+
+async function dbLoadSkuHistory(){
+  const db=getDB();if(!db)return null;
+  try{
+    const{count,error:cErr}=await db.from('pd_sku_history').select('id',{count:'exact',head:true});
+    if(cErr)throw cErr;
+    _useSkuHistoryTable=true;
+    if(count===0){
+      // Migrate from blob
+      const blob=await dbGet(DB_KEYS.sku_history);
+      if(blob&&typeof blob==='object'){
+        const entries=[];
+        for(const[skuId,arr]of Object.entries(blob)){
+          if(!Array.isArray(arr))continue;
+          for(const h of arr){
+            if(h.field==='_snapshot')continue;
+            entries.push({sku_id:skuId,field:h.field,old_val:String(h.oldVal??''),new_val:String(h.newVal??''),user_name:h.user||null,ts:h.ts});
+          }
+        }
+        if(entries.length){
+          console.log(`Migrating ${entries.length} SKU history entries to pd_sku_history...`);
+          for(let i=0;i<entries.length;i+=100){
+            await db.from('pd_sku_history').insert(entries.slice(i,i+100));
+          }
+          console.log('✓ SKU history migration complete');
+        }
+      }
+    }
+    return true;
+  }catch(e){console.warn('pd_sku_history table not available:',e.message);}
+  _useSkuHistoryTable=false;
+  return null;
+}
+
+async function dbGetSkuHistory(skuId){
+  const db=getDB();if(!db)return[];
+  try{
+    const{data,error}=await db.from('pd_sku_history').select('*').eq('sku_id',skuId).order('ts',{ascending:false}).limit(50);
+    if(error)throw error;
+    return data.map(r=>({ts:r.ts,field:r.field,oldVal:r.old_val,newVal:r.new_val,user:r.user_name||'Unknown'}));
+  }catch(e){return[];}
+}
+
 // Legacy wrapper for compatibility (used by debounced edit save)
 async function _doSaveSKUs(){
   _lastWriteTs=Date.now();
@@ -2256,6 +2493,28 @@ async function save(type, opts){
       }
     }catch(e){/* fall through to blob save */}
   }
+  // Categories + cat_levels: use per-row table if available
+  if(type==='categories'||type==='cat_levels'){
+    _lastWriteTs=Date.now();
+    try{
+      if(_useCategoryTable){
+        await dbSaveCategories(CATS, CAT_LEVEL);
+        updateSyncBadge(true);
+        return;
+      }
+    }catch(e){/* fall through to blob save */}
+  }
+  // Thresholds: use per-row table if available
+  if(type==='thresholds'){
+    _lastWriteTs=Date.now();
+    try{
+      if(_useThresholdTable){
+        await dbSaveThresholds(THRESHOLDS);
+        updateSyncBadge(true);
+        return;
+      }
+    }catch(e){/* fall through to blob save */}
+  }
   updateSyncBadge(false);
   const dataMap = {
     brands:      brands,
@@ -2295,12 +2554,22 @@ async function loadFromStorage(){
     const loaded = {};
     // Batch 1: SKUs — try per-row table first, fall back to JSON blob
     loaded.skus = await dbLoadAllSKUs();
-    // Batch 2: Core config (brands from table, rest from app_data)
-    loaded.brands = await dbLoadAllBrands();
-    const batch2a = ['users','thresholds'];
-    const r2a = await Promise.all(batch2a.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
-    batch2a.forEach((t,i) => { loaded[t] = r2a[i]; });
-    const batch2b = ['categories','levels','cat_levels','alert'];
+    // Batch 2: Core config (brands/categories/thresholds from tables, rest from app_data)
+    const [brandsResult, catResult, threshResult, usersResult] = await Promise.all([
+      dbLoadAllBrands(),
+      dbLoadAllCategories(),
+      dbLoadAllThresholds(),
+      dbGet(DB_KEYS.users).catch(()=>null)
+    ]);
+    loaded.brands = brandsResult;
+    loaded.users = usersResult;
+    if(catResult){ loaded.categories=catResult.cats; loaded.cat_levels=catResult.catLevel; }
+    else {
+      loaded.categories = await dbGet(DB_KEYS.categories).catch(()=>null);
+      loaded.cat_levels = await dbGet(DB_KEYS.cat_levels).catch(()=>null);
+    }
+    loaded.thresholds = threshResult || await dbGet(DB_KEYS.thresholds).catch(()=>null);
+    const batch2b = ['levels','alert'];
     const r2b = await Promise.all(batch2b.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
     batch2b.forEach((t,i) => { loaded[t] = r2b[i]; });
     // Batch 3: Commission + logistics (2-3 at a time)
@@ -2903,6 +3172,7 @@ async function deleteCategory(cat){
     if(affected.length) await dbSaveSKU(...affected);
   }
   delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];delete COLL_FEE_DATA[cat];
+  if(_useCategoryTable) dbDeleteCategory(cat).catch(()=>{});
   for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
   invalidateCalcCache();buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
   audit('category_delete',`Category "${cat}" deleted${usedCount?` (${usedCount} SKUs moved to ${CATS[0]})`:''}`);
@@ -7240,6 +7510,12 @@ let _auditPage=1;
 const AUDIT_PAGE_SIZE=30;
 
 async function loadAuditLog(){
+  // Try table first, fall back to blob
+  const tableData=await dbLoadAuditLog(500);
+  if(tableData&&Array.isArray(tableData)&&(_useAuditTable||tableData.length>0)){
+    auditLogData=tableData;
+    return;
+  }
   const data=await dbGet(DB_KEYS.audit_log);
   if(data&&Array.isArray(data)) auditLogData=data;
 }
@@ -7256,7 +7532,12 @@ function audit(action, details, extra){
   if(extra) entry.extra=extra;
   auditLogData.unshift(entry);
   if(auditLogData.length>AUDIT_MAX) auditLogData=auditLogData.slice(0,AUDIT_MAX);
-  saveAuditLog().catch(e=>console.warn('Audit save failed:',e));
+  // Use table if available, otherwise save entire array to blob
+  if(_useAuditTable){
+    dbInsertAudit(entry).catch(e=>console.warn('Audit table insert failed:',e));
+  } else {
+    saveAuditLog().catch(e=>console.warn('Audit save failed:',e));
+  }
 }
 
 function populateAuditFilters(){
@@ -7320,13 +7601,21 @@ function clearAuditLog(){
 let skuHistoryData={};// keyed by skuId -> array of {ts, field, oldVal, newVal, user}
 
 async function loadSkuHistory(){
+  // Try table first, fall back to blob
+  const tableOk=await dbLoadSkuHistory();
+  if(_useSkuHistoryTable) return;
   const data=await dbGet(DB_KEYS.sku_history);
   if(data&&typeof data==='object') skuHistoryData=data;
 }
-async function saveSkuHistory(){ await dbSet(DB_KEYS.sku_history, skuHistoryData); }
+async function saveSkuHistory(){ if(!_useSkuHistoryTable) await dbSet(DB_KEYS.sku_history, skuHistoryData); }
 
 function trackSkuChange(skuId, field, oldVal, newVal){
   if(oldVal===newVal) return;
+  // Write to table if available
+  if(_useSkuHistoryTable){
+    dbInsertSkuHistory(skuId, field, String(oldVal), String(newVal), currentUser?.name).catch(()=>{});
+  }
+  // Always keep in-memory copy for current session
   if(!skuHistoryData[skuId]) skuHistoryData[skuId]=[];
   skuHistoryData[skuId].push({
     ts: new Date().toISOString(),
@@ -7335,7 +7624,6 @@ function trackSkuChange(skuId, field, oldVal, newVal){
     newVal,
     user: currentUser?.name||'Unknown'
   });
-  // Keep max 50 entries per SKU
   if(skuHistoryData[skuId].length>50) skuHistoryData[skuId]=skuHistoryData[skuId].slice(-50);
 }
 // Record profit/ifDelivered/grossSettlement snapshots alongside field changes
@@ -7359,10 +7647,15 @@ function populateSkuHistorySelect(){
     skuDB.map(s=>`<option value="${escAttr(s.id)}">${esc(s.sku||s.styleId||s.id)} — ${esc((brands.find(b=>b.id===s.brandId)||{}).name||'?')}</option>`).join('');
 }
 
-function renderSkuHistory(skuId){
+async function renderSkuHistory(skuId){
   const body=el('sku-history-body');if(!body)return;
   if(!skuId){body.innerHTML='<div class="st" style="text-align:center;padding:10px">Select a SKU above</div>';return;}
-  const history=skuHistoryData[skuId];
+  // Load from table if available, otherwise use in-memory data
+  let history=skuHistoryData[skuId];
+  if(_useSkuHistoryTable){
+    const tableHistory=await dbGetSkuHistory(skuId);
+    if(tableHistory&&tableHistory.length) history=tableHistory;
+  }
   if(!history||!history.length){body.innerHTML='<div class="st" style="text-align:center;padding:10px">No price changes recorded for this SKU yet</div>';return;}
   const fieldLabels={cost:'Cost (₹)',markup:'Markup %',discount:'Discount %',category:'Category',brandId:'Brand'};
   body.innerHTML=`<div style="max-height:250px;overflow-y:auto"><table class="dt" style="font-size:11px">
@@ -7615,7 +7908,10 @@ function setupRealtime(){
       (payload) => {
         if(Date.now() - _lastWriteTs < 10000) return;
         const key = payload.new?.key;
-        if(!key || key === DB_KEYS.sessions || key === 'pd_skus_v2' || (key === DB_KEYS.brands && _useBrandTable)) return;
+        if(!key || key === DB_KEYS.sessions || key === 'pd_skus_v2'
+          || (key === DB_KEYS.brands && _useBrandTable)
+          || ((key === DB_KEYS.categories || key === DB_KEYS.cat_levels) && _useCategoryTable)
+          || (key === DB_KEYS.thresholds && _useThresholdTable)) return;
         console.log(`⚡ Sync: ${key} changed`);
         dbGet(key).then(val=>{
           if(val) handleRealtimeUpdate(key, val);
