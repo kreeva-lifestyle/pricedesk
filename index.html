@@ -2129,29 +2129,19 @@ async function dbSaveBrands(brandsArr){
   const db=getDB();if(!db)throw new Error('No DB');
   _lastWriteTs=Date.now();
   const rows=brandsArr.map(_brandToRow);
-  try{
-    const{error}=await db.from('pd_brands').upsert(rows,{onConflict:'id'});
-    if(error)throw error;
-    _useBrandTable=true;
-    console.log(`✓ Saved ${rows.length} brand(s) to pd_brands`);
-  }catch(tableErr){
-    console.warn('Brand table save failed, using blob fallback:',tableErr.message||tableErr);
-    await _enqueueWrite(()=>dbSet(DB_KEYS.brands, brandsArr));
-  }
+  const{error}=await db.from('pd_brands').upsert(rows,{onConflict:'id'});
+  if(error)throw new Error(`Brand save failed: ${error.message}`);
+  _useBrandTable=true;
+  console.log(`✓ Saved ${rows.length} brand(s) to pd_brands`);
 }
 
 async function dbDeleteBrand(id){
   const db=getDB();if(!db)throw new Error('No DB');
   _lastWriteTs=Date.now();
-  try{
-    const{error}=await db.from('pd_brands').delete().eq('id',id);
-    if(error)throw error;
-    _useBrandTable=true;
-    console.log(`✓ Deleted brand ${id} from pd_brands`);
-  }catch(tableErr){
-    console.warn('Brand table delete failed, using blob fallback:',tableErr.message||tableErr);
-    await _enqueueWrite(()=>dbSet(DB_KEYS.brands, brands));
-  }
+  const{error}=await db.from('pd_brands').delete().eq('id',id);
+  if(error)throw new Error(`Brand delete failed: ${error.message}`);
+  _useBrandTable=true;
+  console.log(`✓ Deleted brand ${id} from pd_brands`);
 }
 
 async function dbLoadAllBrands(){
@@ -2218,28 +2208,18 @@ async function dbSaveCategories(catsArr, catLevelMap){
   const db=getDB();if(!db)throw new Error('No DB');
   _lastWriteTs=Date.now();
   const rows=catsArr.map((name,i)=>_catToRow(name, catLevelMap[name], i));
-  try{
-    const{error}=await db.from('pd_categories').upsert(rows,{onConflict:'name'});
-    if(error)throw error;
-    _useCategoryTable=true;
-    console.log(`✓ Saved ${rows.length} categories to pd_categories`);
-  }catch(tableErr){
-    console.warn('Category table save failed, using blob fallback:',tableErr.message||tableErr);
-    await _enqueueWrite(()=>dbSet(DB_KEYS.categories, catsArr));
-    await _enqueueWrite(()=>dbSet(DB_KEYS.cat_levels, catLevelMap));
-  }
+  const{error}=await db.from('pd_categories').upsert(rows,{onConflict:'name'});
+  if(error)throw new Error(`Category save failed: ${error.message}`);
+  _useCategoryTable=true;
+  console.log(`✓ Saved ${rows.length} categories to pd_categories`);
 }
 
 async function dbDeleteCategory(name){
   const db=getDB();if(!db)throw new Error('No DB');
   _lastWriteTs=Date.now();
-  try{
-    const{error}=await db.from('pd_categories').delete().eq('name',name);
-    if(error)throw error;
-    _useCategoryTable=true;
-  }catch(tableErr){
-    console.warn('Category table delete failed, using blob fallback:',tableErr.message||tableErr);
-  }
+  const{error}=await db.from('pd_categories').delete().eq('name',name);
+  if(error)throw new Error(`Category delete failed: ${error.message}`);
+  _useCategoryTable=true;
 }
 
 async function dbLoadAllCategories(){
@@ -2292,15 +2272,10 @@ async function dbSaveThresholds(thresholdObj){
   const rows=Object.entries(thresholdObj).map(([cat,min])=>({
     category:cat, min_profit:min||0, updated_at:new Date().toISOString()
   }));
-  try{
-    const{error}=await db.from('pd_thresholds').upsert(rows,{onConflict:'category'});
-    if(error)throw error;
-    _useThresholdTable=true;
-    console.log(`✓ Saved ${rows.length} thresholds to pd_thresholds`);
-  }catch(tableErr){
-    console.warn('Threshold table save failed, using blob fallback:',tableErr.message||tableErr);
-    await _enqueueWrite(()=>dbSet(DB_KEYS.thresholds, thresholdObj));
-  }
+  const{error}=await db.from('pd_thresholds').upsert(rows,{onConflict:'category'});
+  if(error)throw new Error(`Threshold save failed: ${error.message}`);
+  _useThresholdTable=true;
+  console.log(`✓ Saved ${rows.length} thresholds to pd_thresholds`);
 }
 
 async function dbLoadAllThresholds(){
@@ -2393,18 +2368,10 @@ async function dbSaveCommissions(myntra, ppmp, cc, amazon){
   const db=getDB();if(!db)throw new Error('No DB');
   _lastWriteTs=Date.now();
   const rows=_commToRows(myntra, ppmp, cc, amazon);
-  try{
-    const{error}=await db.from('pd_commissions').upsert(rows,{onConflict:'marketplace,category,slab_index'});
-    if(error)throw error;
-    _useCommTable=true;
-    console.log(`✓ Saved ${rows.length} commission rows to pd_commissions`);
-  }catch(tableErr){
-    console.warn('Commission table save failed, using blob fallback:',tableErr.message||tableErr);
-    await _enqueueWrite(()=>dbSet(DB_KEYS.comm_myntra, myntra));
-    await _enqueueWrite(()=>dbSet(DB_KEYS.comm_ppmp, ppmp));
-    await _enqueueWrite(()=>dbSet(DB_KEYS.comm_cc, cc));
-    await _enqueueWrite(()=>dbSet(DB_KEYS.comm_amazon, amazon));
-  }
+  const{error}=await db.from('pd_commissions').upsert(rows,{onConflict:'marketplace,category,slab_index'});
+  if(error)throw new Error(`Commission save failed: ${error.message}`);
+  _useCommTable=true;
+  console.log(`✓ Saved ${rows.length} commission rows to pd_commissions`);
 }
 
 async function dbLoadAllCommissions(){
