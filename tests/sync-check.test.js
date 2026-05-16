@@ -21,11 +21,9 @@ const HTML = readFileSync(resolve(__dirname, '../index.html'), 'utf8');
 
 describe('source drift detection — production strings must match test copies', () => {
   describe('one-line functions', () => {
-    it('autoGST is unchanged (tests/calc/gst.test.js)', () => {
-      expect(HTML).toContain(
-        'function autoGST(sp){return sp>=2500?0.18:0.05;}'
-      );
-    });
+    // autoGST has been extracted to src/calc/gst.js as part of Phase 4B.
+    // The test file now imports the real source — drift detection is no
+    // longer needed for this function.
 
     it('getMynRet is unchanged (tests/calc/myntra-fees.test.js)', () => {
       expect(HTML).toContain(

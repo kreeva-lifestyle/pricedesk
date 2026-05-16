@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { autoGST } from '../../src/calc/gst.js';
 
 // SYNC NOTE: calcSKU is copied verbatim from index.html:3017 below,
 // along with the globals and helpers it reads. If you change any of
@@ -41,7 +42,7 @@ const LOGISTICS_SETTINGS = {
   amz_fba: 55, amz_close: 15, amz_ret: 55,
 };
 
-function autoGST(sp) { return sp >= 2500 ? 0.18 : 0.05; }
+// autoGST imported from real source at top of file (Phase 4B extraction).
 
 // brands is a global array searched by id
 let brands = [];
