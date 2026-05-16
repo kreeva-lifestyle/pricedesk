@@ -1588,6 +1588,10 @@ body:has(#login-screen.active){overflow:hidden}
 // ═══════════════════════════════════════════════════════
 const SUPABASE_URL  = 'https://fcmesdnagvrdmjzzuwue.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbWVzZG5hZ3ZyZG1qenp1d3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxNjM4NTgsImV4cCI6MjA4OTczOTg1OH0.fS1ecV898Dmrka6hr3R0RE6gcKlneWUPbDyDPv30_qU';
+// Default password issued to new users / used by client-side auth fallback.
+// The authoritative copy lives in the `login` Edge Function — change both
+// places if rotating.
+const DEFAULT_USER_PASSWORD = 'pricedesk123';
 
 // ═══════════════════════════════════════════════════════
 // SECURITY HELPERS
@@ -4569,7 +4573,7 @@ async function saveUser(eid){
   if(eid) audit('user_edit',`${name} (${email}) updated`);
   else audit('user_add',`${name} (${email}) added as ${role}`);
   // Send onboarding email to new users
-  if(!eid){ const newUser=users[users.length-1]; sendEmail(EMAIL_CONFIG.templateWelcome,{to_name:newUser.name,to_email:newUser.email,role:newUser.role,temp_password:'pricedesk123',login_url:window.location.href}); }
+  if(!eid){ const newUser=users[users.length-1]; sendEmail(EMAIL_CONFIG.templateWelcome,{to_name:newUser.name,to_email:newUser.email,role:newUser.role,temp_password:DEFAULT_USER_PASSWORD,login_url:window.location.href}); }
 }
 
 async function deleteUser(id){
@@ -5871,7 +5875,7 @@ async function testEmail(type){
   const base = { to_email: dest, to_name:'Test User', login_url: window.location.href };
   if(type==='welcome'){
     result = await sendEmail(EMAIL_CONFIG.templateWelcome,{
-      ...base, role:'manager', temp_password:'pricedesk123'
+      ...base, role:'manager', temp_password:DEFAULT_USER_PASSWORD
     });
   } else if(type==='reset'){
     result = await sendEmail(EMAIL_CONFIG.templateReset,{
@@ -5979,7 +5983,7 @@ async function doLogin(){
     if(!user){ showLoginErr('Invalid email or password.'); return; }
     if(user.revoked){ showLoginErr('Your access has been revoked. Contact your admin.'); return; }
     const storedHash = user.passwordHash || null;
-    const defaultPass = 'pricedesk123';
+    const defaultPass = DEFAULT_USER_PASSWORD;
     if(storedHash){
       const valid = await verifyPassword(pass, storedHash);
       if(!valid){ showLoginErr('Invalid email or password.'); return; }
