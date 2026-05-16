@@ -1995,7 +1995,7 @@ async function dbSaveSKU(...skus){
   updateSyncBadge(false);
   const rows=skus.map(_skuToRow);
   const{error}=await db.from('pd_skus_v2').upsert(rows,{onConflict:'id'});
-  if(error){updateSyncBadge(true);throw new Error(`SKU save failed: ${error.message}`);}
+  if(error){updateSyncBadge(false,error.message);throw new Error(`SKU save failed: ${error.message}`);}
   _useSkuTable=true;
   updateSyncBadge(true);
   console.log(`✓ Saved ${rows.length} SKU(s) to pd_skus_v2`);
@@ -2007,7 +2007,7 @@ async function dbDeleteSKU(id){
   _lastWriteTs=Date.now();
   updateSyncBadge(false);
   const{error}=await db.from('pd_skus_v2').delete().eq('id',id);
-  if(error){updateSyncBadge(true);throw new Error(`SKU delete failed: ${error.message}`);}
+  if(error){updateSyncBadge(false,error.message);throw new Error(`SKU delete failed: ${error.message}`);}
   _useSkuTable=true;
   updateSyncBadge(true);
   console.log(`✓ Deleted SKU ${id} from pd_skus_v2`);
