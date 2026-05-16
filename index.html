@@ -1994,19 +1994,11 @@ async function dbSaveSKU(...skus){
   _lastWriteTs=Date.now();
   updateSyncBadge(false);
   const rows=skus.map(_skuToRow);
-  // Always try table first, fall back to blob if table fails
-  try{
-    const{error}=await db.from('pd_skus_v2').upsert(rows,{onConflict:'id'});
-    if(error)throw error;
-    _useSkuTable=true;
-    updateSyncBadge(true);
-    console.log(`✓ Saved ${rows.length} SKU(s) to pd_skus_v2`);
-    db.from('pd_sync').upsert({key:'pd_skus_v2',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
-  }catch(tableErr){
-    console.warn('Table save failed, using blob fallback:',tableErr.message||tableErr);
-    const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
-    await _enqueueWrite(()=>dbSet(DB_KEYS.skus,val));
-  }
+  const{error}=await db.from('pd_skus_v2').upsert(rows,{onConflict:'id'});
+  if(error){updateSyncBadge(true);throw new Error(`SKU save failed: ${error.message}`);}
+  _useSkuTable=true;
+  updateSyncBadge(true);
+  console.log(`✓ Saved ${rows.length} SKU(s) to pd_skus_v2`);
 }
 
 // Delete one SKU by ID (atomic)
@@ -2014,18 +2006,11 @@ async function dbDeleteSKU(id){
   const db=getDB();if(!db)throw new Error('No DB');
   _lastWriteTs=Date.now();
   updateSyncBadge(false);
-  try{
-    const{error}=await db.from('pd_skus_v2').delete().eq('id',id);
-    if(error)throw error;
-    _useSkuTable=true;
-    updateSyncBadge(true);
-    console.log(`✓ Deleted SKU ${id} from pd_skus_v2`);
-    db.from('pd_sync').upsert({key:'pd_skus_v2',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
-  }catch(tableErr){
-    console.warn('Table delete failed, using blob fallback:',tableErr.message||tableErr);
-    const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
-    await _enqueueWrite(()=>dbSet(DB_KEYS.skus,val));
-  }
+  const{error}=await db.from('pd_skus_v2').delete().eq('id',id);
+  if(error){updateSyncBadge(true);throw new Error(`SKU delete failed: ${error.message}`);}
+  _useSkuTable=true;
+  updateSyncBadge(true);
+  console.log(`✓ Deleted SKU ${id} from pd_skus_v2`);
 }
 
 // Load all SKUs from table
@@ -2552,7 +2537,6 @@ async function _doSaveSKUs(){
       if(error)throw new Error(error.message);
     }
     updateSyncBadge(true);
-    db.from('pd_sync').upsert({key:'pd_skus_v2',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
   } else {
     const val=skuDB.map(s=>{const{img,...rest}=s;return rest;});
     await _enqueueWrite(()=>dbSet(DB_KEYS.skus,val));
