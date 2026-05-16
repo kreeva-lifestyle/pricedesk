@@ -1582,17 +1582,6 @@ body:has(#login-screen.active){overflow:hidden}
 </div>
 <div id="modal-root"></div>
 
-<!-- Module shim: import extracted calc helpers and expose them as globals
-     so the classic inline scripts below can keep calling autoGST(...) etc.
-     This is the foundation of Phase 4B modularization — each function gets
-     extracted one at a time, then the inline definition is removed. -->
-<script type="module">
-  import { autoGST } from './src/calc/gst.js';
-  import { sanitizeExpr } from './src/calc/sanitize.js';
-  window.autoGST = autoGST;
-  window.sanitizeExpr = sanitizeExpr;
-</script>
-
 <script>
 // ═══════════════════════════════════════════════════════
 // SUPABASE CONFIG — paste your keys here after setup
@@ -1617,9 +1606,18 @@ function escAttr(s){
   if(s==null) return '';
   return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/</g,'\\x3c').replace(/>/g,'\\x3e');
 }
-// sanitizeExpr is now defined in src/calc/sanitize.js and attached to
-// window by the module shim near the top of <body>. To change the
-// denylist, edit the BLOCKED regex there.
+// Sanitize formula expressions — allow only safe math/variable tokens
+function sanitizeExpr(expr){
+  if(!expr) return '0';
+  // Allow: numbers, decimals, operators, parens, commas, spaces, Math.*, known variable names
+  // Block: assignment, function calls to non-Math, property access beyond Math, semicolons, brackets
+  const blocked = /[;{}\[\]\\`]|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\b)/;
+  if(blocked.test(expr)){
+    console.warn('Blocked unsafe expression:', expr);
+    return '0';
+  }
+  return expr;
+}
 // Login rate limiter
 const _loginAttempts = {};
 function checkLoginRate(email){
@@ -2956,8 +2954,7 @@ let editId=null;
 // ═══════════════════════════════════════════════════════
 // CALC HELPERS
 // ═══════════════════════════════════════════════════════
-// autoGST is now defined in src/calc/gst.js and attached to window by
-// the module shim above. Look there to change the GST boundary.
+function autoGST(sp){return sp>=2500?0.18:0.05;}
 function gstBadge(sp){return sp>=2500?'<span class="gst18">18%</span>':'<span class="gst5">5%</span>';}
 function getMyntraComm(cat,sp){
   const slabs=COMM_MYNTRA[cat];if(!slabs)return 18.88;

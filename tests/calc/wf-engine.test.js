@@ -1,9 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { autoGST } from '../../src/calc/gst.js';
-import { sanitizeExpr } from '../../src/calc/sanitize.js';
 
-// SYNC NOTE: runWFEngine is still copied verbatim from index.html:6728.
-// autoGST and sanitizeExpr are now imported from their src/ modules.
+// SYNC NOTE: Functions below are copied verbatim from index.html.
+//   - sanitizeExpr:  index.html:1606
+//   - runWFEngine:   index.html:6728
 //
 // We deliberately do NOT copy WF.myntra or the calcMyntraFull
 // wrapper. Those depend on user-editable wireframe rules and
@@ -12,7 +11,15 @@ import { sanitizeExpr } from '../../src/calc/sanitize.js';
 // with small synthetic rule sets so we catch regressions in the
 // engine itself, not in user-specific formulas.
 
-// sanitizeExpr imported from real source at top of file (Phase 4B extraction).
+function sanitizeExpr(expr) {
+  if (!expr) return '0';
+  const blocked = /[;{}\[\]\\`]|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\b)/;
+  if (blocked.test(expr)) {
+    console.warn('Blocked unsafe expression:', expr);
+    return '0';
+  }
+  return expr;
+}
 
 // Minimal stand-ins for the globals runWFEngine reaches for.
 const CATS = ['Kurta Sets', 'Tops'];
@@ -21,6 +28,7 @@ const LOGISTICS_SETTINGS = { myn_pg_fee: 50.22 };
 function getMynFwd() { return 0; }
 function getMynRet(lvl) { return REVERSE_FEES[lvl] ?? 218; }
 function getMyntraComm() { return 0; }
+function autoGST(sp) { return sp >= 2500 ? 0.18 : 0.05; }
 
 // WF lookup table — keyed by `fn` field on lookup rows. The engine
 // invokes WF_LOOKUPS[row.fn](ctx). Tests stub specific lookups.
