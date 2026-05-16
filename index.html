@@ -4602,15 +4602,53 @@ async function saveUser(eid){
   if(!email||!email.includes('@')){toast('Valid email required','red');return;}
   if(eid){
     const u=users.find(x=>x.id===eid);if(u)Object.assign(u,{name,email,role,updatedAt:new Date().toISOString()});toast(`✓ ${name} updated`,'green');
-  } else {
-    if(users.find(u=>u.email===email)){toast('Email already exists','red');return;}
-    users.push({id:'u'+Date.now(),name,email,role,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});toast(`✓ ${name} added`,'green');
+    closeModal();renderUsers();await save('users');
+    audit('user_edit',`${name} (${email}) updated`);
+    return;
   }
+  if(users.find(u=>u.email===email)){toast('Email already exists','red');return;}
+  // Generate a unique random temp password per user. Stored only as a hash;
+  // the plain text is shown to the admin once (in the post-save modal) and
+  // sent in the welcome email. User is forced to change it on first login.
+  const tempPass=generateTempPassword();
+  const tempHash=await secureHash(tempPass);
+  const newUser={
+    id:'u'+Date.now(), name, email, role,
+    passwordHash:tempHash,
+    mustChangePassword:true,
+    createdAt:new Date().toISOString(),
+    updatedAt:new Date().toISOString(),
+  };
+  users.push(newUser);
+  toast(`✓ ${name} added`,'green');
   closeModal();renderUsers();await save('users');
-  if(eid) audit('user_edit',`${name} (${email}) updated`);
-  else audit('user_add',`${name} (${email}) added as ${role}`);
-  // Send onboarding email to new users
-  if(!eid){ const newUser=users[users.length-1]; sendEmail(EMAIL_CONFIG.templateWelcome,{to_name:newUser.name,to_email:newUser.email,role:newUser.role,temp_password:DEFAULT_USER_PASSWORD,login_url:window.location.href}); }
+  audit('user_add',`${name} (${email}) added as ${role}`);
+  // Email the temp password if email is configured.
+  if(emailReady()){
+    sendEmail(EMAIL_CONFIG.templateWelcome,{
+      to_name:newUser.name, to_email:newUser.email, role:newUser.role,
+      temp_password:tempPass, login_url:window.location.href,
+    });
+  }
+  // Always show the admin a copyable modal — email may not be configured
+  // and the plain password is never recoverable once the admin closes this.
+  showTempPasswordModal(newUser, tempPass);
+}
+
+function showTempPasswordModal(user, tempPass){
+  setModal(`<div class="mhdr"><div class="mtl">🔐 Temp password for ${esc(user.name)}</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
+    <div class="mbody">
+      <div class="info mb12" style="background:rgba(245,166,35,.08);border-color:rgba(245,166,35,.4);color:var(--ac)">
+        <strong>Important:</strong> This password is shown only once. ${emailReady()?'It was emailed to '+esc(user.email)+', but copy it here as a backup.':'Email is not configured — copy this and share it with the user manually.'}
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--bd2);border-radius:8px;padding:14px;text-align:center;cursor:pointer"
+        onclick="navigator.clipboard.writeText('${escAttr(tempPass)}').then(()=>this.querySelector('.copy-hint').textContent='✓ Copied to clipboard')">
+        <div class="mono" style="font-size:22px;letter-spacing:2px;color:var(--ac);font-weight:600">${esc(tempPass)}</div>
+        <div class="copy-hint" style="font-size:11px;color:var(--tx3);margin-top:6px">Click to copy</div>
+      </div>
+      <div class="st" style="margin-top:14px">${esc(user.name)} will be required to choose a new password on first login.</div>
+      <div style="text-align:right;margin-top:14px"><button class="btn bp" onclick="closeModal()">Done</button></div>
+    </div>`);
 }
 
 async function deleteUser(id){
@@ -5087,8 +5125,21 @@ function logMode(name,mode){
 // ═══════════════════════════════════════════════════════
 // MODAL / TOAST / UTIL
 // ═══════════════════════════════════════════════════════
-function setModal(html){el('modal-root').innerHTML=`<div class="movl" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;}
-function closeModal(){el('modal-root').innerHTML='';}
+// Forced modals (e.g., first-login password change) cannot be dismissed via
+// Escape, backdrop click, or closeModal() without the explicit `force` flag.
+// Callers that need to actually close them call closeModal(true).
+let _forcedModal = false;
+function setModal(html, opts){
+  const forced = !!(opts && opts.forced);
+  _forcedModal = forced;
+  const overlayOnclick = forced ? '' : 'onclick="if(event.target===this)closeModal()"';
+  el('modal-root').innerHTML=`<div class="movl"${overlayOnclick?' '+overlayOnclick:''}><div class="modal">${html}</div></div>`;
+}
+function closeModal(force){
+  if(_forcedModal && !force) return;
+  _forcedModal = false;
+  el('modal-root').innerHTML='';
+}
 function toast(msg,type){
   const ex=el('app-toast');if(ex)ex.remove();
   const d=document.createElement('div');d.id='app-toast';
@@ -6052,6 +6103,11 @@ async function doLogin(){
   invalidateCalcCache();
   populateFilters();populateTagFilter();renderBrandSummary();updateAlerts();
   renderGTTable();renderRetTable();renderCollTable();populateLogisticsInputs();
+  // Force password change on first login with a temp password
+  if(user.mustChangePassword){
+    showForcePasswordChange();
+    return;
+  }
   const defaultPage=getUserPref('defaultPage','dashboard');
   nav(defaultPage||'dashboard');
   toast(`Welcome back, ${esc(user.name.split(' ')[0])}!`,'green');
@@ -6239,6 +6295,57 @@ async function doResetPassword(token){
   setTimeout(()=>{window.location.href=window.location.origin+window.location.pathname;},2000);
 }
 
+// Forced password change after first login with a temp password.
+// Shown by doLogin() when the logged-in user has mustChangePassword=true.
+// The modal cannot be dismissed without entering a new password (the X close
+// button is omitted on purpose, and Escape is handled in our keydown listener
+// only for non-forced modals).
+function showForcePasswordChange(){
+  setModal(`<div class="mhdr"><div class="mtl">🔐 Set a new password</div></div>
+    <div class="mbody">
+      <div class="info mb12" style="background:rgba(245,87,92,.08);border-color:rgba(245,87,92,.4);color:var(--re)">
+        You're using a temporary password. Choose a new one before continuing.
+      </div>
+      <div class="fg"><label class="fl">New password</label>
+        <input id="fpw-1" class="fi" type="password" placeholder="At least 6 characters" autocomplete="new-password"
+          onkeydown="if(event.key==='Enter')doForcePasswordChange()"></div>
+      <div class="fg"><label class="fl">Confirm new password</label>
+        <input id="fpw-2" class="fi" type="password" placeholder="Re-enter the same password" autocomplete="new-password"
+          onkeydown="if(event.key==='Enter')doForcePasswordChange()"></div>
+      <div id="fpw-err" class="info" style="display:none;background:rgba(245,87,92,.1);border-color:rgba(245,87,92,.5);color:var(--re)"></div>
+      <div style="text-align:right;margin-top:14px">
+        <button class="btn bp" onclick="doForcePasswordChange()">Set password</button>
+      </div>
+    </div>`, {forced:true});
+  // Force focus so the user can type immediately
+  setTimeout(()=>document.getElementById('fpw-1')?.focus(),50);
+}
+
+async function doForcePasswordChange(){
+  const p1=document.getElementById('fpw-1')?.value;
+  const p2=document.getElementById('fpw-2')?.value;
+  const errEl=document.getElementById('fpw-err');
+  const showErr=(msg)=>{if(errEl){errEl.textContent=msg;errEl.style.display='block';}};
+  if(!p1||p1.length<6){showErr('Password must be at least 6 characters.');return;}
+  if(p1!==p2){showErr('Passwords do not match.');return;}
+  if(!currentUser){showErr('Session expired. Please reload and sign in again.');return;}
+  // Hash the new password and store it. Clear the mustChangePassword flag.
+  currentUser.passwordHash=await secureHash(p1);
+  currentUser.mustChangePassword=false;
+  currentUser.updatedAt=new Date().toISOString();
+  try{
+    await save('users',{immediate:true});
+    audit('password_changed',`${currentUser.name} changed password (first-login flow)`);
+  }catch(e){
+    showErr('Save failed: '+e.message);
+    return;
+  }
+  closeModal(true);
+  const defaultPage=getUserPref('defaultPage','dashboard');
+  nav(defaultPage||'dashboard');
+  toast(`Welcome, ${esc(currentUser.name.split(' ')[0])}! Your new password is set.`,'green');
+}
+
 function doLogout(){
   // Stop realtime sync
   const db=getDB();
@@ -6322,6 +6429,17 @@ function _legacyHash(str){
   let hash = 0;
   for(let i=0;i<str.length;i++){ hash = ((hash<<5)-hash)+str.charCodeAt(i); hash|=0; }
   return 'h'+Math.abs(hash).toString(36);
+}
+// Random temp password for newly-created users. 12 chars from an alphabet
+// that excludes look-alike characters (0/O, 1/l/I) so users can type it
+// from an email/SMS without confusion. ~62 bits of entropy — plenty for a
+// one-time-use credential that must be changed on first login.
+function generateTempPassword(length=12){
+  const alphabet='abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes=crypto.getRandomValues(new Uint8Array(length));
+  let pw='';
+  for(let i=0;i<length;i++) pw+=alphabet[bytes[i]%alphabet.length];
+  return pw;
 }
 // SHA-256 hash using Web Crypto API (with per-user salt)
 async function secureHash(str){
