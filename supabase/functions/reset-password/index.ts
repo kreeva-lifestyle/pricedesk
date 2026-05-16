@@ -4,15 +4,30 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Origin allowlist — see claude-chat for rationale.
+const ALLOWED_ORIGINS = new Set([
+  "https://pricing.aryadesigns.co.in",
+  "https://kreeva-lifestyle.github.io",
+  "http://localhost:5173",
+  "http://localhost:4173",
+]);
 
-function jsonResponse(data: unknown, status = 200) {
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("Origin");
+  const allowOrigin = origin && ALLOWED_ORIGINS.has(origin)
+    ? origin
+    : "https://pricing.aryadesigns.co.in";
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
+
+function jsonResponse(data: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...cors, "Content-Type": "application/json" },
   });
 }
 
@@ -37,8 +52,9 @@ function generateToken(): string {
 }
 
 serve(async (req) => {
+  const cors = corsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: cors });
   }
 
   try {
@@ -53,7 +69,7 @@ serve(async (req) => {
     if (action === "request") {
       // Request a password reset token
       const email = body.email?.trim().toLowerCase();
-      if (!email) return jsonResponse({ error: "Email required" }, 400);
+      if (!email) return jsonResponse({ error: "Email required" }, 400, cors);
 
       // Always return generic success to prevent email enumeration
       const genericMsg = "If an account exists with that email, a reset link has been generated.";
@@ -63,7 +79,7 @@ serve(async (req) => {
       const user = users.find((u: any) => u.email?.toLowerCase() === email);
 
       if (!user) {
-        return jsonResponse({ message: genericMsg });
+        return jsonResponse({ message: genericMsg }, 200, cors);
       }
 
       // Generate token and store server-side
@@ -87,13 +103,13 @@ serve(async (req) => {
         token,
         userName: user.name,
         userEmail: user.email,
-      });
+      }, 200, cors);
 
     } else if (action === "reset") {
       // Reset password using token
       const { token, newPassword } = body;
-      if (!token || !newPassword) return jsonResponse({ error: "Token and new password required" }, 400);
-      if (newPassword.length < 6) return jsonResponse({ error: "Password must be at least 6 characters" }, 400);
+      if (!token || !newPassword) return jsonResponse({ error: "Token and new password required" }, 400, cors);
+      if (newPassword.length < 6) return jsonResponse({ error: "Password must be at least 6 characters" }, 400, cors);
 
       // Validate token
       const { data: tokenData } = await db.from("app_data").select("value").eq("key", "pd_reset_tokens").single();
@@ -101,7 +117,7 @@ serve(async (req) => {
       const entry = tokens[token];
 
       if (!entry || Date.now() > entry.expires) {
-        return jsonResponse({ error: "Reset link has expired or is invalid." }, 400);
+        return jsonResponse({ error: "Reset link has expired or is invalid." }, 400, cors);
       }
 
       // Find user and update password
@@ -110,7 +126,7 @@ serve(async (req) => {
       const user = users.find((u: any) => u.id === entry.userId);
 
       if (!user) {
-        return jsonResponse({ error: "User not found." }, 404);
+        return jsonResponse({ error: "User not found." }, 404, cors);
       }
 
       user.passwordHash = await secureHash(newPassword);
@@ -126,12 +142,12 @@ serve(async (req) => {
         { onConflict: "key" }
       );
 
-      return jsonResponse({ message: "Password updated successfully." });
+      return jsonResponse({ message: "Password updated successfully." }, 200, cors);
 
     } else {
-      return jsonResponse({ error: "Invalid action. Use 'request' or 'reset'." }, 400);
+      return jsonResponse({ error: "Invalid action. Use 'request' or 'reset'." }, 400, cors);
     }
   } catch (error) {
-    return jsonResponse({ error: error.message }, 500);
+    return jsonResponse({ error: error.message }, 500, cors);
   }
 });
