@@ -1611,7 +1611,7 @@ function sanitizeExpr(expr){
   if(!expr) return '0';
   // Allow: numbers, decimals, operators, parens, commas, spaces, Math.*, known variable names
   // Block: assignment, function calls to non-Math, property access beyond Math, semicolons, brackets
-  const blocked = /[;{}\[\]\\]|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|alert|prompt|confirm|setTimeout|setInterval|setImmediate)\b)/;
+  const blocked = /[;{}\[\]\\`]|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\b)/;
   if(blocked.test(expr)){
     console.warn('Blocked unsafe expression:', expr);
     return '0';
