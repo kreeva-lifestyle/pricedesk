@@ -4,15 +4,30 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Origin allowlist — see claude-chat for rationale.
+const ALLOWED_ORIGINS = new Set([
+  "https://pricing.aryadesigns.co.in",
+  "https://kreeva-lifestyle.github.io",
+  "http://localhost:5173",
+  "http://localhost:4173",
+]);
 
-function jsonResponse(data: unknown, status = 200) {
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("Origin");
+  const allowOrigin = origin && ALLOWED_ORIGINS.has(origin)
+    ? origin
+    : "https://pricing.aryadesigns.co.in";
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
+
+function jsonResponse(data: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...cors, "Content-Type": "application/json" },
   });
 }
 
@@ -65,8 +80,9 @@ interface LoginAttempt {
 }
 
 serve(async (req) => {
+  const cors = corsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: cors });
   }
 
   try {
@@ -76,7 +92,7 @@ serve(async (req) => {
 
     const { email, password } = await req.json();
     if (!email || !password) {
-      return jsonResponse({ error: "Email and password required" }, 400);
+      return jsonResponse({ error: "Email and password required" }, 400, cors);
     }
 
     const emailLower = email.trim().toLowerCase();
@@ -90,7 +106,7 @@ serve(async (req) => {
 
     if (now < rec.lockedUntil) {
       const waitSec = Math.ceil((rec.lockedUntil - now) / 1000);
-      return jsonResponse({ error: `Too many attempts. Try again in ${waitSec}s.` }, 429);
+      return jsonResponse({ error: `Too many attempts. Try again in ${waitSec}s.` }, 429, cors);
     }
 
     if (now - rec.firstAttempt > 15 * 60 * 1000) {
@@ -101,7 +117,7 @@ serve(async (req) => {
     // Load users
     const { data: userData, error: userErr } = await db.from("app_data").select("value").eq("key", "pd_users").single();
     if (userErr || !userData?.value) {
-      return jsonResponse({ error: "User system unavailable" }, 500);
+      return jsonResponse({ error: "User system unavailable" }, 500, cors);
     }
 
     const users: any[] = userData.value;
@@ -116,7 +132,7 @@ serve(async (req) => {
       attempts[emailLower] = rec;
       await db.from("app_data").upsert({ key: "pd_login_attempts", value: attempts, updated_at: new Date().toISOString() }, { onConflict: "key" });
 
-      return jsonResponse({ error: "Invalid email or password." }, 401);
+      return jsonResponse({ error: "Invalid email or password." }, 401, cors);
     }
 
     // Password verification
@@ -138,7 +154,7 @@ serve(async (req) => {
       attempts[emailLower] = rec;
       await db.from("app_data").upsert({ key: "pd_login_attempts", value: attempts, updated_at: new Date().toISOString() }, { onConflict: "key" });
 
-      return jsonResponse({ error: "Invalid email or password." }, 401);
+      return jsonResponse({ error: "Invalid email or password." }, 401, cors);
     }
 
     // Clear rate limit on success
@@ -168,8 +184,8 @@ serve(async (req) => {
       user: safeUser,
       isFirstLogin,
       serverAuth: true,
-    });
+    }, 200, cors);
   } catch (error) {
-    return jsonResponse({ error: error.message }, 500);
+    return jsonResponse({ error: error.message }, 500, cors);
   }
 });

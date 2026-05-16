@@ -3,14 +3,32 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Origin allowlist — only browsers on these origins can call this function.
+// Server-side / curl callers still work (they don't send Origin) but are not
+// the CORS threat model. Add/remove origins here when deploying to new hosts.
+const ALLOWED_ORIGINS = new Set([
+  "https://pricing.aryadesigns.co.in",
+  "https://kreeva-lifestyle.github.io",
+  "http://localhost:5173",
+  "http://localhost:4173",
+]);
+
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("Origin");
+  const allowOrigin = origin && ALLOWED_ORIGINS.has(origin)
+    ? origin
+    : "https://pricing.aryadesigns.co.in";
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 serve(async (req) => {
+  const cors = corsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: cors });
   }
 
   try {
@@ -65,12 +83,12 @@ GUIDELINES:
     const reply = data.content?.[0]?.text || "No response from Claude.";
 
     return new Response(JSON.stringify({ reply }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...cors, "Content-Type": "application/json" },
     });
   }
 });
