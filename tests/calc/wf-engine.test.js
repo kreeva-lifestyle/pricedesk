@@ -13,7 +13,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 function sanitizeExpr(expr) {
   if (!expr) return '0';
-  const blocked = /[;{}\[\]\\]|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|alert|prompt|confirm|setTimeout|setInterval|setImmediate)\b)/;
+  const blocked = /[;{}\[\]\\`]|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\b)/;
   if (blocked.test(expr)) {
     console.warn('Blocked unsafe expression:', expr);
     return '0';
@@ -138,6 +138,27 @@ describe('sanitizeExpr — blocks unsafe formula content', () => {
       ['braces',              '{a:1}'],
       ['brackets',            'a[0]'],
       ['backslash',           'a\\b'],
+      ['backtick',            'a`b`'],
+      ['globalThis',          'globalThis.fetch("/x")'],
+      ['self',                'self.location'],
+      ['arguments',           'arguments[0]'],
+      ['await',               'await foo'],
+      ['async',               'async()=>0'],
+      ['new',                 'new Function("x")'],
+      ['class',               'class X {}'],
+      ['function keyword',    'function(){}'],
+      ['this',                'this.constructor'],
+      ['delete',              'delete a.b'],
+      ['void',                'void 0'],
+      ['typeof',              'typeof a'],
+      ['instanceof',          'a instanceof Object'],
+      ['with',                'with(a) b'],
+      ['debugger',            'debugger'],
+      ['yield',               'yield foo'],
+      ['throw',               'throw 1'],
+      ['try',                 'try foo'],
+      ['catch',               'catch(e) e'],
+      ['finally',             'finally bar'],
     ])('blocks %s', (_label, expr) => {
       expect(sanitizeExpr(expr)).toBe('0');
     });
