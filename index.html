@@ -5326,12 +5326,14 @@ function previewImport(input){
 
 async function confirmImport(){
   if(!importRows.length&&!importUpdates.length){toast('No valid rows to import','red');return;}
-  // Add new SKUs
-  const newCount=importRows.length;
-  if(newCount) skuDB.push(...importRows);
-  // Update existing SKUs
+  // Snapshot what's being imported BEFORE mutating skuDB
+  const newRows=[...importRows];
+  const updates=[...importUpdates];
+  const newCount=newRows.length;
+  // Apply to in-memory state
+  if(newCount) skuDB.push(...newRows);
   let updCount=0;
-  importUpdates.forEach(upd=>{
+  updates.forEach(upd=>{
     const s=skuDB.find(x=>x.id===upd.id);
     if(s){Object.assign(s,upd.changes);updCount++;}
   });
@@ -5340,20 +5342,57 @@ async function confirmImport(){
   renderSKUs();renderBrands();updateAlerts();
   const total=newCount+updCount;
   toast(`Saving ${total} SKU${total>1?'s':''} to database...`,'blue');
+
+  // Try the batch-import Edge Function first — single atomic upsert on the
+  // server side, only sends the affected rows. Falls back to the legacy
+  // per-row _doSaveSKUs path on any failure (network, 4xx, 5xx, etc.).
+  let savedViaEdge=false;
   try{
-    // For bulk imports, save immediately (don't debounce — this is a single large operation)
-    _lastWriteTs=Date.now();
-    await _doSaveSKUs();
-    toast(`✓ ${total} SKU${total>1?'s':''} saved to database`,'green');
+    const affected=[
+      ...newRows.map(_skuToRow),
+      ...updates.map(u=>{const s=skuDB.find(x=>x.id===u.id);return s?_skuToRow(s):null;}).filter(Boolean),
+    ];
+    if(affected.length===total){
+      _lastWriteTs=Date.now();
+      const resp=await fetch(`${SUPABASE_URL}/functions/v1/batch-import`,{
+        method:'POST',
+        headers:{
+          'Authorization':`Bearer ${SUPABASE_ANON}`,
+          'apikey':SUPABASE_ANON,
+          'Content-Type':'application/json',
+        },
+        body:JSON.stringify({skus:affected}),
+      });
+      if(resp.ok){
+        const result=await resp.json().catch(()=>null);
+        if(result&&result.ok){
+          savedViaEdge=true;
+          toast(`✓ ${total} SKU${total>1?'s':''} saved (atomic batch)`,'green');
+        }
+      } else {
+        console.warn('batch-import HTTP',resp.status);
+      }
+    }
   }catch(e){
-    toast(`⚠ Save failed: ${e.message} — retrying in 5s...`,'red');
-    setTimeout(async()=>{
-      try{await _doSaveSKUs();toast(`✓ Retry succeeded — ${total} SKUs saved`,'green');}
-      catch(e2){toast('⚠ Retry failed — please save manually from SKU page','red');}
-    },5000);
+    console.warn('batch-import call failed, falling back to _doSaveSKUs:',e.message);
+  }
+
+  if(!savedViaEdge){
+    try{
+      // Legacy path: full skuDB upsert in chunks
+      _lastWriteTs=Date.now();
+      await _doSaveSKUs();
+      toast(`✓ ${total} SKU${total>1?'s':''} saved to database`,'green');
+    }catch(e){
+      toast(`⚠ Save failed: ${e.message} — retrying in 5s...`,'red');
+      setTimeout(async()=>{
+        try{await _doSaveSKUs();toast(`✓ Retry succeeded — ${total} SKUs saved`,'green');}
+        catch(e2){toast('⚠ Retry failed — please save manually from SKU page','red');}
+      },5000);
+    }
   }
   logBulkImport(_importFileName, newCount, updCount, 0);
-  audit('bulk_import',`${_importFileName}: ${newCount} added, ${updCount} updated`);
+  audit('bulk_import',`${_importFileName}: ${newCount} added, ${updCount} updated${savedViaEdge?' (batch)':''}`);
   _importFileName='';
   const parts=[];
   if(newCount) parts.push(`${newCount} added`);
