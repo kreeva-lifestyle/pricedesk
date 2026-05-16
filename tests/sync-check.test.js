@@ -90,7 +90,11 @@ describe('source drift detection — production strings must match test copies',
     });
   });
 
-  // sanitizeExpr has been extracted to src/calc/sanitize.js as part of
-  // Phase 4B. The test file imports the real source — drift detection is
-  // no longer needed for this function.
+  describe('security-critical function: sanitizeExpr blocked-token regex', () => {
+    it('blocked-token regex is unchanged (tests/calc/wf-engine.test.js)', () => {
+      expect(HTML).toContain(
+        "const blocked = /[;{}\\[\\]\\\\`]|(\\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\\b)/;"
+      );
+    });
+  });
 });
