@@ -2134,7 +2134,6 @@ async function dbSaveBrands(brandsArr){
     if(error)throw error;
     _useBrandTable=true;
     console.log(`✓ Saved ${rows.length} brand(s) to pd_brands`);
-    db.from('pd_sync').upsert({key:'pd_brands',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
   }catch(tableErr){
     console.warn('Brand table save failed, using blob fallback:',tableErr.message||tableErr);
     await _enqueueWrite(()=>dbSet(DB_KEYS.brands, brandsArr));
@@ -2149,7 +2148,6 @@ async function dbDeleteBrand(id){
     if(error)throw error;
     _useBrandTable=true;
     console.log(`✓ Deleted brand ${id} from pd_brands`);
-    db.from('pd_sync').upsert({key:'pd_brands',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
   }catch(tableErr){
     console.warn('Brand table delete failed, using blob fallback:',tableErr.message||tableErr);
     await _enqueueWrite(()=>dbSet(DB_KEYS.brands, brands));
@@ -2225,7 +2223,6 @@ async function dbSaveCategories(catsArr, catLevelMap){
     if(error)throw error;
     _useCategoryTable=true;
     console.log(`✓ Saved ${rows.length} categories to pd_categories`);
-    db.from('pd_sync').upsert({key:'pd_categories',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
   }catch(tableErr){
     console.warn('Category table save failed, using blob fallback:',tableErr.message||tableErr);
     await _enqueueWrite(()=>dbSet(DB_KEYS.categories, catsArr));
@@ -2240,7 +2237,6 @@ async function dbDeleteCategory(name){
     const{error}=await db.from('pd_categories').delete().eq('name',name);
     if(error)throw error;
     _useCategoryTable=true;
-    db.from('pd_sync').upsert({key:'pd_categories',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
   }catch(tableErr){
     console.warn('Category table delete failed, using blob fallback:',tableErr.message||tableErr);
   }
@@ -2301,7 +2297,6 @@ async function dbSaveThresholds(thresholdObj){
     if(error)throw error;
     _useThresholdTable=true;
     console.log(`✓ Saved ${rows.length} thresholds to pd_thresholds`);
-    db.from('pd_sync').upsert({key:'pd_thresholds',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
   }catch(tableErr){
     console.warn('Threshold table save failed, using blob fallback:',tableErr.message||tableErr);
     await _enqueueWrite(()=>dbSet(DB_KEYS.thresholds, thresholdObj));
@@ -2403,7 +2398,6 @@ async function dbSaveCommissions(myntra, ppmp, cc, amazon){
     if(error)throw error;
     _useCommTable=true;
     console.log(`✓ Saved ${rows.length} commission rows to pd_commissions`);
-    db.from('pd_sync').upsert({key:'pd_commissions',updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
   }catch(tableErr){
     console.warn('Commission table save failed, using blob fallback:',tableErr.message||tableErr);
     await _enqueueWrite(()=>dbSet(DB_KEYS.comm_myntra, myntra));
