@@ -2417,17 +2417,34 @@ async function dbLoadAllCommissions(){
 let _useAuditTable=false;
 
 async function dbInsertAudit(entry){
-  const db=getDB();if(!db)return;
+  // Audit inserts go through the audit-log-write Edge Function (service-role
+  // INSERT). Anon clients cannot write to pd_audit_log directly anymore — the
+  // RLS policy denies it. The Edge Function validates the entry shape, caps
+  // sizes, and uses the database's NOW() for the timestamp (so a client
+  // can't backdate or futuredate an audit row).
   try{
-    const row={
-      ts:entry.ts, user_name:entry.user||null, user_id:entry.userId||null,
-      action:entry.action, details:entry.details||null, extra:entry.extra||null
-    };
-    const{error}=await db.from('pd_audit_log').insert(row);
-    if(error)throw error;
+    const resp=await fetch(`${SUPABASE_URL}/functions/v1/audit-log-write`,{
+      method:'POST',
+      headers:{
+        'Authorization':`Bearer ${SUPABASE_ANON}`,
+        'apikey':SUPABASE_ANON,
+        'Content-Type':'application/json',
+      },
+      body:JSON.stringify({entry:{
+        user:entry.user||null,
+        userId:entry.userId||null,
+        action:entry.action,
+        details:entry.details||null,
+        extra:entry.extra||null,
+      }}),
+    });
+    if(!resp.ok){
+      const err=await resp.json().catch(()=>({error:`HTTP ${resp.status}`}));
+      throw new Error(err.error||err.message||`HTTP ${resp.status}`);
+    }
     _useAuditTable=true;
   }catch(e){
-    console.warn('Audit table insert failed:',e.message);
+    console.warn('Audit Edge Function failed:',e.message);
     _useAuditTable=false;
   }
 }
