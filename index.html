@@ -2488,16 +2488,30 @@ async function dbLoadAuditLog(limit=500){
 let _useSkuHistoryTable=false;
 
 async function dbInsertSkuHistory(skuId, field, oldVal, newVal, userName){
-  const db=getDB();if(!db)return;
+  // Like audit-log-write: anon can no longer INSERT directly. The Edge
+  // Function validates field lengths and uses DB DEFAULT NOW() for ts.
   try{
-    const{error}=await db.from('pd_sku_history').insert({
-      sku_id:skuId, field, old_val:String(oldVal??''), new_val:String(newVal??''),
-      user_name:userName||null, ts:new Date().toISOString()
+    const resp=await fetch(`${SUPABASE_URL}/functions/v1/sku-history-write`,{
+      method:'POST',
+      headers:{
+        'Authorization':`Bearer ${SUPABASE_ANON}`,
+        'apikey':SUPABASE_ANON,
+        'Content-Type':'application/json',
+      },
+      body:JSON.stringify({entry:{
+        sku_id:skuId, field,
+        old_val:String(oldVal??''),
+        new_val:String(newVal??''),
+        user_name:userName||null,
+      }}),
     });
-    if(error)throw error;
+    if(!resp.ok){
+      const err=await resp.json().catch(()=>({error:`HTTP ${resp.status}`}));
+      throw new Error(err.error||err.message||`HTTP ${resp.status}`);
+    }
     _useSkuHistoryTable=true;
   }catch(e){
-    console.warn('SKU history table insert failed:',e.message);
+    console.warn('SKU history Edge Function failed:',e.message);
     _useSkuHistoryTable=false;
   }
 }
