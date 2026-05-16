@@ -64,7 +64,7 @@
 - SHA-256 password hashing without salt for legacy hashes (server-side `login` Edge Function uses salted hashes for new passwords)
 - Supabase anon key exposed in client (expected for SPA)
 - Session cache is per-tab, not per-user (single-user app)
-- localStorage still used for dashboard widget order (non-critical)
+- localStorage used only for EmailJS template config (browser-local on purpose)
 - No undo for permanent delete (only archive has undo via reinstate)
 - Myntra branch of `calcSKU` is tested at the WF-engine and wrapper level, but specific output values depend on the user's editable wireframe rules so end-to-end Myntra calcs aren't snapshot-tested
 
