@@ -2581,7 +2581,12 @@ async function save(type, opts){
         updateSyncBadge(true);
         return;
       }
-    }catch(e){/* fall through to blob save */}
+    }catch(e){
+      console.warn('Brand table save failed, falling back to blob:',e.message);
+      updateSyncBadge(false, `Brand save failed: ${e.message}`);
+      toast(`⚠ Brand save failed (saved locally): ${e.message}`,'red');
+      /* fall through to blob save */
+    }
   }
   // Categories + cat_levels: use per-row table if available
   if(type==='categories'||type==='cat_levels'){
@@ -2592,7 +2597,12 @@ async function save(type, opts){
         updateSyncBadge(true);
         return;
       }
-    }catch(e){/* fall through to blob save */}
+    }catch(e){
+      console.warn('Category table save failed, falling back to blob:',e.message);
+      updateSyncBadge(false, `Category save failed: ${e.message}`);
+      toast(`⚠ Category save failed (saved locally): ${e.message}`,'red');
+      /* fall through to blob save */
+    }
   }
   // Thresholds: use per-row table if available
   if(type==='thresholds'){
@@ -2603,7 +2613,12 @@ async function save(type, opts){
         updateSyncBadge(true);
         return;
       }
-    }catch(e){/* fall through to blob save */}
+    }catch(e){
+      console.warn('Threshold table save failed, falling back to blob:',e.message);
+      updateSyncBadge(false, `Threshold save failed: ${e.message}`);
+      toast(`⚠ Threshold save failed (saved locally): ${e.message}`,'red');
+      /* fall through to blob save */
+    }
   }
   // Commissions: use unified table if available
   if(type==='comm_myntra'||type==='comm_ppmp'||type==='comm_cc'||type==='comm_amazon'){
@@ -2614,7 +2629,12 @@ async function save(type, opts){
         updateSyncBadge(true);
         return;
       }
-    }catch(e){/* fall through to blob save */}
+    }catch(e){
+      console.warn('Commission table save failed, falling back to blob:',e.message);
+      updateSyncBadge(false, `Commission save failed: ${e.message}`);
+      toast(`⚠ Commission save failed (saved locally): ${e.message}`,'red');
+      /* fall through to blob save */
+    }
   }
   updateSyncBadge(false);
   const dataMap = {
