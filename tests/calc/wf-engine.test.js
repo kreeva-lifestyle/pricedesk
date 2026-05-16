@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { autoGST } from '../../src/calc/gst.js';
 
 // SYNC NOTE: Functions below are copied verbatim from index.html.
 //   - sanitizeExpr:  index.html:1606
@@ -29,6 +28,7 @@ const LOGISTICS_SETTINGS = { myn_pg_fee: 50.22 };
 function getMynFwd() { return 0; }
 function getMynRet(lvl) { return REVERSE_FEES[lvl] ?? 218; }
 function getMyntraComm() { return 0; }
+function autoGST(sp) { return sp >= 2500 ? 0.18 : 0.05; }
 
 // WF lookup table — keyed by `fn` field on lookup rows. The engine
 // invokes WF_LOOKUPS[row.fn](ctx). Tests stub specific lookups.

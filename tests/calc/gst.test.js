@@ -1,8 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { autoGST } from '../../src/calc/gst.js';
 
-// Imports the real production source — no copy, no drift. This is the
-// first function migrated as part of Phase 4B (module extraction).
+// SYNC NOTE: The function below is copied verbatim from
+// index.html line 2951. If you change `autoGST` in index.html,
+// update this copy and the tests too, or these tests will silently
+// pass while the live behavior diverges.
+//
+// Future PR: extract this into src/calc/gst.js and have both
+// index.html and these tests import the same source.
+
+function autoGST(sp) {
+  return sp >= 2500 ? 0.18 : 0.05;
+}
 
 describe('autoGST — GST rate from seller price', () => {
   describe('below the ₹2,500 threshold → 5%', () => {

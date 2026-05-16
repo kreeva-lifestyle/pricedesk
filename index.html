@@ -1582,15 +1582,6 @@ body:has(#login-screen.active){overflow:hidden}
 </div>
 <div id="modal-root"></div>
 
-<!-- Module shim: import extracted calc helpers and expose them as globals
-     so the classic inline scripts below can keep calling autoGST(...) etc.
-     This is the foundation of Phase 4B modularization — each function gets
-     extracted one at a time, then the inline definition is removed. -->
-<script type="module">
-  import { autoGST } from './src/calc/gst.js';
-  window.autoGST = autoGST;
-</script>
-
 <script>
 // ═══════════════════════════════════════════════════════
 // SUPABASE CONFIG — paste your keys here after setup
@@ -2963,8 +2954,7 @@ let editId=null;
 // ═══════════════════════════════════════════════════════
 // CALC HELPERS
 // ═══════════════════════════════════════════════════════
-// autoGST is now defined in src/calc/gst.js and attached to window by
-// the module shim above. Look there to change the GST boundary.
+function autoGST(sp){return sp>=2500?0.18:0.05;}
 function gstBadge(sp){return sp>=2500?'<span class="gst18">18%</span>':'<span class="gst5">5%</span>';}
 function getMyntraComm(cat,sp){
   const slabs=COMM_MYNTRA[cat];if(!slabs)return 18.88;

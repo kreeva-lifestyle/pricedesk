@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { autoGST } from '../../src/calc/gst.js';
 
 // SYNC NOTE: calcMyntraFull is copied verbatim from index.html:6776.
 // It's the thin wrapper between the WF engine (already tested in
@@ -21,7 +20,7 @@ const COLL_FEE_DATA = {
   'Kurtas':         [15, 17, 27, 27, 27, 45, 61],
 };
 const LOGISTICS_SETTINGS = { myn_pg_fee: 50.22 };
-// autoGST imported from real source at top of file (Phase 4B extraction).
+function autoGST(sp) { return sp >= 2500 ? 0.18 : 0.05; }
 function getMynColl(cat, sellerPrice) {
   const slabs = COLL_FEE_DATA[cat] || [15, 17, 27, 27, 27, 45, 61];
   const p = sellerPrice || 0;
