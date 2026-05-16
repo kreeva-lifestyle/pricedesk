@@ -1588,7 +1588,9 @@ body:has(#login-screen.active){overflow:hidden}
      extracted one at a time, then the inline definition is removed. -->
 <script type="module">
   import { autoGST } from './src/calc/gst.js';
+  import { sanitizeExpr } from './src/calc/sanitize.js';
   window.autoGST = autoGST;
+  window.sanitizeExpr = sanitizeExpr;
 </script>
 
 <script>
@@ -1615,18 +1617,9 @@ function escAttr(s){
   if(s==null) return '';
   return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/</g,'\\x3c').replace(/>/g,'\\x3e');
 }
-// Sanitize formula expressions — allow only safe math/variable tokens
-function sanitizeExpr(expr){
-  if(!expr) return '0';
-  // Allow: numbers, decimals, operators, parens, commas, spaces, Math.*, known variable names
-  // Block: assignment, function calls to non-Math, property access beyond Math, semicolons, brackets
-  const blocked = /[;{}\[\]\\`]|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\b)/;
-  if(blocked.test(expr)){
-    console.warn('Blocked unsafe expression:', expr);
-    return '0';
-  }
-  return expr;
-}
+// sanitizeExpr is now defined in src/calc/sanitize.js and attached to
+// window by the module shim near the top of <body>. To change the
+// denylist, edit the BLOCKED regex there.
 // Login rate limiter
 const _loginAttempts = {};
 function checkLoginRate(email){
