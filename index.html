@@ -7393,7 +7393,7 @@ function runBugDetector(){
       // Add input keys
       Object.keys(inputs).forEach(k => varsBefore.add(k));
       // Extract variable names from expr
-      const refs = (row.expr.match(/[a-z][a-zA-Z0-9_]*/g)||[])
+      const refs = (row.expr.match(/\b[a-z][a-zA-Z0-9_]*\b/g)||[])
         .filter(v => !['Math','true','false','null','undefined','return','if','else'].includes(v))
         .filter(v => isNaN(v));
       refs.forEach(ref => {
