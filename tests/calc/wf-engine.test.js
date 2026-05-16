@@ -37,6 +37,7 @@ let WF_LOOKUPS = {};
 // WF is the per-marketplace rule list. Tests assign WF.myntra etc.
 let WF = {};
 
+// SYNC NOTE: runWFEngine fix in this PR — line 6776 now coerces NaN to null.
 function runWFEngine(marketplace, inputs) {
   const rows = WF[marketplace] || [];
   const ctx = {
@@ -79,7 +80,7 @@ function runWFEngine(marketplace, inputs) {
       const vals = entries.map(([, v]) => v);
       const fn = new Function(...keys, `"use strict"; return (${sanitizeExpr(row.expr)});`);
       const r = fn(...vals);
-      ctx[row.var] = (typeof r === 'number' && !isNaN(r)) ? r : (r == null ? null : r);
+      ctx[row.var] = (typeof r === 'number' && isNaN(r)) || r == null ? null : r;
     } catch (e) {
       ctx[row.var] = null;
       console.warn(`WF expr error [${row.var}]: ${row.expr}`, e.message);
@@ -221,13 +222,7 @@ describe('runWFEngine — row sequencing and evaluation mechanics', () => {
     spy.mockRestore();
   });
 
-  it('expression that returns NaN passes through (latent prod bug: code intends to coerce to null but does not)', () => {
-    // Production code at index.html:6776 is:
-    //   ctx[row.var] = (typeof r === 'number' && !isNaN(r)) ? r : (r == null ? null : r);
-    // For r=NaN, the typeof+!isNaN check fails, then NaN==null is false,
-    // so the function returns r unchanged. The comment "Guard against NaN
-    // — treat as null" doesn't match the implementation. Documenting
-    // current behavior here so a future fix is visible as a test change.
+  it('expression that returns NaN is coerced to null so downstream `??` fallbacks fire', () => {
     WF = {
       test: [
         { var: 'x', expr: '0 / 0' },
@@ -235,7 +230,22 @@ describe('runWFEngine — row sequencing and evaluation mechanics', () => {
     };
     WF_LOOKUPS = {};
     const r = runWFEngine('test', {});
-    expect(r.x).toBeNaN();
+    expect(r.x).toBe(null);
+  });
+
+  it('NaN coercion lets downstream rows fall back via ??', () => {
+    // A row whose expression goes NaN should not poison the chain.
+    // After coercion the next row can guard with `?? fallback`.
+    WF = {
+      test: [
+        { var: 'broken', expr: '0 / 0' },
+        { var: 'safe',   expr: '(broken ?? 99) + 1' },
+      ],
+    };
+    WF_LOOKUPS = {};
+    const r = runWFEngine('test', {});
+    expect(r.broken).toBe(null);
+    expect(r.safe).toBe(100);
   });
 
   it('expression that throws → null, engine continues with subsequent rows', () => {
