@@ -6773,7 +6773,7 @@ function runWFEngine(marketplace, inputs){
       const fn = new Function(...keys, `"use strict"; return (${sanitizeExpr(row.expr)});`);
       const r = fn(...vals);
       // Guard against NaN — treat as null so downstream formulas use fallbacks
-      ctx[row.var] = (typeof r === 'number' && !isNaN(r)) ? r : (r == null ? null : r);
+      ctx[row.var] = (typeof r === 'number' && isNaN(r)) || r == null ? null : r;
     } catch(e){
       ctx[row.var] = null;
       console.warn(`WF expr error [${row.var}]: ${row.expr}`, e.message);
