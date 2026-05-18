@@ -6610,6 +6610,14 @@ async function resetUserPassword(userId){
 function exportSKUsToExcel(){
   if(typeof XLSX==='undefined'){ toast('Loading Excel library…','red'); return; }
   if(!skuDB.length){ toast('No SKUs to export','red'); return; }
+  // Show feedback first, then yield so the toast actually paints before the
+  // calcSKU loop blocks the main thread. Matters at ~2k SKUs (~0.5–1s of
+  // blocking work) and will matter a lot more as the catalog grows.
+  toast('Building Excel…','blue');
+  setTimeout(_doExportSKUsToExcel, 0);
+}
+
+function _doExportSKUsToExcel(){
   try{
     const wb = XLSX.utils.book_new();
     // Editable columns first (so the file is also a valid import template),
@@ -6618,7 +6626,9 @@ function exportSKUsToExcel(){
       'SKU','STYLE_ID','CATEGORY*','COST_PRICE*','MARKUP_PCT*','DISCOUNT',
       'CUSTOMER_PAID','GROSS_SETTLEMENT','PROFIT','IF_DELIVERED'
     ]];
-    skuDB.filter(s=>!s.archived).forEach(s=>{
+    let exportCount = 0;
+    skuDB.forEach(s=>{
+      if(s.archived) return;
       const c = calcSKU(s);
       rows.push([
         s.sku||'', s.styleId||'', s.category||'', s.cost||0, s.markup||0, s.discount||0,
@@ -6627,6 +6637,7 @@ function exportSKUsToExcel(){
         Math.round(c.profitRs||0),
         Math.round(c.ifDelivered||0),
       ]);
+      exportCount++;
     });
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [
@@ -6635,7 +6646,7 @@ function exportSKUsToExcel(){
     ];
     XLSX.utils.book_append_sheet(wb, ws, 'SKUs');
     XLSX.writeFile(wb,'PriceDesk_SKUs_'+new Date().toISOString().slice(0,10)+'.xlsx');
-    toast(`✓ Exported ${skuDB.length} SKUs to Excel`,'green');
+    toast(`✓ Exported ${exportCount} SKUs to Excel`,'green');
   }catch(e){
     console.error('Export failed:', e);
     toast('Export failed: '+e.message,'red');
@@ -6644,12 +6655,18 @@ function exportSKUsToExcel(){
 
 function exportBreaches(){
   if(typeof XLSX==='undefined'){toast('Loading Excel library…','red');return;}
-  const breached=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
+  // Single pass: compute calcSKU once, keep the result alongside the SKU.
+  // Previously this filter+forEach called calcSKU(s) twice per breached SKU.
+  const breached=[];
+  skuDB.forEach(s=>{
+    if(s.archived||s.ignoreThreshold) return;
+    const c=calcSKU(s);
+    if(c.isBreach) breached.push({s,c});
+  });
   if(!breached.length){toast('No active breaches to export','red');return;}
   try{
     const rows=[['SKU','Style ID','Category','Brand','Net Profit (₹)','Threshold (₹)']];
-    breached.forEach(s=>{
-      const c=calcSKU(s);
+    breached.forEach(({s,c})=>{
       const brand=brands.find(b=>b.id===s.brandId);
       rows.push([s.sku||'',s.styleId||'',s.category||'',brand?.name||'—',Math.round(c.profitRs),c.threshold]);
     });
