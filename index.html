@@ -1202,10 +1202,13 @@ body:has(#login-screen.active){overflow:hidden}
       <div class="btn bp bsm" onclick="addRow()">+ Add SKU</div>
       <div style="position:relative;display:inline-block" id="import-dropdown">
         <button class="btn bg bsm" onclick="toggleImportMenu()" style="min-width:80px">Import ▾</button>
-        <div id="import-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--s);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:100;min-width:180px;overflow:hidden">
+        <div id="import-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--s);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:100;min-width:220px;overflow:hidden">
           <div style="padding:8px 14px;cursor:pointer;font-size:12px;color:var(--tx)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''" onclick="openImport();hideImportMenu()">Upload CSV / Excel</div>
           <div style="padding:8px 14px;cursor:pointer;font-size:12px;color:var(--tx)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''" onclick="dlTemplate();hideImportMenu()">Download Template</div>
-          <div style="border-top:1px solid var(--bd);padding:8px 14px;cursor:pointer;font-size:12px;color:var(--gr)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''" onclick="exportSKUsToExcel();hideImportMenu()">Export All SKUs</div>
+          <!-- Export item is rendered dynamically by updateImportMenu() based on
+               the active marketplace tab. On the "All SKUs" tab it becomes a
+               muted hint instead of a clickable export. -->
+          <div id="import-menu-export" style="border-top:1px solid var(--bd)"></div>
         </div>
       </div>
     </div>
@@ -4028,6 +4031,9 @@ function toggleImportMenu(){
   const m=el('import-menu');if(!m)return;
   m.style.display=m.style.display==='none'?'block':'none';
   if(m.style.display==='block'){
+    // Refresh the dynamic Export item before showing — covers first-open
+    // and any state where the menu was opened without a tab switch.
+    updateImportMenu();
     // Close on outside click
     setTimeout(()=>document.addEventListener('click',hideImportOnOutside,{once:true}),10);
   }
@@ -4039,6 +4045,25 @@ function hideImportOnOutside(e){
 function hideImportMenu(){const m=el('import-menu');if(m)m.style.display='none';}
 
 let _skuMPTab = ''; // Current marketplace tab filter
+const _MP_LABELS = {myntra:'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC',amazon:'Amazon'};
+
+// Rebuilds the Export entry in the Import dropdown based on the active
+// marketplace tab. On a marketplace tab it's a clickable "Export <MP> SKUs";
+// on the "All SKUs" tab it's a muted hint so the user knows where to click
+// instead of producing a mixed-marketplace file.
+function updateImportMenu(){
+  const slot=document.getElementById('import-menu-export');
+  if(!slot) return;
+  if(_skuMPTab && _MP_LABELS[_skuMPTab]){
+    slot.innerHTML = `<div style="padding:8px 14px;cursor:pointer;font-size:12px;color:var(--gr)"
+      onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"
+      onclick="exportSKUsToExcel();hideImportMenu()">Export ${esc(_MP_LABELS[_skuMPTab])} SKUs</div>`;
+  } else {
+    slot.innerHTML = `<div style="padding:8px 14px;font-size:11px;color:var(--tx3);font-style:italic;cursor:default">
+      Switch to a marketplace tab to export</div>`;
+  }
+}
+
 function switchSKUTab(tab, mp){
   _skuMPTab = mp;
   document.querySelectorAll('.sku-mp-tab').forEach(t=>t.classList.remove('active'));
@@ -4051,6 +4076,7 @@ function switchSKUTab(tab, mp){
   }
   populateFilters();
   renderSKUs();
+  updateImportMenu();
 }
 
 let _dataReady=false;
@@ -6607,46 +6633,94 @@ async function resetUserPassword(userId){
 }
 
 // ── SKU EXCEL EXPORT ──────────────────────────────────
+// Public entry — routes to the per-marketplace export based on the active
+// SKU tab. The dropdown only exposes this when a marketplace tab is active
+// (see updateImportMenu), but we guard defensively here too.
 function exportSKUsToExcel(){
   if(typeof XLSX==='undefined'){ toast('Loading Excel library…','red'); return; }
+  if(!_skuMPTab || !_MP_LABELS[_skuMPTab]){
+    toast('Switch to a marketplace tab to export','red');
+    return;
+  }
   if(!skuDB.length){ toast('No SKUs to export','red'); return; }
-  // Show feedback first, then yield so the toast actually paints before the
-  // calcSKU loop blocks the main thread. Matters at ~2k SKUs (~0.5–1s of
-  // blocking work) and will matter a lot more as the catalog grows.
+  // Feedback first, then yield so the toast paints before calcSKU loops
+  // block the main thread.
   toast('Building Excel…','blue');
-  setTimeout(_doExportSKUsToExcel, 0);
+  const mp = _skuMPTab;
+  setTimeout(()=>_doExportSKUsToExcel(mp), 0);
 }
 
-function _doExportSKUsToExcel(){
+// Myntra-specific row: includes STYLE_ID, LEVEL, IF_DELIVERED, GROSS_SETTLEMENT.
+function _skuToMyntraRow(s, c, brand){
+  return [
+    s.sku||'', s.styleId||'', s.category||'', brand?.name||'—',
+    s.level||'Level 2',
+    s.cost||0, s.markup||0, s.discount||0,
+    Math.round(c.mrp||0),
+    Math.round(c.custPaid||0),
+    Math.round(c.sp||0),
+    c.comm||0,
+    Math.round(c.payout||0),
+    Math.round(c.profitRs||0),
+    Math.round(c.ifDelivered||0),
+    Math.round(c.grossSettlement||0),
+  ];
+}
+
+// Ajio (PPMP / CC) and Amazon row: no STYLE_ID, LEVEL, IF_DELIVERED, or
+// GROSS_SETTLEMENT — those are Myntra-specific.
+function _skuToOtherMpRow(s, c, brand){
+  return [
+    s.sku||'', s.category||'', brand?.name||'—',
+    s.cost||0, s.markup||0, s.discount||0,
+    Math.round(c.mrp||0),
+    Math.round(c.custPaid||0),
+    Math.round(c.sp||0),
+    c.comm||0,
+    Math.round(c.payout||0),
+    Math.round(c.profitRs||0),
+  ];
+}
+
+function _doExportSKUsToExcel(mp){
   try{
-    const wb = XLSX.utils.book_new();
-    // Editable columns first (so the file is also a valid import template),
-    // then computed columns (round to whole rupees for readability).
-    const rows = [[
-      'SKU','STYLE_ID','CATEGORY*','COST_PRICE*','MARKUP_PCT*','DISCOUNT',
-      'CUSTOMER_PAID','GROSS_SETTLEMENT','PROFIT','IF_DELIVERED'
-    ]];
+    const label = _MP_LABELS[mp] || mp;
+    const isMyntra = mp === 'myntra';
+    // Editable columns first (template-compatible), then computed columns.
+    const headers = isMyntra
+      ? ['SKU','STYLE_ID','CATEGORY*','BRAND','LEVEL','COST_PRICE*','MARKUP_PCT*','DISCOUNT',
+         'MRP','CUSTOMER_PAID','SELLER_PRICE','COMMISSION_%','PAYOUT','PROFIT','IF_DELIVERED','GROSS_SETTLEMENT']
+      : ['SKU','CATEGORY*','BRAND','COST_PRICE*','MARKUP_PCT*','DISCOUNT',
+         'MRP','CUSTOMER_PAID','SELLER_PRICE','COMMISSION_%','PAYOUT','PROFIT'];
+    const colWidths = isMyntra
+      ? [{wch:18},{wch:16},{wch:16},{wch:20},{wch:10},{wch:12},{wch:12},{wch:10},
+         {wch:12},{wch:14},{wch:14},{wch:14},{wch:12},{wch:12},{wch:14},{wch:18}]
+      : [{wch:18},{wch:16},{wch:20},{wch:12},{wch:12},{wch:10},
+         {wch:12},{wch:14},{wch:14},{wch:14},{wch:12},{wch:12}];
+    const rows = [headers];
     let exportCount = 0;
     skuDB.forEach(s=>{
       if(s.archived) return;
+      const brand = brands.find(b=>b.id===s.brandId);
+      // Match calcSKU's marketplace resolution: missing brand or missing
+      // model defaults to 'myntra'. Filter to the requested marketplace.
+      const skuMp = (brand && brand.model) || 'myntra';
+      if(skuMp !== mp) return;
       const c = calcSKU(s);
-      rows.push([
-        s.sku||'', s.styleId||'', s.category||'', s.cost||0, s.markup||0, s.discount||0,
-        Math.round(c.custPaid||0),
-        Math.round(c.grossSettlement||0),
-        Math.round(c.profitRs||0),
-        Math.round(c.ifDelivered||0),
-      ]);
+      rows.push(isMyntra ? _skuToMyntraRow(s, c, brand) : _skuToOtherMpRow(s, c, brand));
       exportCount++;
     });
+    if(exportCount === 0){
+      toast(`No active ${label} SKUs to export`,'red');
+      return;
+    }
+    const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [
-      {wch:18},{wch:16},{wch:16},{wch:12},{wch:12},{wch:10},
-      {wch:14},{wch:18},{wch:12},{wch:14}
-    ];
-    XLSX.utils.book_append_sheet(wb, ws, 'SKUs');
-    XLSX.writeFile(wb,'PriceDesk_SKUs_'+new Date().toISOString().slice(0,10)+'.xlsx');
-    toast(`✓ Exported ${exportCount} SKUs to Excel`,'green');
+    ws['!cols'] = colWidths;
+    XLSX.utils.book_append_sheet(wb, ws, label.replace(/ /g,'_'));
+    const safeName = label.replace(/ /g,'_');
+    XLSX.writeFile(wb, `PriceDesk_${safeName}_${new Date().toISOString().slice(0,10)}.xlsx`);
+    toast(`✓ Exported ${exportCount} ${label} SKUs`,'green');
   }catch(e){
     console.error('Export failed:', e);
     toast('Export failed: '+e.message,'red');
