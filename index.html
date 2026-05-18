@@ -6612,12 +6612,27 @@ function exportSKUsToExcel(){
   if(!skuDB.length){ toast('No SKUs to export','red'); return; }
   try{
     const wb = XLSX.utils.book_new();
-    const rows = [['SKU','STYLE_ID','CATEGORY*','COST_PRICE*','MARKUP_PCT*','DISCOUNT']];
+    // Editable columns first (so the file is also a valid import template),
+    // then computed columns (round to whole rupees for readability).
+    const rows = [[
+      'SKU','STYLE_ID','CATEGORY*','COST_PRICE*','MARKUP_PCT*','DISCOUNT',
+      'CUSTOMER_PAID','GROSS_SETTLEMENT','PROFIT','IF_DELIVERED'
+    ]];
     skuDB.filter(s=>!s.archived).forEach(s=>{
-      rows.push([s.sku||'', s.styleId||'', s.category||'', s.cost||0, s.markup||0, s.discount||0]);
+      const c = calcSKU(s);
+      rows.push([
+        s.sku||'', s.styleId||'', s.category||'', s.cost||0, s.markup||0, s.discount||0,
+        Math.round(c.custPaid||0),
+        Math.round(c.grossSettlement||0),
+        Math.round(c.profitRs||0),
+        Math.round(c.ifDelivered||0),
+      ]);
     });
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:18},{wch:16},{wch:16},{wch:12},{wch:12},{wch:10}];
+    ws['!cols'] = [
+      {wch:18},{wch:16},{wch:16},{wch:12},{wch:12},{wch:10},
+      {wch:14},{wch:18},{wch:12},{wch:14}
+    ];
     XLSX.utils.book_append_sheet(wb, ws, 'SKUs');
     XLSX.writeFile(wb,'PriceDesk_SKUs_'+new Date().toISOString().slice(0,10)+'.xlsx');
     toast(`✓ Exported ${skuDB.length} SKUs to Excel`,'green');
