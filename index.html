@@ -1237,7 +1237,7 @@ body:has(#login-screen.active){overflow:hidden}
   <div class="filter-bar">
     <div style="position:relative">
       <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:14px;pointer-events:none">⌕</span>
-      <input id="f-search" class="filter-select" style="padding-left:27px;min-width:180px" placeholder="Search SKU or Style ID..." oninput="renderSKUs()">
+      <input id="f-search" class="filter-select" style="padding-left:27px;min-width:180px" placeholder="Search SKU or Style ID..." oninput="debouncedRenderSKUs()">
     </div>
     <select id="f-brand" class="filter-select" onchange="renderSKUs()"><option value="">All Brands</option></select>
     <select id="f-cat" class="filter-select" onchange="renderSKUs()"><option value="">All Categories</option></select>
@@ -1250,9 +1250,9 @@ body:has(#login-screen.active){overflow:hidden}
     <select id="f-tag" class="filter-select" onchange="renderSKUs()"><option value="">All Tags</option></select>
     <div class="filter-sep"></div>
     <span class="filter-label">Profit ₹</span>
-    <input id="f-profit-min" class="filter-select" type="number" placeholder="Min" style="width:70px;min-width:0" oninput="renderSKUs()">
+    <input id="f-profit-min" class="filter-select" type="number" placeholder="Min" style="width:70px;min-width:0" oninput="debouncedRenderSKUs()">
     <span style="color:var(--tx3);font-size:11px">to</span>
-    <input id="f-profit-max" class="filter-select" type="number" placeholder="Max" style="width:70px;min-width:0" oninput="renderSKUs()">
+    <input id="f-profit-max" class="filter-select" type="number" placeholder="Max" style="width:70px;min-width:0" oninput="debouncedRenderSKUs()">
     <button class="filter-clear" onclick="clearFilters()" style="display:none" id="f-clear-btn">✕ Clear Filters</button>
   </div>
   <div id="active-filter-chips" class="active-filters" style="margin-bottom:8px"></div>
@@ -2045,50 +2045,60 @@ async function dbLoadAllSKUs(){
   const db=getDB();if(!db)return null;
   // Try pd_skus_v2 table first
   try{
-    // Get count first to know if table exists and has data
-    const{count:tableCount,error:cErr}=await db.from('pd_skus_v2').select('id',{count:'exact',head:true});
-    if(cErr)throw cErr;
+    // Fetch ALL rows in pages of 1000 (Supabase hard limit per request).
+    // The first page doubles as the existence/emptiness probe — no separate
+    // count round trip needed.
+    let allRows=[];
+    for(let from=0;;from+=1000){
+      const{data,error}=await db.from('pd_skus_v2').select('*').order('id').range(from,from+999);
+      if(error)throw error;
+      if(!data||data.length===0)break;
+      allRows.push(...data);
+      if(data.length<1000)break; // last page
+    }
 
-    if(tableCount>0){
-      // Fetch ALL rows in pages of 1000 (Supabase hard limit per request)
-      let allRows=[];
-      for(let from=0;;from+=1000){
-        const{data,error}=await db.from('pd_skus_v2').select('*').range(from,from+999);
-        if(error)throw error;
-        if(!data||data.length===0)break;
-        allRows.push(...data);
-        if(data.length<1000)break; // last page
-      }
+    if(allRows.length>0){
       _useSkuTable=true;
-      console.log(`Loaded ${allRows.length} SKUs from pd_skus_v2 (table has ${tableCount})`);
+      console.log(`Loaded ${allRows.length} SKUs from pd_skus_v2`);
       const loaded=allRows.map(_rowToSku);
 
-      // Compare against blob — re-migrate any missing SKUs
-      const blob=await dbGet(DB_KEYS.skus);
-      if(blob&&Array.isArray(blob)&&blob.length>loaded.length){
-        const tableIds=new Set(loaded.map(s=>s.id));
-        const missing=blob.filter(s=>!tableIds.has(s.id));
-        if(missing.length){
-          console.warn(`Table has ${loaded.length} but blob has ${blob.length} — re-migrating ${missing.length} missing SKUs...`);
-          toast(`Restoring ${missing.length} missing SKUs...`,'blue');
-          const rows=missing.map(s=>_skuToRow(s));
-          let migrated=0;
-          for(let i=0;i<rows.length;i+=200){
-            const chunk=rows.slice(i,i+200);
-            const{error:uErr}=await db.from('pd_skus_v2').upsert(chunk,{onConflict:'id'});
-            if(uErr){console.warn('Re-migration chunk failed:',uErr.message);continue;}
-            migrated+=chunk.length;
-            if(migrated%1000===0) console.log(`  ...migrated ${migrated}/${missing.length}`);
-          }
-          console.log(`✓ Re-migrated ${migrated} of ${missing.length} missing SKUs`);
-          toast(`✓ Restored ${migrated} SKUs to database`,'green');
-          if(migrated===missing.length) loaded.push(...missing);
-          else {
-            // Only add SKUs that were successfully migrated (re-fetch from table)
-            const{data:fresh}=await db.from('pd_skus_v2').select('*').in('id',missing.map(s=>s.id));
-            if(fresh) loaded.push(...fresh.map(_rowToSku));
+      // Compare against blob — re-migrate any missing SKUs.
+      // ONE-TIME per browser: the legacy blob is frozen (all writes go
+      // per-row to pd_skus_v2 now), so re-downloading the multi-MB blob on
+      // every startup repeats a check whose answer cannot change. A
+      // localStorage marker skips it after one clean pass; fresh browsers
+      // still run the defense-in-depth check once.
+      let _blobCheckDone=false;
+      try{_blobCheckDone=localStorage.getItem('pd_blob_check_done_v1')==='1';}catch(_e){}
+      if(!_blobCheckDone){
+        let checkClean=true;
+        const blob=await dbGet(DB_KEYS.skus);
+        if(blob&&Array.isArray(blob)&&blob.length>loaded.length){
+          const tableIds=new Set(loaded.map(s=>s.id));
+          const missing=blob.filter(s=>!tableIds.has(s.id));
+          if(missing.length){
+            console.warn(`Table has ${loaded.length} but blob has ${blob.length} — re-migrating ${missing.length} missing SKUs...`);
+            toast(`Restoring ${missing.length} missing SKUs...`,'blue');
+            const rows=missing.map(s=>_skuToRow(s));
+            let migrated=0;
+            for(let i=0;i<rows.length;i+=200){
+              const chunk=rows.slice(i,i+200);
+              const{error:uErr}=await db.from('pd_skus_v2').upsert(chunk,{onConflict:'id'});
+              if(uErr){console.warn('Re-migration chunk failed:',uErr.message);checkClean=false;continue;}
+              migrated+=chunk.length;
+              if(migrated%1000===0) console.log(`  ...migrated ${migrated}/${missing.length}`);
+            }
+            console.log(`✓ Re-migrated ${migrated} of ${missing.length} missing SKUs`);
+            toast(`✓ Restored ${migrated} SKUs to database`,'green');
+            if(migrated===missing.length) loaded.push(...missing);
+            else {
+              // Only add SKUs that were successfully migrated (re-fetch from table)
+              const{data:fresh}=await db.from('pd_skus_v2').select('*').in('id',missing.map(s=>s.id));
+              if(fresh) loaded.push(...fresh.map(_rowToSku));
+            }
           }
         }
+        if(checkClean){try{localStorage.setItem('pd_blob_check_done_v1','1');}catch(_e){}}
       }
       return loaded;
     }
@@ -2159,25 +2169,30 @@ async function dbDeleteBrand(id){
 async function dbLoadAllBrands(){
   const db=getDB();if(!db)return null;
   try{
-    const{count:tableCount,error:cErr}=await db.from('pd_brands').select('id',{count:'exact',head:true});
-    if(cErr)throw cErr;
-    if(tableCount>0){
-      const{data,error}=await db.from('pd_brands').select('*');
-      if(error)throw error;
+    const{data,error}=await db.from('pd_brands').select('*');
+    if(error)throw error;
+    if(data&&data.length>0){
       _useBrandTable=true;
       console.log(`Loaded ${data.length} brands from pd_brands table`);
       const loaded=data.map(_rowToBrand);
-      // Compare against blob — re-migrate any missing brands
-      const blob=await dbGet(DB_KEYS.brands);
-      if(blob&&Array.isArray(blob)&&blob.length>loaded.length){
-        const tableIds=new Set(loaded.map(b=>b.id));
-        const missing=blob.filter(b=>!tableIds.has(b.id));
-        if(missing.length){
-          console.warn(`Brand table has ${loaded.length} but blob has ${blob.length} — re-migrating ${missing.length}`);
-          const rows=missing.map(_brandToRow);
-          const{error:uErr}=await db.from('pd_brands').upsert(rows,{onConflict:'id'});
-          if(!uErr) loaded.push(...missing);
+      // Compare against blob — one-time per browser (blob is frozen, see SKU loader)
+      let _brandBlobDone=false;
+      try{_brandBlobDone=localStorage.getItem('pd_brand_blob_check_done_v1')==='1';}catch(_e){}
+      if(!_brandBlobDone){
+        let checkClean=true;
+        const blob=await dbGet(DB_KEYS.brands);
+        if(blob&&Array.isArray(blob)&&blob.length>loaded.length){
+          const tableIds=new Set(loaded.map(b=>b.id));
+          const missing=blob.filter(b=>!tableIds.has(b.id));
+          if(missing.length){
+            console.warn(`Brand table has ${loaded.length} but blob has ${blob.length} — re-migrating ${missing.length}`);
+            const rows=missing.map(_brandToRow);
+            const{error:uErr}=await db.from('pd_brands').upsert(rows,{onConflict:'id'});
+            if(!uErr) loaded.push(...missing);
+            else checkClean=false;
+          }
         }
+        if(checkClean){try{localStorage.setItem('pd_brand_blob_check_done_v1','1');}catch(_e){}}
       }
       return loaded;
     }
@@ -2237,11 +2252,9 @@ async function dbDeleteCategory(name){
 async function dbLoadAllCategories(){
   const db=getDB();if(!db)return null;
   try{
-    const{count:tableCount,error:cErr}=await db.from('pd_categories').select('name',{count:'exact',head:true});
-    if(cErr)throw cErr;
-    if(tableCount>0){
-      const{data,error}=await db.from('pd_categories').select('*').order('sort_order');
-      if(error)throw error;
+    const{data,error}=await db.from('pd_categories').select('*').order('sort_order');
+    if(error)throw error;
+    if(data&&data.length>0){
       _useCategoryTable=true;
       console.log(`Loaded ${data.length} categories from pd_categories table`);
       const cats=data.map(r=>r.name);
@@ -2293,11 +2306,9 @@ async function dbSaveThresholds(thresholdObj){
 async function dbLoadAllThresholds(){
   const db=getDB();if(!db)return null;
   try{
-    const{count:tableCount,error:cErr}=await db.from('pd_thresholds').select('category',{count:'exact',head:true});
-    if(cErr)throw cErr;
-    if(tableCount>0){
-      const{data,error}=await db.from('pd_thresholds').select('*');
-      if(error)throw error;
+    const{data,error}=await db.from('pd_thresholds').select('*');
+    if(error)throw error;
+    if(data&&data.length>0){
       _useThresholdTable=true;
       const obj={};
       data.forEach(r=>{obj[r.category]=r.min_profit||0;});
@@ -2389,11 +2400,9 @@ async function dbSaveCommissions(myntra, ppmp, cc, amazon){
 async function dbLoadAllCommissions(){
   const db=getDB();if(!db)return null;
   try{
-    const{count,error:cErr}=await db.from('pd_commissions').select('marketplace',{count:'exact',head:true});
-    if(cErr)throw cErr;
-    if(count>0){
-      const{data,error}=await db.from('pd_commissions').select('*');
-      if(error)throw error;
+    const{data,error}=await db.from('pd_commissions').select('*');
+    if(error)throw error;
+    if(data&&data.length>0){
       const result=_rowsToComm(data);
       if(!result){
         // Data incomplete — fall back to blob (don't trust partial table data)
@@ -2725,30 +2734,42 @@ async function loadFromStorage(){
 
   updateSyncBadge(false);
   try{
-    // Load sequentially in small batches to avoid overwhelming free-tier DB
+    // All independent loads fire in ONE parallel wave — the old 5-stage
+    // serialized batching added ~7 avoidable round-trip depths to every
+    // startup. Blob fallbacks (rare paths) run in a second short wave.
     const loaded = {};
-    // Batch 1: SKUs — try per-row table first, fall back to JSON blob
-    loaded.skus = await dbLoadAllSKUs();
-    // Batch 2: Core config (brands/categories/thresholds from tables, rest from app_data)
-    const [brandsResult, catResult, threshResult, usersResult] = await Promise.all([
+    const [skusResult, brandsResult, catResult, threshResult, usersResult,
+           levelsResult, alertResult, commResult, logisticsResult,
+           wireframeResult, emailResult] = await Promise.all([
+      dbLoadAllSKUs(),
       dbLoadAllBrands(),
       dbLoadAllCategories(),
       dbLoadAllThresholds(),
-      dbGet(DB_KEYS.users).catch(()=>null)
+      dbGet(DB_KEYS.users).catch(()=>null),
+      dbGet(DB_KEYS.levels).catch(()=>null),
+      dbGet(DB_KEYS.alert).catch(()=>null),
+      dbLoadAllCommissions(),
+      dbGet(DB_KEYS.logistics).catch(()=>null),
+      dbGet(DB_KEYS.wireframe).catch(()=>null),
+      dbGet(DB_KEYS.email_cfg).catch(()=>null)
     ]);
+    loaded.skus = skusResult;
     loaded.brands = brandsResult;
     loaded.users = usersResult;
+    loaded.levels = levelsResult;
+    loaded.alert = alertResult;
+    loaded.logistics = logisticsResult;
+    loaded.wireframe = wireframeResult;
+    loaded.email_cfg = emailResult;
     if(catResult){ loaded.categories=catResult.cats; loaded.cat_levels=catResult.catLevel; }
     else {
-      loaded.categories = await dbGet(DB_KEYS.categories).catch(()=>null);
-      loaded.cat_levels = await dbGet(DB_KEYS.cat_levels).catch(()=>null);
+      const [bc, bl] = await Promise.all([
+        dbGet(DB_KEYS.categories).catch(()=>null),
+        dbGet(DB_KEYS.cat_levels).catch(()=>null)
+      ]);
+      loaded.categories = bc; loaded.cat_levels = bl;
     }
     loaded.thresholds = threshResult || await dbGet(DB_KEYS.thresholds).catch(()=>null);
-    const batch2b = ['levels','alert'];
-    const r2b = await Promise.all(batch2b.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
-    batch2b.forEach((t,i) => { loaded[t] = r2b[i]; });
-    // Batch 3: Commissions (from unified table or blobs) + logistics
-    const commResult = await dbLoadAllCommissions();
     if(commResult){
       loaded.comm_myntra = commResult.myntra;
       loaded.comm_ppmp = commResult.ppmp;
@@ -2759,9 +2780,6 @@ async function loadFromStorage(){
       const r3a = await Promise.all(batch3a.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
       batch3a.forEach((t,i) => { loaded[t] = r3a[i]; });
     }
-    const batch3b = ['logistics','wireframe','email_cfg'];
-    const r3b = await Promise.all(batch3b.map(t => dbGet(DB_KEYS[t]).catch(()=>null)));
-    batch3b.forEach((t,i) => { loaded[t] = r3b[i]; });
 
     // Apply each type if data exists
     if(loaded.skus)        skuDB           = loaded.skus;
@@ -4124,13 +4142,25 @@ function switchSKUTab(tab, mp){
 }
 
 let _dataReady=false;
+let _skuRenderRetry=null;
+// Debounced render for type-ahead filters — a keystroke must not trigger a
+// full filter+calc pass on every character
+let _skuSearchTimer=null;
+function debouncedRenderSKUs(){
+  clearTimeout(_skuSearchTimer);
+  _skuSearchTimer=setTimeout(renderSKUs,160);
+}
 function renderSKUs(){
   if(!_dataReady){
     const t=el('sku-body');if(t)t.innerHTML=`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)"><div style="animation:pulse 1.5s infinite">Loading SKUs...</div></td></tr>`;
     el('sku-count')&&(el('sku-count').textContent='');
     const pgEl=el('sku-pagination');if(pgEl)pgEl.innerHTML='';
+    // Data still loading — retry so the table paints itself when ready
+    // (fixes the "Loading SKUs..." stall when login wins the race vs data load)
+    if(!_skuRenderRetry) _skuRenderRetry=setTimeout(()=>{_skuRenderRetry=null;renderSKUs();},400);
     return;
   }
+  if(_skuRenderRetry){clearTimeout(_skuRenderRetry);_skuRenderRetry=null;}
   invalidateCalcCache();
   const list=filteredSKUs();
   renderActiveFilterChips();
@@ -7181,6 +7211,23 @@ const WF_LOOKUPS = {
   closeFee:  () => LOGISTICS_SETTINGS.amz_close||15,
 };
 
+// Compiled-expression cache. Without it every formula row builds a fresh
+// Function object for every SKU calculated (~17 compiles per Myntra SKU,
+// thousands per render pass). Key = parameter list + expression text, so
+// editing a WF rule naturally produces a new entry; identical rows across
+// SKUs hit the cache.
+const _wfFnCache = new Map();
+function _wfCompile(keys, expr){
+  const cacheKey = keys.join(',')+'|'+expr;
+  let fn = _wfFnCache.get(cacheKey);
+  if(!fn){
+    if(_wfFnCache.size > 500) _wfFnCache.clear();
+    fn = new Function(...keys, `"use strict"; return (${sanitizeExpr(expr)});`);
+    _wfFnCache.set(cacheKey, fn);
+  }
+  return fn;
+}
+
 function runWFEngine(marketplace, inputs){
   const rows = WF[marketplace] || [];
   // Start context with all inputs + helper functions
@@ -7226,7 +7273,7 @@ function runWFEngine(marketplace, inputs){
       const entries = Object.entries(ctx).filter(([k])=>validIdRe.test(k));
       const keys = entries.map(([k])=>k);
       const vals = entries.map(([,v])=>v);
-      const fn = new Function(...keys, `"use strict"; return (${sanitizeExpr(row.expr)});`);
+      const fn = _wfCompile(keys, row.expr);
       const r = fn(...vals);
       // Guard against NaN — treat as null so downstream formulas use fallbacks
       ctx[row.var] = (typeof r === 'number' && isNaN(r)) || r == null ? null : r;
@@ -8814,9 +8861,10 @@ document.addEventListener('DOMContentLoaded',async ()=>{
   try{ _db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
   catch(e){ console.warn('Supabase init failed:', e); }
   loadConfig();
-  // Check table exists before loading
-  const tableOk = await ensureTable();
-  if(!tableOk){ console.warn('app_data table missing — showing setup guide'); }
+  // Table-existence probe runs concurrently with the session check below —
+  // its result is only a diagnostic, so it must not cost a serial round trip
+  const tableOkP = ensureTable();
+  tableOkP.then(ok=>{ if(!ok) console.warn('app_data table missing — showing setup guide'); });
 
   // Check for password reset link first
   const urlParams = new URLSearchParams(window.location.search);
@@ -8836,10 +8884,16 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     document.getElementById('app-loading')?.classList.remove('active');
     document.getElementById('login-screen').classList.add('active');
     // Load data in background (needed for login to work — users array)
-    await loadFromStorage();
-    await loadUserPrefs();
+    await Promise.all([loadFromStorage(), loadUserPrefs()]);
     applyUserPrefs();
     _dataReady=true;
+    // If the user already logged in while data was still loading, the app
+    // rendered empty screens — refresh them now that data is here
+    if(currentUser){
+      invalidateCalcCache();
+      populateFilters();populateTagFilter();
+      renderSKUs();renderBrandSummary();updateAlerts();
+    }
   } else {
     // Session valid — load data, then show app
     const loadingMsg=document.getElementById('app-loading-msg');
@@ -8847,10 +8901,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
 
     try{
     setLoadMsg('Loading SKUs...');
-    await loadFromStorage();
-
-    setLoadMsg('Loading preferences...');
-    await loadUserPrefs();
+    await Promise.all([loadFromStorage(), loadUserPrefs()]);
     applyUserPrefs();
 
     // Auto-archive STOCK OUT SKUs BEFORE marking data ready
@@ -8860,7 +8911,10 @@ document.addEventListener('DOMContentLoaded',async ()=>{
       stockOutToArchive.forEach(s=>{s.archived=true;});
       invalidateCalcCache();
       try{
-        await _doSaveSKUs();
+        // Save only the rows that changed — rewriting the whole table here
+        // added ~20 sequential upserts to every startup that hit this path
+        if(_useSkuTable) await dbSaveSKU(...stockOutToArchive);
+        else await _doSaveSKUs();
         console.log(`✓ Auto-archived ${stockOutToArchive.length} STOCK OUT SKUs`);
       }catch(e){console.warn('Auto-archive save failed:',e);}
     }
