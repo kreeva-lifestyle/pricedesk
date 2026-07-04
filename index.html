@@ -1134,7 +1134,7 @@ body:has(#login-screen.active){overflow:hidden}
           <button class="btn bg bsm" onclick="openGTSlabModal()">✎ Edit Price Slabs</button>
         </div>
       </div>
-      <div id="mfwd-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Rate (₹)</label><input class="fi" type="number" id="mfwd-fix" value="230" oninput="LOGISTICS_SETTINGS.myn_fwd_fixed=+this.value;invalidateCalcCache()"></div>
+      <div id="mfwd-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Rate (₹)</label><input class="fi" type="number" id="mfwd-fix" value="230" oninput="LOGISTICS_SETTINGS.myn_fwd_fixed=+this.value||0;invalidateCalcCache()"></div>
         <button class="btn bp bsm" onclick="saveGTCharges()">✓ Save GT Charges</button>
       </div>
       <div id="mfwd-cat" style="display:none">
@@ -1177,7 +1177,7 @@ body:has(#login-screen.active){overflow:hidden}
         <tbody id="ret-table-body"></tbody>
       </table></div>
       <button class="btn bg bsm" style="margin-top:10px" onclick="openRevSlabModal()">✎ Edit Price Slabs</button></div>
-      <div id="mret-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Return Rate (₹)</label><input class="fi" type="number" id="mret-fix" value="218" oninput="LOGISTICS_SETTINGS.myn_ret_fixed=+this.value;invalidateCalcCache()"></div></div>
+      <div id="mret-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Return Rate (₹)</label><input class="fi" type="number" id="mret-fix" value="218" oninput="LOGISTICS_SETTINGS.myn_ret_fixed=+this.value||0;invalidateCalcCache()"></div></div>
       <div id="mret-cat" style="display:none"><div style="overflow-x:auto"><table class="dt" style="font-size:12px" id="ret-cat-table">
         <thead id="ret-cat-table-head"></thead>
         <tbody id="ret-cat-table-body"></tbody>
@@ -2371,15 +2371,14 @@ function _commToRows(myntra, ppmp, cc, amazon){
 
 function _rowsToComm(rows){
   const myntra={},ppmp={},cc={},amazon={};
-  // Myntra slab count is dynamic (editable slabs) — size arrays by the
-  // largest slab_index present, then validate contiguity below
-  let maxIdx=0;
-  for(const r of rows){ if(r.marketplace==='myntra'&&r.slab_index>maxIdx) maxIdx=r.slab_index; }
-  const slabCount=maxIdx+1;
+  // Myntra slab count is dynamic (editable slabs) — collect each category's
+  // rows independently and validate contiguity PER CATEGORY below, so one
+  // bad/orphaned category cannot invalidate the whole load
+  const mynRaw={};
   for(const r of rows){
     if(r.marketplace==='myntra'){
-      if(!myntra[r.category])myntra[r.category]=new Array(slabCount).fill(null);
-      if(r.slab_index>=0&&r.slab_index<slabCount) myntra[r.category][r.slab_index]=r.rate;
+      if(!mynRaw[r.category])mynRaw[r.category]={};
+      if(r.slab_index>=0) mynRaw[r.category][r.slab_index]=r.rate;
     }else if(r.marketplace==='ajio-ppmp'){
       ppmp[r.category]=r.rate;
     }else if(r.marketplace==='ajio-cc'){
@@ -2388,12 +2387,27 @@ function _rowsToComm(rows){
       amazon[r.category]=r.rate;
     }
   }
-  // Validate Myntra slabs: if ANY slab is null (missing row), data is incomplete
-  for(const[cat,slabs]of Object.entries(myntra)){
-    if(slabs.some(v=>v===null)){
-      console.error(`Commission data incomplete for Myntra/${cat}: missing slab(s). Falling back to blob.`);
-      return null;
+  // Per-category contiguity: a category is valid when its rows cover
+  // 0..catMax with no holes. Invalid/orphaned categories are dropped with
+  // a warning; only if EVERY Myntra category is invalid do we treat the
+  // table as unusable and fall back to the blob.
+  let hadMyn=false, validMyn=false;
+  for(const[cat,idxMap]of Object.entries(mynRaw)){
+    hadMyn=true;
+    const idxs=Object.keys(idxMap).map(Number);
+    const catMax=Math.max(...idxs);
+    const arr=new Array(catMax+1).fill(null);
+    idxs.forEach(i=>{arr[i]=idxMap[i];});
+    if(arr.some(v=>v===null)){
+      console.warn(`Commission rows for Myntra/${cat} are non-contiguous (likely orphaned) — skipping this category.`);
+      continue;
     }
+    myntra[cat]=arr;
+    validMyn=true;
+  }
+  if(hadMyn&&!validMyn){
+    console.error('Commission data incomplete for ALL Myntra categories. Falling back to blob.');
+    return null;
   }
   return{myntra,ppmp,cc,amazon};
 }
@@ -3282,9 +3296,9 @@ function renderDynamicCalc(mp){
       const mpSafe = escAttr(mp);
       const varSafe = escAttr(row.var);
       if(isMyntra){
-        html+=`<tr class="ir myn-row"><td>${esc(row.l)}</td><td class="myn-val"><input type="number" value="${val}" onchange="CD['${mpSafe}']['${varSafe}']=+this.value;renderDynamicCalc('${mpSafe}')"></td><td class="myn-math">${esc(row.desc||'')}</td></tr>`;
+        html+=`<tr class="ir myn-row"><td>${esc(row.l)}</td><td class="myn-val"><input type="number" value="${val}" onchange="CD['${mpSafe}']['${varSafe}']=+this.value||0;renderDynamicCalc('${mpSafe}')"></td><td class="myn-math">${esc(row.desc||'')}</td></tr>`;
       } else {
-        html+=`<tr class="ir"><td>${esc(row.l)}</td><td><input type="number" value="${val}" onchange="CD['${mpSafe}']['${varSafe}']=+this.value;renderDynamicCalc('${mpSafe}')"></td></tr>`;
+        html+=`<tr class="ir"><td>${esc(row.l)}</td><td><input type="number" value="${val}" onchange="CD['${mpSafe}']['${varSafe}']=+this.value||0;renderDynamicCalc('${mpSafe}')"></td></tr>`;
       }
     }
     else if(row.t==='formula'||row.t==='lookup'){
@@ -3370,7 +3384,7 @@ function buildCommMyntra(){
   let h=`<thead><tr><th>Category</th><th>Level</th>${SLABS.map(s=>`<th>${s.label}</th>`).join('')}</tr></thead><tbody>`;
   if(slabOnly){
     h+=`<tr style="background:rgba(240,177,42,.06)"><td><strong style="color:var(--ac)">★ All Categories</strong></td><td class="st" style="font-size:10px">slab-only</td>${
-      COMM_SLAB_ONLY.map((v,i)=>`<td><input class="ci" style="border-color:var(--ac)" value="${v}" onchange="COMM_SLAB_ONLY[${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')
+      COMM_SLAB_ONLY.map((v,i)=>`<td><input class="ci" style="border-color:var(--ac)" value="${v}" onchange="COMM_SLAB_ONLY[${i}]=+this.value||0;triggerRecalc();renderSKUs()"></td>`).join('')
     }</tr>`;
   }
   CATS.forEach(cat=>{
@@ -3380,7 +3394,7 @@ function buildCommMyntra(){
     const lvlOpts=LEVELS.map(l=>`<option${l===curLvl?' selected':''}>${l}</option>`).join('');
     const skuCount=skuDB.filter(s=>s.category===cat).length;
     const skuBadge=skuCount?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(78,142,247,.12);color:var(--bl)">${skuCount}</span>`:'';
-    h+=`<tr${slabOnly?' style="opacity:.45"':''}><td><div class="flex gap8">${esc(cat)} ${skuBadge} <button class="btn br bxs" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}"${slabOnly?' disabled title="Ignored in slab-only mode"':''} onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
+    h+=`<tr${slabOnly?' style="opacity:.45"':''}><td><div class="flex gap8">${esc(cat)} ${skuBadge} <button class="btn br bxs" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}"${slabOnly?' disabled title="Ignored in slab-only mode"':''} onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value||0;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 
@@ -3390,21 +3404,22 @@ function setCommMode(mode){
   LOGISTICS_SETTINGS.comm_slab_only=COMM_SLAB_ONLY;
   invalidateCalcCache();
   buildCommMyntra();
-  save('logistics');
   triggerRecalc();renderSKUs();
   audit('commission_mode',`Myntra commission mode set to ${COMM_MODE==='slab'?'Slab only':'Level + Slab'}`);
-  toast(`Commission mode: ${COMM_MODE==='slab'?'Slab only (all categories)':'Level + Slab (per category)'}`,'blue');
+  save('logistics')
+    .then(()=>toast(`✓ Commission mode saved: ${COMM_MODE==='slab'?'Slab only (all categories)':'Level + Slab (per category)'}`,'blue'))
+    .catch(e=>toast('Mode save failed: '+e.message,'red'));
 }
 function buildCommAjioPPMP(){
   const t=el('comm-ajio-ppmp-table');if(!t)return;
   let h='<thead><tr><th>Category</th><th>Commission %</th></tr></thead><tbody>';
-  CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AJIO_PPMP[cat]||18.88}" onchange="COMM_AJIO_PPMP['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
+  CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AJIO_PPMP[cat]||18.88}" onchange="COMM_AJIO_PPMP['${escAttr(cat)}']=+this.value||0;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 function buildCommAjioCC(){
   const t=el('comm-ajio-cc-table');if(!t)return;
   let h='<thead><tr><th>Category</th><th>Commission %</th></tr></thead><tbody>';
-  CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AJIO_CC[cat]||18.88}" onchange="COMM_AJIO_CC['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
+  CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AJIO_CC[cat]||18.88}" onchange="COMM_AJIO_CC['${escAttr(cat)}']=+this.value||0;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 function buildCommAjioBrands(){
@@ -3423,7 +3438,7 @@ function buildCommAjioBrands(){
 function buildCommAmazon(){
   const t=el('comm-amazon-table');if(!t)return;
   let h='<thead><tr><th>Category</th><th>Referral Fee %</th></tr></thead><tbody>';
-  CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AMAZON[cat]||17}" onchange="COMM_AMAZON['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
+  CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AMAZON[cat]||17}" onchange="COMM_AMAZON['${escAttr(cat)}']=+this.value||0;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 async function saveComm(){
@@ -3461,7 +3476,7 @@ async function addCategory(){
   CATS.push(name);
   CAT_LEVEL[name]=level;
   THRESHOLDS[name]=THRESHOLDS[name]||0;
-  COMM_MYNTRA[name]=COMM_MYNTRA[name]||[0,0,18.88,18.88,18.88];
+  COMM_MYNTRA[name]=COMM_MYNTRA[name]||_normSlabArr([0,0,18.88,18.88,18.88],SLABS.length,18.88);
   COMM_AMAZON[name]=COMM_AMAZON[name]||17;
   for(const t of['categories','cat_levels','comm_myntra','comm_amazon'])await save(t);
   buildCommMyntra();buildCommAmazon();populateFilters();
@@ -3489,6 +3504,20 @@ async function deleteCategory(cat){
   delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];delete COLL_FEE_DATA[cat];delete GT_CAT_DATA[cat];delete REV_CAT_DATA[cat];
   if(_useCategoryTable){
     try{await dbDeleteCategory(cat);}catch(e){console.warn('Category table delete failed, will sync via save:',e.message);}
+  }
+  // Purge per-row child records — save() only upserts, so without explicit
+  // deletes these rows would resurrect the category on the next load (and a
+  // stale slab_index range would poison the commission contiguity check)
+  const _pdb=getDB();
+  if(_pdb){
+    if(_useCommTable){
+      try{await _pdb.from('pd_commissions').delete().eq('category',cat);}
+      catch(e){console.warn('Commission rows delete failed for',cat,e.message);}
+    }
+    if(_useThresholdTable){
+      try{await _pdb.from('pd_thresholds').delete().eq('category',cat);}
+      catch(e){console.warn('Threshold row delete failed for',cat,e.message);}
+    }
   }
   for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
   invalidateCalcCache();buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
@@ -3534,7 +3563,7 @@ function renderThresholds(){
       </div>
       <div class="flex gap8" style="align-items:center">
         <span style="font-size:13px;color:var(--ac)">₹</span>
-        <input class="thr-input" type="number" data-cat="${esc(cat)}" value="${THRESHOLDS[cat]||0}" min="0" oninput="THRESHOLDS['${escAttr(cat)}']=+this.value;updateAlerts();renderBreachList()">
+        <input class="thr-input" type="number" data-cat="${esc(cat)}" value="${THRESHOLDS[cat]||0}" min="0" oninput="THRESHOLDS['${escAttr(cat)}']=+this.value||0;updateAlerts();renderBreachList()">
       </div>
       ${status}
     </div>`;
@@ -5331,11 +5360,12 @@ function logMode(name,mode){
   LOGISTICS_SETTINGS.gt_cat_data=GT_CAT_DATA;
   LOGISTICS_SETTINGS.rev_cat_data=REV_CAT_DATA;
   invalidateCalcCache();
-  save('logistics');
   triggerRecalc();renderSKUs();
   const label=mode==='cat'?'Category-wise':mode==='fixed'?'Fixed':'Level-based';
-  toast(`${name==='mfwd'?'Forward GT':'Return fee'} mode: ${label}`,'blue');
   audit('logistics_mode',`${name==='mfwd'?'Forward GT':'Return fee'} mode set to ${label}`);
+  save('logistics')
+    .then(()=>toast(`✓ ${name==='mfwd'?'Forward GT':'Return fee'} mode saved: ${label}`,'blue'))
+    .catch(e=>toast('Mode save failed: '+e.message,'red'));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -7008,7 +7038,7 @@ function renderGTTable(){
     const vals = GT_DATA[lvl] = _normSlabArr(GT_DATA[lvl]||[0,1,0,0,0,0,0], n, 0);
     return `<tr>${['<td><div class="flex gap8"><strong>'+esc(lvl)+`</strong><button class="btn br bxs" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td>`,
       ...vals.map((v,i) => `<td><input class="ci" style="width:58px;${i===n-1?'border-color:var(--ac)':''}"
-        value="${v}" oninput="GT_DATA['${escAttr(lvl)}'][${i}]=+this.value;invalidateCalcCache()">`+'</td>')
+        value="${v}" oninput="GT_DATA['${escAttr(lvl)}'][${i}]=+this.value||0;invalidateCalcCache()">`+'</td>')
     ].join('')}</tr>`;
   }).join('');
 }
@@ -7018,12 +7048,12 @@ function _retRowCells(store, key, val, n){
   if(!REV_SLABS.length){
     const v=Array.isArray(val)?(+val[0]||0):(+val||0);
     return `<td><input class="ci" style="width:80px" value="${v}"
-      oninput="${store}['${escAttr(key)}']=+this.value;invalidateCalcCache()"></td>
+      oninput="${store}['${escAttr(key)}']=+this.value||0;invalidateCalcCache()"></td>
       <td class="st">Half: ₹${(v/2).toFixed(1)}</td>`;
   }
   const arr=_normSlabArr(Array.isArray(val)?val:Array(n).fill(+val||0), n, +val||0);
   (store==='REVERSE_FEES'?REVERSE_FEES:REV_CAT_DATA)[key]=arr;
-  return arr.map((v,i)=>`<td><input class="ci" style="width:64px;${i===n-1?'border-color:var(--ac)':''}" value="${v}" oninput="${store}['${escAttr(key)}'][${i}]=+this.value;invalidateCalcCache()"></td>`).join('');
+  return arr.map((v,i)=>`<td><input class="ci" style="width:64px;${i===n-1?'border-color:var(--ac)':''}" value="${v}" oninput="${store}['${escAttr(key)}'][${i}]=+this.value||0;invalidateCalcCache()"></td>`).join('');
 }
 
 function renderRetTable(){
@@ -7052,7 +7082,7 @@ function renderGTCatTable(){
     }
     const vals=GT_CAT_DATA[cat]=_normSlabArr(GT_CAT_DATA[cat],n,0);
     return`<tr><td style="white-space:nowrap"><strong style="font-size:11px">${esc(cat)}</strong></td>${
-      vals.map((v,i)=>`<td><input class="ci" style="width:58px;${i===n-1?'border-color:var(--ac)':''}" value="${v}" oninput="GT_CAT_DATA['${escAttr(cat)}'][${i}]=+this.value;invalidateCalcCache()"></td>`).join('')
+      vals.map((v,i)=>`<td><input class="ci" style="width:58px;${i===n-1?'border-color:var(--ac)':''}" value="${v}" oninput="GT_CAT_DATA['${escAttr(cat)}'][${i}]=+this.value||0;invalidateCalcCache()"></td>`).join('')
     }</tr>`;
   }).join('');
 }
@@ -7095,7 +7125,7 @@ function renderCollTable(){
     if(vals.length>n) vals=vals.slice(0,n);
     COLL_FEE_DATA[cat]=vals;
     return`<tr><td style="white-space:nowrap"><strong style="font-size:11px">${esc(cat)}</strong></td>${
-      vals.map((v,i)=>`<td><input class="ci" style="width:48px;${i===n-1?'border-color:var(--ac)':''}" value="${v}" oninput="COLL_FEE_DATA['${escAttr(cat)}'][${i}]=+this.value;invalidateCalcCache()"></td>`).join('')
+      vals.map((v,i)=>`<td><input class="ci" style="width:48px;${i===n-1?'border-color:var(--ac)':''}" value="${v}" oninput="COLL_FEE_DATA['${escAttr(cat)}'][${i}]=+this.value||0;invalidateCalcCache()"></td>`).join('')
     }</tr>`;
   }).join('');
 }
@@ -7137,9 +7167,21 @@ function addCollSlabRow(){
   inps[inps.length-1]?.focus();
 }
 function applySlabEditor(){
-  const vals=[...document.querySelectorAll('.coll-slab-inp')].map(i=>parseFloat(i.value)).filter(v=>isFinite(v)&&v>0);
+  // Validate BEFORE closing: bad input keeps the modal open and applies
+  // nothing, so the user never silently loses a slab they typed
+  const raw=[...document.querySelectorAll('.coll-slab-inp')].map(i=>i.value.trim());
+  const invalid=raw.filter(v=>{const n=parseFloat(v);return v===''||!isFinite(n)||n<=0;});
+  if(invalid.length){
+    toast(`Invalid slab bound${invalid.length>1?'s':''}: ${invalid.map(v=>v===''?'(empty)':`"${v}"`).join(', ')} — enter amounts above ₹0`,'red');
+    return;
+  }
+  const vals=raw.map(v=>parseFloat(v));
   const bounds=[...new Set(vals)].sort((a,b)=>a-b);
   if(!bounds.length&&!_slabEditorAllowEmpty){toast('Add at least one slab bound','red');return;}
+  if(bounds.length>12){toast(`Too many slabs (${bounds.length}) — keep it to 12 or fewer`,'red');return;}
+  if(bounds.length<vals.length){
+    toast(`Duplicate bounds merged — ${bounds.length} slab bound${bounds.length>1?'s':''} kept`,'blue');
+  }
   const fn=_slabEditorApply;
   closeModal();
   if(fn) fn(bounds);
@@ -7171,12 +7213,15 @@ function applyCollSlabs(bounds){
     LOGISTICS_SETTINGS.coll_slabs=COLL_SLABS;
     LOGISTICS_SETTINGS.coll_fee_data=COLL_FEE_DATA;
     invalidateCalcCache();
-    save('logistics');
     renderCollTable();
     triggerRecalc();renderSKUs();
     audit('coll_slabs',`Collection fee slabs updated: ${bounds.join(', ')} (+ >${bounds[bounds.length-1]})`);
+    save('logistics')
+      .then(()=>toast('✓ Collection fee slabs saved','green'))
+      .catch(e=>toast('Slab save failed: '+e.message,'red'));
+  } else {
+    toast('Slabs unchanged','blue');
   }
-  toast('✓ Collection fee slabs updated','green');
 }
 
 // Forward GT slabs — shared by the level table and the category-wise table
@@ -7193,11 +7238,12 @@ function applyGTSlabs(bounds){
   LOGISTICS_SETTINGS.gt_slabs=GT_SLABS;
   LOGISTICS_SETTINGS.gt_cat_data=GT_CAT_DATA;
   invalidateCalcCache();
-  save('logistics');
   renderGTTable();renderGTCatTable();
   triggerRecalc();renderSKUs();
   audit('gt_slabs',`Forward GT price slabs updated: ${bounds.join(', ')}`);
-  toast('✓ GT price slabs updated','green');
+  save('logistics')
+    .then(()=>toast('✓ GT price slabs saved','green'))
+    .catch(e=>toast('Slab save failed: '+e.message,'red'));
 }
 
 // Reverse-fee slabs — empty bounds = one flat fee (historical behaviour)
@@ -7219,11 +7265,12 @@ function applyRevSlabs(bounds){
   LOGISTICS_SETTINGS.rev_slabs=REV_SLABS;
   LOGISTICS_SETTINGS.rev_cat_data=REV_CAT_DATA;
   invalidateCalcCache();
-  save('logistics');
   renderRetTable();renderRetCatTable();
   triggerRecalc();renderSKUs();
   audit('rev_slabs',`Return fee slabs updated: ${bounds.length?bounds.join(', '):'flat fee'}`);
-  toast('✓ Return fee slabs updated','green');
+  save('logistics')
+    .then(()=>toast('✓ Return fee slabs saved','green'))
+    .catch(e=>toast('Slab save failed: '+e.message,'red'));
 }
 
 // Commission slabs (Myntra) — remaps per-category rates and slab-only rates
@@ -7246,8 +7293,9 @@ function applyCommSlabs(bounds){
   SLABS=newSlabs;
   invalidateCalcCache();
   buildCommMyntra();
-  saveComm(); // persists rates (with stale slab-row cleanup) + slab config
   audit('comm_slabs',`Commission price slabs updated: ${bounds.join(', ')}`);
+  // saveComm persists rates (with stale slab-row cleanup) + slab config
+  saveComm().catch(e=>toast('Slab save failed: '+e.message,'red'));
 }
 
 // ── Level Management ────────────────────────────────
