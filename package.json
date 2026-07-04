@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "vite build && cp CNAME sw.js dist/",
+    "build": "vite build && cp CNAME sw.js manifest.json dist/ && cp -r icons dist/",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
