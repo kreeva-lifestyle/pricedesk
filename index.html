@@ -1116,6 +1116,7 @@ body:has(#login-screen.active){overflow:hidden}
       <div class="fg"><label class="fl">Mode</label><div class="flex gap12">
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="level" checked style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Level-based</label>
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Fixed</label>
+        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="cat" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Category-wise</label>
       </div></div>
       <div id="mfwd-level">
         <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:520px" id="gt-table">
@@ -1130,7 +1131,19 @@ body:has(#login-screen.active){overflow:hidden}
           <button class="btn bg bsm" onclick="openAddLevelModal()">+ Add Level</button>
         </div>
       </div>
-      <div id="mfwd-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Rate (₹)</label><input class="fi" type="number" id="mfwd-fix" value="230"></div></div>
+      <div id="mfwd-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Rate (₹)</label><input class="fi" type="number" id="mfwd-fix" value="230" oninput="LOGISTICS_SETTINGS.myn_fwd_fixed=+this.value;invalidateCalcCache()"></div>
+        <button class="btn bp bsm" onclick="saveGTCharges()">✓ Save GT Charges</button>
+      </div>
+      <div id="mfwd-cat" style="display:none">
+        <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:520px" id="gt-cat-table">
+          <thead><tr>
+            <th>Category</th><th>0–1</th><th>2–99</th><th>100–300</th><th>300–500</th><th>500–1000</th><th>1000–2000</th><th style="color:var(--ac)">&gt;2000 ★</th>
+          </tr></thead>
+          <tbody id="gt-cat-table-body"></tbody>
+        </table></div>
+        <div class="st" style="margin-top:6px">Shipping charged per category (same price bands). New categories start from their level's GT row.</div>
+        <button class="btn bp bsm" style="margin-top:12px" onclick="saveGTCharges()">✓ Save GT Charges</button>
+      </div>
       <div style="margin-top:14px">
         <div class="fg"><label class="fl">Payment Gateway (₹)</label><input class="fi" type="number" id="myn-pg" value="50.22"></div>
       </div>
@@ -1139,25 +1152,32 @@ body:has(#login-screen.active){overflow:hidden}
     <!-- Collection Fee / Fixed Fee — separate card -->
     <div class="card" style="margin-top:16px"><div class="ch"><div style="font-size:13px;font-weight:600">💰 Collection Fee / Fixed Fee</div><div class="st">By Category × Seller Price slab</div></div><div class="cb">
       <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:560px" id="coll-table">
-        <thead><tr>
-          <th>Category</th><th>0–300</th><th>300–500</th><th>500–700</th><th>700–800</th><th>800–1000</th><th>1000–2000</th><th style="color:var(--ac)">&gt;2000 ★</th>
-        </tr></thead>
+        <thead id="coll-table-head"></thead>
         <tbody id="coll-table-body"></tbody>
       </table></div>
       <div class="st" style="margin-top:6px">★ Most common slab. Fee × 1.18 (incl. GST) is deducted from payout.</div>
-      <button class="btn bp bsm" style="margin-top:10px" onclick="saveCollFees()">✓ Save Collection Fees</button>
+      <div class="flex gap8" style="margin-top:10px">
+        <button class="btn bp bsm" onclick="saveCollFees()">✓ Save Collection Fees</button>
+        <button class="btn bg bsm" onclick="openCollSlabModal()">✎ Edit Price Slabs</button>
+      </div>
     </div></div>
 
     <div class="card" style="margin-top:16px"><div class="ch"><div style="font-size:13px;font-weight:600">🔴 Return (Reverse Fees)</div></div><div class="cb">
       <div class="fg"><label class="fl">Mode</label><div class="flex gap12">
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="level" checked style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Level-based</label>
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Fixed</label>
+        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="cat" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Category-wise</label>
       </div></div>
       <div id="mret-level"><table class="dt" style="font-size:12px" id="ret-table">
         <thead><tr><th>Level</th><th>Return Fee (₹)</th></tr></thead>
         <tbody id="ret-table-body"></tbody>
       </table></div>
-      <div id="mret-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Return Rate (₹)</label><input class="fi" type="number" id="mret-fix" value="218"></div></div>
+      <div id="mret-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Return Rate (₹)</label><input class="fi" type="number" id="mret-fix" value="218" oninput="LOGISTICS_SETTINGS.myn_ret_fixed=+this.value;invalidateCalcCache()"></div></div>
+      <div id="mret-cat" style="display:none"><table class="dt" style="font-size:12px" id="ret-cat-table">
+        <thead><tr><th>Category</th><th>Return Fee (₹)</th></tr></thead>
+        <tbody id="ret-cat-table-body"></tbody>
+      </table>
+      <div class="st" style="margin-top:6px">Return fee charged per category. New categories start from their level's reverse fee.</div></div>
       <button class="btn bp bsm" style="margin-top:12px" onclick="saveLogisticsAll()">✓ Save All Logistics</button>
     </div></div>
   </div></div>
@@ -2760,6 +2780,7 @@ async function loadFromStorage(){
       if(loaded.logistics.rev)      REVERSE_FEES        = loaded.logistics.rev;
       if(loaded.logistics.settings) LOGISTICS_SETTINGS  = loaded.logistics.settings;
       if(loaded.logistics.collFees) COLL_FEE_DATA       = loaded.logistics.collFees;
+      hydrateLogisticsDerived();
     }
     if(loaded.wireframe){
       const WF_VERSION = 8; // v8: collection fee lookup by category × price band
@@ -2986,14 +3007,29 @@ let COLL_FEE_DATA = {
   'Tops':           [15, 17, 27, 27, 27, 45, 61],
   'Co-Ords':        [27, 27, 27, 27, 27, 45, 61],
 };
+// Category-wise logistics (Myntra) — used when mode = 'cat'
+let GT_CAT_DATA = {};   // {category: [7 GT band values]}
+let REV_CAT_DATA = {};  // {category: return fee ₹}
+// Collection fee slab upper bounds (₹) — last slab is "> last bound"
+const COLL_SLABS_DEFAULT = [300,500,700,800,1000,2000];
+let COLL_SLABS = [...COLL_SLABS_DEFAULT];
 let LOGISTICS_SETTINGS = {
   myn_pg_fee: 50.22,
+  myn_fwd_mode: 'level', myn_ret_mode: 'level',
+  myn_fwd_fixed: 230, myn_ret_fixed: 218,
   ajio_fwd: 70, ajio_ret: 70, ajio_platform_fee: 0,
   amz_fba: 55, amz_close: 15, amz_ret: 55
 };
+// Pull derived structures out of LOGISTICS_SETTINGS after any load/sync
+function hydrateLogisticsDerived(){
+  const s=LOGISTICS_SETTINGS;
+  if(s.coll_fee_data) COLL_FEE_DATA=s.coll_fee_data;
+  if(s.gt_cat_data)   GT_CAT_DATA=s.gt_cat_data;
+  if(s.rev_cat_data)  REV_CAT_DATA=s.rev_cat_data;
+  if(Array.isArray(s.coll_slabs)&&s.coll_slabs.length) COLL_SLABS=s.coll_slabs;
+}
 
-function getMynFwd(level, sp){
-  const slabs = GT_DATA[level] || GT_DATA['Level 2'];
+function gtSlabValue(slabs, sp){
   const price = sp || 0;
   if(price <= 1)    return slabs[0];
   if(price <= 99)   return slabs[1];
@@ -3003,17 +3039,25 @@ function getMynFwd(level, sp){
   if(price <= 2000) return slabs[5];
   return slabs[6];
 }
-function getMynRet(level){return REVERSE_FEES[level]||218;}
+function getMynFwd(level, sp, cat){
+  const mode = LOGISTICS_SETTINGS.myn_fwd_mode || 'level';
+  if(mode==='fixed') return +LOGISTICS_SETTINGS.myn_fwd_fixed || 0;
+  if(mode==='cat' && cat && GT_CAT_DATA[cat]) return gtSlabValue(GT_CAT_DATA[cat], sp);
+  return gtSlabValue(GT_DATA[level] || GT_DATA['Level 2'] || [0,1,83,83,118,195,230], sp);
+}
+function getMynRet(level, cat){
+  const mode = LOGISTICS_SETTINGS.myn_ret_mode || 'level';
+  if(mode==='fixed') return +LOGISTICS_SETTINGS.myn_ret_fixed || 218;
+  if(mode==='cat' && cat && REV_CAT_DATA[cat]!=null) return +REV_CAT_DATA[cat] || 0;
+  return REVERSE_FEES[level]||218;
+}
 function getMynColl(cat, sellerPrice){
   const slabs=COLL_FEE_DATA[cat]||[15,17,27,27,27,45,61];
   const p=sellerPrice||0;
-  if(p<=300) return slabs[0];
-  if(p<=500) return slabs[1];
-  if(p<=700) return slabs[2];
-  if(p<=800) return slabs[3];
-  if(p<=1000) return slabs[4];
-  if(p<=2000) return slabs[5];
-  return slabs[6];
+  for(let i=0;i<COLL_SLABS.length;i++){
+    if(p<=COLL_SLABS[i]) return +slabs[Math.min(i,slabs.length-1)]||0;
+  }
+  return +slabs[Math.min(COLL_SLABS.length,slabs.length-1)]||0;
 }
 function el(id){return document.getElementById(id);}
 
@@ -3337,7 +3381,7 @@ async function deleteCategory(cat){
     affected.forEach(s=>{s.category=fallback;s.level=CAT_LEVEL[fallback]||'Level 2';});
     if(affected.length) await dbSaveSKU(...affected);
   }
-  delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];delete COLL_FEE_DATA[cat];
+  delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];delete COLL_FEE_DATA[cat];delete GT_CAT_DATA[cat];delete REV_CAT_DATA[cat];
   if(_useCategoryTable){
     try{await dbDeleteCategory(cat);}catch(e){console.warn('Category table delete failed, will sync via save:',e.message);}
   }
@@ -5158,8 +5202,23 @@ function switchLogTab(mp,e_){
   e_.classList.add('active');
   ['myntra','ajio','amazon'].forEach(m=>el('log-'+m).style.display=(m===mp?'':'none'));
 }
-function logMode(name,mode){
+function _logModeDisplay(name,mode){
   const t=['level','fixed','cat'];t.forEach(x=>{const e=el(name+'-'+x);if(e)e.style.display=(x===mode?'':'none');});
+}
+function logMode(name,mode){
+  _logModeDisplay(name,mode);
+  const key=name==='mfwd'?'myn_fwd_mode':name==='mret'?'myn_ret_mode':null;
+  if(!key) return;
+  LOGISTICS_SETTINGS[key]=mode;
+  if(mode==='cat'){ if(name==='mfwd') renderGTCatTable(); else renderRetCatTable(); }
+  LOGISTICS_SETTINGS.gt_cat_data=GT_CAT_DATA;
+  LOGISTICS_SETTINGS.rev_cat_data=REV_CAT_DATA;
+  invalidateCalcCache();
+  save('logistics');
+  triggerRecalc();renderSKUs();
+  const label=mode==='cat'?'Category-wise':mode==='fixed'?'Fixed':'Level-based';
+  toast(`${name==='mfwd'?'Forward GT':'Return fee'} mode: ${label}`,'blue');
+  audit('logistics_mode',`${name==='mfwd'?'Forward GT':'Return fee'} mode set to ${label}`);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -5744,7 +5803,7 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
 }
 
 function exportData(){
-  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CATS,LEVELS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,GT_DATA,REVERSE_FEES,exportedAt:new Date().toISOString()},null,2);
+  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CATS,LEVELS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,GT_DATA,REVERSE_FEES,GT_CAT_DATA,REV_CAT_DATA,COLL_FEE_DATA,COLL_SLABS,LOGISTICS_SETTINGS,exportedAt:new Date().toISOString()},null,2);
   const a=document.createElement('a');
   a.href='data:application/json,'+encodeURIComponent(data);
   a.download='pricedesk_backup_'+new Date().toISOString().slice(0,10)+'.json';
@@ -5771,6 +5830,11 @@ function importDataPrompt(){
         if(d.CAT_LEVEL)  CAT_LEVEL=d.CAT_LEVEL;
         if(d.GT_DATA)    GT_DATA=d.GT_DATA;
         if(d.REVERSE_FEES) REVERSE_FEES=d.REVERSE_FEES;
+        if(d.GT_CAT_DATA)  GT_CAT_DATA=d.GT_CAT_DATA;
+        if(d.REV_CAT_DATA) REV_CAT_DATA=d.REV_CAT_DATA;
+        if(d.COLL_FEE_DATA) COLL_FEE_DATA=d.COLL_FEE_DATA;
+        if(d.COLL_SLABS)   COLL_SLABS=d.COLL_SLABS;
+        if(d.LOGISTICS_SETTINGS) LOGISTICS_SETTINGS=d.LOGISTICS_SETTINGS;
         if(d.COMM_MYNTRA)    COMM_MYNTRA=d.COMM_MYNTRA;
         if(d.COMM_AJIO_PPMP) COMM_AJIO_PPMP=d.COMM_AJIO_PPMP;
         if(d.COMM_AJIO_CC)   COMM_AJIO_CC=d.COMM_AJIO_CC;
@@ -6818,23 +6882,125 @@ function renderRetTable(){
   }).join('');
 }
 
+// Category-wise Forward GT — rows = categories, same 7 GT price bands
+function renderGTCatTable(){
+  const tbody=el('gt-cat-table-body');if(!tbody)return;
+  tbody.innerHTML=CATS.map(cat=>{
+    if(!GT_CAT_DATA[cat]){
+      const lvl=CAT_LEVEL[cat]||'Level 2';
+      GT_CAT_DATA[cat]=[...(GT_DATA[lvl]||[0,1,83,83,118,195,230])];
+    }
+    const vals=GT_CAT_DATA[cat];
+    return`<tr><td style="white-space:nowrap"><strong style="font-size:11px">${esc(cat)}</strong></td>${
+      vals.map((v,i)=>`<td><input class="ci" style="width:58px;${i===6?'border-color:var(--ac)':''}" value="${v}" oninput="GT_CAT_DATA['${escAttr(cat)}'][${i}]=+this.value;invalidateCalcCache()"></td>`).join('')
+    }</tr>`;
+  }).join('');
+}
+
+// Category-wise Return fees — one fee per category
+function renderRetCatTable(){
+  const tbody=el('ret-cat-table-body');if(!tbody)return;
+  tbody.innerHTML=CATS.map(cat=>{
+    if(REV_CAT_DATA[cat]==null){
+      const lvl=CAT_LEVEL[cat]||'Level 2';
+      REV_CAT_DATA[cat]=REVERSE_FEES[lvl]||218;
+    }
+    const v=REV_CAT_DATA[cat];
+    return`<tr><td><strong style="font-size:11px">${esc(cat)}</strong></td>
+      <td><input class="ci" style="width:80px" value="${v}"
+        oninput="REV_CAT_DATA['${escAttr(cat)}']=+this.value;invalidateCalcCache()"></td>
+      <td class="st">Half: ₹${(v/2).toFixed(1)}</td></tr>`;
+  }).join('');
+}
+
+// Slab labels derived from COLL_SLABS bounds, e.g. [300,500] → 0–300, 300–500, >500
+function collSlabLabels(){
+  const L=[];
+  for(let i=0;i<COLL_SLABS.length;i++) L.push(`${i===0?0:COLL_SLABS[i-1]}–${COLL_SLABS[i]}`);
+  L.push('>'+COLL_SLABS[COLL_SLABS.length-1]);
+  return L;
+}
+
 function renderCollTable(){
   const tbody=el('coll-table-body');if(!tbody)return;
+  const labels=collSlabLabels();
+  const n=labels.length;
+  const thead=el('coll-table-head');
+  if(thead) thead.innerHTML=`<tr><th>Category</th>${labels.map((l,i)=>`<th${i===n-1?' style="color:var(--ac)"':''}>${esc(l)}${i===n-1?' ★':''}</th>`).join('')}</tr>`;
   tbody.innerHTML=CATS.map(cat=>{
-    const vals=COLL_FEE_DATA[cat]||[15,17,27,27,27,45,61];
-    // Ensure COLL_FEE_DATA has this category
-    if(!COLL_FEE_DATA[cat]) COLL_FEE_DATA[cat]=[...vals];
+    let vals=COLL_FEE_DATA[cat]||[15,17,27,27,27,45,61];
+    // Normalize to current slab count (pad with last value / truncate)
+    if(vals.length<n) vals=[...vals,...Array(n-vals.length).fill(vals[vals.length-1]??0)];
+    if(vals.length>n) vals=vals.slice(0,n);
+    COLL_FEE_DATA[cat]=vals;
     return`<tr><td style="white-space:nowrap"><strong style="font-size:11px">${esc(cat)}</strong></td>${
-      vals.map((v,i)=>`<td><input class="ci" style="width:48px;${i===6?'border-color:var(--ac)':''}" value="${v}" oninput="COLL_FEE_DATA['${escAttr(cat)}'][${i}]=+this.value;invalidateCalcCache()"></td>`).join('')
+      vals.map((v,i)=>`<td><input class="ci" style="width:48px;${i===n-1?'border-color:var(--ac)':''}" value="${v}" oninput="COLL_FEE_DATA['${escAttr(cat)}'][${i}]=+this.value;invalidateCalcCache()"></td>`).join('')
     }</tr>`;
   }).join('');
 }
 
 function saveCollFees(){
   LOGISTICS_SETTINGS.coll_fee_data=COLL_FEE_DATA;
+  LOGISTICS_SETTINGS.coll_slabs=COLL_SLABS;
   invalidateCalcCache();
   save('logistics').then(()=>toast('✓ Collection fees saved','green')).catch(e=>toast('Save failed: '+e.message,'red'));
   renderSKUs();
+}
+
+// ── Collection Fee slab editor ───────────────────────
+function _collSlabRowHTML(v){
+  return`<div class="flex gap8" style="margin-bottom:8px;align-items:center">
+    <span class="st" style="width:52px">Upto ₹</span>
+    <input class="fi coll-slab-inp" type="number" style="width:130px" value="${v}" min="1" placeholder="e.g. 1500">
+    <button class="btn br bxs" onclick="this.parentElement.remove()" title="Remove slab">✕</button></div>`;
+}
+function openCollSlabModal(){
+  setModal(`<div class="mhdr"><div class="mtl">✎ Collection Fee Price Slabs</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="st" style="margin-bottom:12px">Each value is a slab's <strong>upper bound</strong> in ₹. Slabs become 0–v1, v1–v2, … plus a final "&gt;last" slab. Existing fees are remapped automatically; bounds are sorted for you.</div>
+      <div id="coll-slab-list">${COLL_SLABS.map(b=>_collSlabRowHTML(b)).join('')}</div>
+      <button class="btn bg bsm" onclick="addCollSlabRow()">+ Add Slab</button>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg" onclick="closeModal()">Cancel</button>
+      <button class="btn bp" onclick="applyCollSlabs()">✓ Apply Slabs</button>
+    </div>`);
+}
+function addCollSlabRow(){
+  el('coll-slab-list')?.insertAdjacentHTML('beforeend',_collSlabRowHTML(''));
+  const inps=document.querySelectorAll('.coll-slab-inp');
+  inps[inps.length-1]?.focus();
+}
+// Rebuild each category's fee array for new bounds — each new slab takes the
+// fee of the old slab that contained its upper bound
+function remapCollFees(oldBounds,newBounds){
+  Object.keys(COLL_FEE_DATA).forEach(cat=>{
+    const oldFees=COLL_FEE_DATA[cat]||[];
+    const feeAt=p=>{
+      for(let i=0;i<oldBounds.length;i++){ if(p<=oldBounds[i]) return +oldFees[i]||0; }
+      const tail=oldFees[oldBounds.length]??oldFees[oldFees.length-1];
+      return +tail||0;
+    };
+    COLL_FEE_DATA[cat]=[...newBounds.map(b=>feeAt(b)),feeAt(newBounds[newBounds.length-1]+1)];
+  });
+}
+function applyCollSlabs(){
+  const vals=[...document.querySelectorAll('.coll-slab-inp')].map(i=>parseFloat(i.value)).filter(v=>isFinite(v)&&v>0);
+  const bounds=[...new Set(vals)].sort((a,b)=>a-b);
+  if(!bounds.length){toast('Add at least one slab bound','red');return;}
+  if(JSON.stringify(COLL_SLABS)!==JSON.stringify(bounds)){
+    remapCollFees(COLL_SLABS,bounds);
+    COLL_SLABS=bounds;
+    LOGISTICS_SETTINGS.coll_slabs=COLL_SLABS;
+    LOGISTICS_SETTINGS.coll_fee_data=COLL_FEE_DATA;
+    invalidateCalcCache();
+    save('logistics');
+    renderCollTable();
+    triggerRecalc();renderSKUs();
+    audit('coll_slabs',`Collection fee slabs updated: ${bounds.join(', ')} (+ >${bounds[bounds.length-1]})`);
+  }
+  closeModal();
+  toast('✓ Collection fee slabs updated','green');
 }
 
 // ── Level Management ────────────────────────────────
@@ -6904,9 +7070,19 @@ async function _reinstateLevel(name){
   toast(`✓ "${name}" reinstated`,'green');
 }
 
+// Sync Myntra logistics fields (modes, fixed rates, category-wise data) into settings
+function _syncMynLogisticsSettings(){
+  LOGISTICS_SETTINGS.myn_fwd_fixed = +el('mfwd-fix')?.value || LOGISTICS_SETTINGS.myn_fwd_fixed || 230;
+  LOGISTICS_SETTINGS.myn_ret_fixed = +el('mret-fix')?.value || LOGISTICS_SETTINGS.myn_ret_fixed || 218;
+  LOGISTICS_SETTINGS.gt_cat_data   = GT_CAT_DATA;
+  LOGISTICS_SETTINGS.rev_cat_data  = REV_CAT_DATA;
+  LOGISTICS_SETTINGS.coll_slabs    = COLL_SLABS;
+}
+
 function saveGTCharges(){
   LOGISTICS_SETTINGS.myn_pg_fee         = +el('myn-pg')?.value  || 50.22;
   LOGISTICS_SETTINGS.coll_fee_data      = COLL_FEE_DATA;
+  _syncMynLogisticsSettings();
   save('logistics');
   triggerRecalc();
   renderSKUs();
@@ -6916,6 +7092,7 @@ function saveGTCharges(){
 function saveLogisticsAll(){
   LOGISTICS_SETTINGS.myn_pg_fee          = +el('myn-pg')?.value    || 50.22;
   LOGISTICS_SETTINGS.coll_fee_data       = COLL_FEE_DATA;
+  _syncMynLogisticsSettings();
   LOGISTICS_SETTINGS.ajio_fwd            = +el('ajfwd-fix')?.value || 70;
   LOGISTICS_SETTINGS.ajio_ret            = +el('ajret-fix')?.value || 70;
   LOGISTICS_SETTINGS.ajio_platform_fee   = +el('ajio-platform-fee')?.value || 0;
@@ -6932,8 +7109,18 @@ function saveLogisticsAll(){
 function populateLogisticsInputs(){
   const s = LOGISTICS_SETTINGS;
   const setVal = (id,v) => { const e=el(id); if(e) e.value=v; };
-  if(s.coll_fee_data) COLL_FEE_DATA=s.coll_fee_data;
+  hydrateLogisticsDerived();
   setVal('myn-pg',     s.myn_pg_fee);
+  setVal('mfwd-fix',   s.myn_fwd_fixed??230);
+  setVal('mret-fix',   s.myn_ret_fixed??218);
+  // Restore saved modes: check the right radio, show the right panel
+  const fm=s.myn_fwd_mode||'level', rm=s.myn_ret_mode||'level';
+  const fr=document.querySelector(`input[name="mfwd"][value="${fm}"]`); if(fr) fr.checked=true;
+  const rr=document.querySelector(`input[name="mret"][value="${rm}"]`); if(rr) rr.checked=true;
+  _logModeDisplay('mfwd',fm);
+  _logModeDisplay('mret',rm);
+  renderGTCatTable();
+  renderRetCatTable();
   setVal('ajfwd-fix',  s.ajio_fwd);
   setVal('ajret-fix',  s.ajio_ret);
   setVal('ajio-platform-fee', s.ajio_platform_fee);
@@ -6964,7 +7151,7 @@ const WF_FUNCTIONS = {
 // Built-in lookup functions — these can never be edited or broken
 const WF_LOOKUPS = {
   gtCharge: ctx => {
-    if(ctx._mp==='myntra') return getMynFwd(ctx.level||'Level 2', ctx.custPaid||0);
+    if(ctx._mp==='myntra') return getMynFwd(ctx.level||'Level 2', ctx.custPaid||0, ctx.cat);
     return 0;
   },
   gstRate: ctx => (ctx.sellerPrice||ctx.sp||0) > 2499 ? 0.18 : 0.05,
@@ -6977,7 +7164,7 @@ const WF_LOOKUPS = {
     return 0;
   },
   retFee: ctx => {
-    if(ctx._mp==='myntra') return getMynRet(ctx.level||'Level 2');
+    if(ctx._mp==='myntra') return getMynRet(ctx.level||'Level 2', ctx.cat);
     if(ctx._mp==='amazon') return LOGISTICS_SETTINGS.amz_ret||55;
     return 0;
   },
@@ -7000,8 +7187,8 @@ function runWFEngine(marketplace, inputs){
   const ctx = {
     ...inputs,
     _mp: marketplace,
-    getMynFwd: (lvl, sp) => getMynFwd(lvl||inputs.level||'Level 2', sp),
-    getMynRet: (lvl) => getMynRet(lvl||inputs.level||'Level 2'),
+    getMynFwd: (lvl, sp, cat) => getMynFwd(lvl||inputs.level||'Level 2', sp, cat||inputs.cat),
+    getMynRet: (lvl, cat) => getMynRet(lvl||inputs.level||'Level 2', cat||inputs.cat),
     getMyntraComm: (cat, sp) => getMyntraComm(cat||inputs.cat||(CATS[0]||'Kurta Sets'), sp),
     autoGST: autoGST,
     REVERSE_FEES, LOGISTICS_SETTINGS, Math,
@@ -8587,6 +8774,8 @@ function applyRealtimeData(type, value){
         if(value.gt) GT_DATA=value.gt;
         if(value.rev) REVERSE_FEES=value.rev;
         if(value.settings) LOGISTICS_SETTINGS=value.settings;
+        if(value.collFees) COLL_FEE_DATA=value.collFees;
+        hydrateLogisticsDerived();
         return true;
       default: return false;
     }
