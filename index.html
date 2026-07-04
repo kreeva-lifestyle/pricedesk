@@ -4259,6 +4259,7 @@ function switchSKUTab(tab, mp){
 
 let _dataReady=false;
 let _skuRenderRetry=null;
+let _skuRenderRetryCount=0; // capped so a permanently failed load can't poll forever
 // Debounced render for type-ahead filters — a keystroke must not trigger a
 // full filter+calc pass on every character
 let _skuSearchTimer=null;
@@ -4273,10 +4274,14 @@ function renderSKUs(){
     const pgEl=el('sku-pagination');if(pgEl)pgEl.innerHTML='';
     // Data still loading — retry so the table paints itself when ready
     // (fixes the "Loading SKUs..." stall when login wins the race vs data load)
-    if(!_skuRenderRetry) _skuRenderRetry=setTimeout(()=>{_skuRenderRetry=null;renderSKUs();},400);
+    if(!_skuRenderRetry&&_skuRenderRetryCount<150){
+      _skuRenderRetryCount++;
+      _skuRenderRetry=setTimeout(()=>{_skuRenderRetry=null;renderSKUs();},400);
+    }
     return;
   }
   if(_skuRenderRetry){clearTimeout(_skuRenderRetry);_skuRenderRetry=null;}
+  _skuRenderRetryCount=0;
   invalidateCalcCache();
   const list=filteredSKUs();
   renderActiveFilterChips();
@@ -7323,7 +7328,11 @@ async function addLevel(){
   if(!name){toast('Enter a level name','red');return;}
   if(LEVELS.includes(name)){toast(`"${name}" already exists`,'red');return;}
   LEVELS.push(name);
-  GT_DATA[name]=[0,1,...Array(Math.max(GT_SLABS.length-1,0)).fill(gtVal)];
+  // The 0/1 defaults only make sense while the first two bands are the
+  // stock "0–1" and "2–99" ranges; with custom slabs seed a flat row
+  GT_DATA[name]=GT_SLABS[0]<=1
+    ? [0,1,...Array(Math.max(GT_SLABS.length-1,0)).fill(gtVal)]
+    : Array(GT_SLABS.length+1).fill(gtVal);
   REVERSE_FEES[name]=REV_SLABS.length?Array(REV_SLABS.length+1).fill(revVal):revVal;
   await save('levels');await save('logistics');
   renderGTTable();renderRetTable();buildCommMyntra();
@@ -7383,10 +7392,11 @@ function saveGTCharges(){
   LOGISTICS_SETTINGS.myn_pg_fee         = +el('myn-pg')?.value  || 50.22;
   LOGISTICS_SETTINGS.coll_fee_data      = COLL_FEE_DATA;
   _syncMynLogisticsSettings();
-  save('logistics');
   triggerRecalc();
   renderSKUs();
-  toast('✓ GT Charges & Fees saved to database','green');
+  save('logistics')
+    .then(()=>toast('✓ GT Charges & Fees saved to database','green'))
+    .catch(e=>toast('Save failed: '+e.message,'red'));
 }
 
 function saveLogisticsAll(){
@@ -7399,10 +7409,11 @@ function saveLogisticsAll(){
   LOGISTICS_SETTINGS.amz_fba             = +el('amz-fba')?.value   || 55;
   LOGISTICS_SETTINGS.amz_close           = +el('amz-close')?.value || 15;
   LOGISTICS_SETTINGS.amz_ret             = +el('amz-ret')?.value   || 55;
-  save('logistics');
   triggerRecalc();
   renderSKUs();
-  toast('✓ All logistics saved to database','green');
+  save('logistics')
+    .then(()=>toast('✓ All logistics saved to database','green'))
+    .catch(e=>toast('Save failed: '+e.message,'red'));
 }
 
 // Populate logistics DOM inputs from LOGISTICS_SETTINGS
@@ -9154,9 +9165,17 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     document.getElementById('app-loading')?.classList.remove('active');
     document.getElementById('login-screen').classList.add('active');
     // Load data in background (needed for login to work — users array)
-    await Promise.all([loadFromStorage(), loadUserPrefs()]);
-    applyUserPrefs();
-    _dataReady=true;
+    try{
+      await Promise.all([loadFromStorage(), loadUserPrefs()]);
+      applyUserPrefs();
+    }catch(loadErr){
+      console.error('Background load error:',loadErr);
+      toast('Some data may not have loaded — please refresh if needed','red');
+    }finally{
+      // MUST flip in all outcomes — renderSKUs gates on it and would
+      // otherwise show "Loading SKUs..." forever after a failed load
+      _dataReady=true;
+    }
     // If the user already logged in while data was still loading, the app
     // rendered empty screens — refresh them now that data is here
     if(currentUser){
@@ -9182,8 +9201,12 @@ document.addEventListener('DOMContentLoaded',async ()=>{
       invalidateCalcCache();
       try{
         // Save only the rows that changed — rewriting the whole table here
-        // added ~20 sequential upserts to every startup that hit this path
-        if(_useSkuTable) await dbSaveSKU(...stockOutToArchive);
+        // added ~20 sequential upserts to every startup that hit this path.
+        // Chunked: one giant spread risks arg limits / oversized payloads.
+        if(_useSkuTable){
+          for(let i=0;i<stockOutToArchive.length;i+=200)
+            await dbSaveSKU(...stockOutToArchive.slice(i,i+200));
+        }
         else await _doSaveSKUs();
         console.log(`✓ Auto-archived ${stockOutToArchive.length} STOCK OUT SKUs`);
       }catch(e){console.warn('Auto-archive save failed:',e);}
@@ -9209,6 +9232,9 @@ document.addEventListener('DOMContentLoaded',async ()=>{
       console.error('Loading error:',loadErr);
       toast('Some data may not have loaded — please refresh if needed','red');
     }finally{
+      // MUST flip in all outcomes (idempotent with the success path above) —
+      // a failed load must not leave the SKU table stuck on "Loading SKUs..."
+      _dataReady=true;
       // ALWAYS hide loading and show app — even if errors occurred
       const lo=document.getElementById('app-loading');
       if(lo)lo.classList.remove('active');
