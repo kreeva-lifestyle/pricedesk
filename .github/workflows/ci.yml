@@ -13,8 +13,12 @@ on:
 permissions:
   contents: read
 
+# PriceDesk is a single-file static SPA (index.html) with Supabase Edge
+# Functions — there is no package.json, so npm install/test/build steps
+# cannot run here. CI validates what actually ships: the inline JavaScript
+# in index.html must parse, and required files must be present.
 jobs:
-  test-and-build:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -24,13 +28,41 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Syntax-check inline JavaScript in index.html
+        run: |
+          node - <<'EOF'
+          const fs = require('fs');
+          const os = require('os');
+          const path = require('path');
+          const { execFileSync } = require('child_process');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const blocks = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)];
+          if (blocks.length === 0) {
+            console.error('No inline <script> blocks found in index.html — extraction regex may be broken');
+            process.exit(1);
+          }
+          const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-js-'));
+          let failed = false;
+          blocks.forEach((m, i) => {
+            const file = path.join(tmp, `block_${i}.js`);
+            fs.writeFileSync(file, m[1]);
+            try {
+              execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });
+              console.log(`✓ script block ${i} (${m[1].split('\n').length} lines) parses`);
+            } catch (e) {
+              failed = true;
+              console.error(`✗ script block ${i} has a syntax error:`);
+              console.error(String(e.stderr));
+            }
+          });
+          process.exit(failed ? 1 : 0);
+          EOF
 
-      - name: Run tests
-        run: npm test
-
-      - name: Build
-        run: npm run build
+      - name: Check required files exist
+        run: |
+          set -e
+          for f in index.html supabase/functions/claude-chat/index.ts supabase/functions/login/index.ts supabase/functions/reset-password/index.ts; do
+            if [ ! -f "$f" ]; then echo "Missing required file: $f"; exit 1; fi
+            echo "✓ $f"
+          done
