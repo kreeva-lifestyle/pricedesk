@@ -9,192 +9,192 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Create daily backup
         env:
           SUPABASE_URL: 'https://fcmesdnagvrdmjzzuwue.supabase.co'
           SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbWVzZG5hZ3ZyZG1qenp1d3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxNjM4NTgsImV4cCI6MjA4OTczOTg1OH0.fS1ecV898Dmrka6hr3R0RE6gcKlneWUPbDyDPv30_qU'
+          # Rows kept per unbounded table in the daily backup. A 7-day rolling
+          # backup gains nothing from re-copying the entire append-only
+          # audit/history tables every night — that is what made payloads
+          # grow without limit and killed this job.
+          AUDIT_MAX_ROWS: '5000'
+          HISTORY_MAX_ROWS: '10000'
         run: |
-          set -e
+          set -euo pipefail
           echo "=== PriceDesk Daily Backup ==="
           echo "Date: $(date -u '+%Y-%m-%d %H:%M UTC')"
           BACKUP_DATE=$(date -u '+%Y-%m-%d')
+          WORK="${RUNNER_TEMP:-/tmp}/pd-backup"
+          mkdir -p "$WORK"
 
-          # 1. Read all data from app_data table
-          echo "Fetching all data from app_data..."
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            "${SUPABASE_URL}/rest/v1/app_data?select=*" \
-            -H "apikey: ${SUPABASE_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_KEY}")
+          # All JSON lives in files, never in shell variables or argv:
+          # a single Linux exec argument caps at ~128 KB, so passing the
+          # SKU/audit JSON via --argjson or curl -d "$VAR" dies with
+          # E2BIG once the data grows. Files have no such limit.
 
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "ERROR: Failed to fetch data (HTTP $HTTP_CODE)"
-            echo "$BODY"
-            exit 1
-          fi
-
-          ROW_COUNT=$(echo "$BODY" | jq 'length')
-          echo "Fetched $ROW_COUNT rows from app_data"
-
-          # 1b. Read all SKUs from pd_skus_v2 (paginated, 1000 per request)
-          echo "Fetching all SKUs from pd_skus_v2..."
-          ALL_SKUS="[]"
-          OFFSET=0
-          while true; do
-            SKU_RESP=$(curl -s -w "\n%{http_code}" \
-              "${SUPABASE_URL}/rest/v1/pd_skus_v2?select=*&order=id&offset=${OFFSET}&limit=1000" \
+          # req <outfile> <path-and-query> [extra curl args...] -> prints HTTP code
+          req() {
+            local out="$1" path="$2"; shift 2
+            curl -sS -o "$out" -w "%{http_code}" \
+              "${SUPABASE_URL}/rest/v1/${path}" \
               -H "apikey: ${SUPABASE_KEY}" \
-              -H "Authorization: Bearer ${SUPABASE_KEY}")
-            SKU_CODE=$(echo "$SKU_RESP" | tail -1)
-            SKU_BODY=$(echo "$SKU_RESP" | sed '$d')
-            if [ "$SKU_CODE" != "200" ]; then
-              echo "Warning: Failed to fetch SKUs at offset $OFFSET (HTTP $SKU_CODE)"
-              break
-            fi
-            PAGE_COUNT=$(echo "$SKU_BODY" | jq 'length')
-            if [ "$PAGE_COUNT" -eq 0 ]; then break; fi
-            ALL_SKUS=$(echo "$ALL_SKUS" "$SKU_BODY" | jq -s '.[0] + .[1]')
-            OFFSET=$((OFFSET + 1000))
-            if [ "$PAGE_COUNT" -lt 1000 ]; then break; fi
-          done
-          SKU_TOTAL=$(echo "$ALL_SKUS" | jq 'length')
-          echo "Fetched $SKU_TOTAL SKUs from pd_skus_v2"
-
-          # 1c. Helper: fetch all rows from a table with pagination
-          fetch_table () {
-            local table="$1"
-            local order_col="${2:-id}"
-            local all="[]"
-            local off=0
-            while true; do
-              local resp code body
-              resp=$(curl -s -w "\n%{http_code}" \
-                "${SUPABASE_URL}/rest/v1/${table}?select=*&order=${order_col}&offset=${off}&limit=1000" \
-                -H "apikey: ${SUPABASE_KEY}" \
-                -H "Authorization: Bearer ${SUPABASE_KEY}")
-              code=$(echo "$resp" | tail -1)
-              body=$(echo "$resp" | sed '$d')
-              if [ "$code" != "200" ]; then
-                echo "Warning: ${table} fetch failed at offset ${off} (HTTP $code)" >&2
-                break
-              fi
-              local page_count
-              page_count=$(echo "$body" | jq 'length')
-              if [ "$page_count" -eq 0 ]; then break; fi
-              all=$(echo "$all" "$body" | jq -s '.[0] + .[1]')
-              off=$((off + 1000))
-              if [ "$page_count" -lt 1000 ]; then break; fi
-            done
-            echo "$all"
+              -H "Authorization: Bearer ${SUPABASE_KEY}" \
+              "$@"
           }
 
-          # 1d. Fetch the 6 normalized tables (Phase 1)
+          die() { # die <step-name> <http-code> <body-file>
+            echo ""
+            echo "### FAILED AT: $1 (HTTP $2)"
+            echo "--- response body (first 800 bytes):"
+            head -c 800 "$3" 2>/dev/null || true
+            echo ""
+            exit 1
+          }
+
+          # ── 1. app_data: fetch key list, then row-by-row ─────────────
+          # One `select=*` over the whole table drags every JSONB blob
+          # through a single query and times out; per-key requests match
+          # how the app itself reads config and stay small.
+          CODE=$(req "$WORK/keys.json" "app_data?select=key&order=key")
+          if [ "$CODE" != "200" ]; then die "app_data key list" "$CODE" "$WORK/keys.json"; fi
+          mapfile -t KEYS < <(jq -r '.[].key' "$WORK/keys.json")
+          echo "app_data keys found: ${#KEYS[@]}"
+
+          echo "[]" > "$WORK/app_data.json"
+          for k in "${KEYS[@]}"; do
+            if [ "$k" = "pd_skus" ]; then
+              echo "  ~ skipping legacy blob 'pd_skus' (superseded by pd_skus_v2, backed up below)"
+              continue
+            fi
+            enc=$(jq -rn --arg k "$k" '$k|@uri')
+            CODE=$(req "$WORK/row.json" "app_data?select=*&key=eq.${enc}")
+            if [ "$CODE" != "200" ]; then die "app_data key '$k'" "$CODE" "$WORK/row.json"; fi
+            jq -s '.[0] + .[1]' "$WORK/app_data.json" "$WORK/row.json" > "$WORK/app_data.tmp"
+            mv "$WORK/app_data.tmp" "$WORK/app_data.json"
+            echo "  ✓ $k ($(wc -c < "$WORK/row.json") bytes)"
+          done
+          APP_TOTAL=$(jq 'length' "$WORK/app_data.json")
+          echo "app_data rows backed up: $APP_TOTAL"
+
+          # ── 2. Paginated table fetch into a file ─────────────────────
+          # fetch_table <table> <order> <outfile> [max_rows]
+          # max_rows=0 means unlimited. Fatal on any non-200.
+          fetch_table() {
+            local table="$1" order="$2" out="$3" max="${4:-0}" off=0 code page
+            echo "[]" > "$out"
+            while true; do
+              code=$(req "$WORK/page.json" "${table}?select=*&order=${order}&offset=${off}&limit=1000")
+              if [ "$code" != "200" ]; then die "$table (offset $off)" "$code" "$WORK/page.json"; fi
+              page=$(jq 'length' "$WORK/page.json")
+              if [ "$page" -eq 0 ]; then break; fi
+              jq -s '.[0] + .[1]' "$out" "$WORK/page.json" > "$out.tmp"
+              mv "$out.tmp" "$out"
+              off=$((off + 1000))
+              if [ "$page" -lt 1000 ]; then break; fi
+              if [ "$max" -gt 0 ] && [ "$off" -ge "$max" ]; then
+                echo "  (capped at $max most recent rows)"
+                break
+              fi
+            done
+          }
+
+          echo "Fetching pd_skus_v2..."
+          fetch_table pd_skus_v2 id "$WORK/skus.json"
+          SKU_TOTAL=$(jq 'length' "$WORK/skus.json")
+          echo "  $SKU_TOTAL SKUs"
+
           echo "Fetching pd_brands..."
-          ALL_BRANDS=$(fetch_table pd_brands id)
-          BRANDS_TOTAL=$(echo "$ALL_BRANDS" | jq 'length')
+          fetch_table pd_brands id "$WORK/brands.json"
+          BRANDS_TOTAL=$(jq 'length' "$WORK/brands.json")
           echo "  $BRANDS_TOTAL brands"
 
           echo "Fetching pd_categories..."
-          ALL_CATEGORIES=$(fetch_table pd_categories name)
-          CATS_TOTAL=$(echo "$ALL_CATEGORIES" | jq 'length')
+          fetch_table pd_categories name "$WORK/categories.json"
+          CATS_TOTAL=$(jq 'length' "$WORK/categories.json")
           echo "  $CATS_TOTAL categories"
 
           echo "Fetching pd_commissions..."
-          ALL_COMMISSIONS=$(fetch_table pd_commissions marketplace)
-          COMM_TOTAL=$(echo "$ALL_COMMISSIONS" | jq 'length')
+          fetch_table pd_commissions marketplace "$WORK/commissions.json"
+          COMM_TOTAL=$(jq 'length' "$WORK/commissions.json")
           echo "  $COMM_TOTAL commission rows"
 
           echo "Fetching pd_thresholds..."
-          ALL_THRESHOLDS=$(fetch_table pd_thresholds category)
-          THRESH_TOTAL=$(echo "$ALL_THRESHOLDS" | jq 'length')
+          fetch_table pd_thresholds category "$WORK/thresholds.json"
+          THRESH_TOTAL=$(jq 'length' "$WORK/thresholds.json")
           echo "  $THRESH_TOTAL thresholds"
 
-          echo "Fetching pd_audit_log..."
-          ALL_AUDIT=$(fetch_table pd_audit_log id)
-          AUDIT_TOTAL=$(echo "$ALL_AUDIT" | jq 'length')
+          echo "Fetching pd_audit_log (newest $AUDIT_MAX_ROWS)..."
+          fetch_table pd_audit_log id.desc "$WORK/audit.json" "$AUDIT_MAX_ROWS"
+          AUDIT_TOTAL=$(jq 'length' "$WORK/audit.json")
           echo "  $AUDIT_TOTAL audit entries"
 
-          echo "Fetching pd_sku_history..."
-          ALL_HISTORY=$(fetch_table pd_sku_history id)
-          HIST_TOTAL=$(echo "$ALL_HISTORY" | jq 'length')
+          echo "Fetching pd_sku_history (newest $HISTORY_MAX_ROWS)..."
+          fetch_table pd_sku_history id.desc "$WORK/history.json" "$HISTORY_MAX_ROWS"
+          HIST_TOTAL=$(jq 'length' "$WORK/history.json")
           echo "  $HIST_TOTAL history entries"
 
-          # 2. Insert backup into pd_backups table
+          # ── 3. Assemble payload (same shape the in-app restore reads) ─
           echo "Creating backup for $BACKUP_DATE..."
-          BACKUP_PAYLOAD=$(jq -n \
+          jq -n \
             --arg date "$BACKUP_DATE" \
-            --argjson data "$BODY" \
-            --argjson skus "$ALL_SKUS" \
-            --argjson brands "$ALL_BRANDS" \
-            --argjson categories "$ALL_CATEGORIES" \
-            --argjson commissions "$ALL_COMMISSIONS" \
-            --argjson thresholds "$ALL_THRESHOLDS" \
-            --argjson audit_log "$ALL_AUDIT" \
-            --argjson sku_history "$ALL_HISTORY" \
+            --slurpfile app_data "$WORK/app_data.json" \
+            --slurpfile skus "$WORK/skus.json" \
+            --slurpfile brands "$WORK/brands.json" \
+            --slurpfile categories "$WORK/categories.json" \
+            --slurpfile commissions "$WORK/commissions.json" \
+            --slurpfile thresholds "$WORK/thresholds.json" \
+            --slurpfile audit_log "$WORK/audit.json" \
+            --slurpfile sku_history "$WORK/history.json" \
             '{backup_date: $date, data: {
-              app_data: $data,
-              pd_skus_v2: $skus,
-              pd_brands: $brands,
-              pd_categories: $categories,
-              pd_commissions: $commissions,
-              pd_thresholds: $thresholds,
-              pd_audit_log: $audit_log,
-              pd_sku_history: $sku_history
-            }, created_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))}')
+              app_data: $app_data[0],
+              pd_skus_v2: $skus[0],
+              pd_brands: $brands[0],
+              pd_categories: $categories[0],
+              pd_commissions: $commissions[0],
+              pd_thresholds: $thresholds[0],
+              pd_audit_log: $audit_log[0],
+              pd_sku_history: $sku_history[0]
+            }, created_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))}' \
+            > "$WORK/payload.json"
 
-          UPSERT_RESPONSE=$(curl -s -w "\n%{http_code}" \
-            "${SUPABASE_URL}/rest/v1/pd_backups" \
-            -H "apikey: ${SUPABASE_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+          PAYLOAD_BYTES=$(wc -c < "$WORK/payload.json")
+          echo "Payload size: $PAYLOAD_BYTES bytes (~$((PAYLOAD_BYTES / 1024 / 1024)) MB)"
+          if [ "$PAYLOAD_BYTES" -gt 8388608 ]; then
+            echo "WARNING: payload exceeds 8 MB — consider lowering AUDIT_MAX_ROWS/HISTORY_MAX_ROWS before this starts timing out again"
+          fi
+
+          # ── 4. Upsert into pd_backups (payload from file, never argv) ─
+          UPSERT_CODE=$(req "$WORK/upsert.json" "pd_backups" \
             -H "Content-Type: application/json" \
             -H "Prefer: resolution=merge-duplicates" \
-            -d "$BACKUP_PAYLOAD")
-
-          UPSERT_CODE=$(echo "$UPSERT_RESPONSE" | tail -1)
-          UPSERT_BODY=$(echo "$UPSERT_RESPONSE" | sed '$d')
-
+            --data-binary "@$WORK/payload.json")
           if [ "$UPSERT_CODE" != "201" ] && [ "$UPSERT_CODE" != "200" ]; then
-            echo "ERROR: Failed to save backup (HTTP $UPSERT_CODE)"
-            echo "$UPSERT_BODY"
-            exit 1
+            die "pd_backups upsert" "$UPSERT_CODE" "$WORK/upsert.json"
           fi
+          echo "✓ Backup saved for $BACKUP_DATE ($APP_TOTAL app_data, $SKU_TOTAL SKUs, $BRANDS_TOTAL brands, $CATS_TOTAL cats, $COMM_TOTAL comm, $THRESH_TOTAL thresh, $AUDIT_TOTAL audit, $HIST_TOTAL hist)"
 
-          echo "✓ Backup saved for $BACKUP_DATE ($ROW_COUNT app_data, $SKU_TOTAL SKUs, $BRANDS_TOTAL brands, $CATS_TOTAL cats, $COMM_TOTAL comm, $THRESH_TOTAL thresh, $AUDIT_TOTAL audit, $HIST_TOTAL hist)"
-
-          # 3. Delete backups older than 7 days
+          # ── 5. Delete backups older than 7 days (non-fatal) ──────────
           CUTOFF_DATE=$(date -u -d '7 days ago' '+%Y-%m-%d')
           echo "Cleaning up backups older than $CUTOFF_DATE..."
-
-          DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" \
-            "${SUPABASE_URL}/rest/v1/pd_backups?backup_date=lt.${CUTOFF_DATE}" \
-            -X DELETE \
-            -H "apikey: ${SUPABASE_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_KEY}" \
-            -H "Prefer: return=representation")
-
-          DELETE_CODE=$(echo "$DELETE_RESPONSE" | tail -1)
-          DELETE_BODY=$(echo "$DELETE_RESPONSE" | sed '$d')
-
+          DELETE_CODE=$(req "$WORK/delete.json" "pd_backups?backup_date=lt.${CUTOFF_DATE}" \
+            -X DELETE -H "Prefer: return=representation")
           if [ "$DELETE_CODE" = "200" ]; then
-            DELETED_COUNT=$(echo "$DELETE_BODY" | jq 'length')
-            echo "✓ Deleted $DELETED_COUNT old backup(s)"
+            echo "✓ Deleted $(jq 'length' "$WORK/delete.json") old backup(s)"
           else
-            echo "Warning: Cleanup returned HTTP $DELETE_CODE (non-critical)"
+            echo "Warning: cleanup returned HTTP $DELETE_CODE (non-critical)"
           fi
 
-          # 4. Show current backup inventory
+          # ── 6. Show current backup inventory (non-fatal) ─────────────
           echo ""
           echo "=== Current Backups ==="
-          INVENTORY=$(curl -s \
-            "${SUPABASE_URL}/rest/v1/pd_backups?select=backup_date,created_at&order=backup_date.desc" \
-            -H "apikey: ${SUPABASE_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_KEY}")
-
-          echo "$INVENTORY" | jq -r '.[] | "  \(.backup_date)  (created: \(.created_at))"'
-          TOTAL=$(echo "$INVENTORY" | jq 'length')
-          echo "Total backups: $TOTAL"
+          INV_CODE=$(req "$WORK/inventory.json" "pd_backups?select=backup_date,created_at&order=backup_date.desc")
+          if [ "$INV_CODE" = "200" ]; then
+            jq -r '.[] | "  \(.backup_date)  (created: \(.created_at))"' "$WORK/inventory.json"
+            echo "Total backups: $(jq 'length' "$WORK/inventory.json")"
+          else
+            echo "Warning: inventory returned HTTP $INV_CODE"
+          fi
           echo ""
           echo "=== Backup Complete ==="
