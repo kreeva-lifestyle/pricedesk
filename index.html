@@ -1089,7 +1089,11 @@ body:has(#login-screen.active){overflow:hidden}
   </div>
   <div id="comm-myntra">
     <div class="success mb12">Myntra charges by <strong>category + seller price slab</strong>. Set the <strong>level</strong> per category for logistics, edit commission cells, and Save.</div>
-    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Commission % — Category × Price Slab × Level</div><div class="flex gap8"><button class="btn bg bsm" onclick="openAddCategoryModal()">+ Add Category</button><button class="btn bp bsm" onclick="saveComm()">✓ Save & Apply</button></div></div>
+    <div class="fg" style="margin-bottom:10px"><label class="fl">Commission Mode</label><div class="flex gap12">
+      <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="commmode" value="level_slab" checked style="accent-color:var(--ac);margin-right:4px" onchange="setCommMode(this.value)"> Level + Slab (per category)</label>
+      <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="commmode" value="slab" style="accent-color:var(--ac);margin-right:4px" onchange="setCommMode(this.value)"> Slab only (same for all categories)</label>
+    </div></div>
+    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600" id="comm-myntra-title">Commission % — Category × Price Slab × Level</div><div class="flex gap8"><button class="btn bg bsm" onclick="openCommSlabModal()">✎ Edit Slabs</button><button class="btn bg bsm" onclick="openAddCategoryModal()">+ Add Category</button><button class="btn bp bsm" onclick="saveComm()">✓ Save & Apply</button></div></div>
     <div style="padding:0;overflow-x:auto"><table class="comm-table" id="comm-myntra-table"></table></div></div>
   </div>
   <div id="comm-ajio" style="display:none">
@@ -1120,15 +1124,14 @@ body:has(#login-screen.active){overflow:hidden}
       </div></div>
       <div id="mfwd-level">
         <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:520px" id="gt-table">
-          <thead><tr>
-            <th>Level</th><th>0–1</th><th>2–99</th><th>100–300</th><th>300–500</th><th>500–1000</th><th>1000–2000</th><th style="color:var(--ac)">&gt;2000 ★</th>
-          </tr></thead>
+          <thead id="gt-table-head"></thead>
           <tbody id="gt-table-body"></tbody>
         </table></div>
-        <div class="st" style="margin-top:6px">★ Most common column (SP &gt; ₹2000). All values editable — changes auto-save to database.</div>
+        <div class="st" style="margin-top:6px">★ Most common column. All values editable — changes auto-save to database.</div>
         <div class="flex gap8" style="margin-top:12px">
           <button class="btn bp bsm" onclick="saveGTCharges()">✓ Save GT Charges</button>
           <button class="btn bg bsm" onclick="openAddLevelModal()">+ Add Level</button>
+          <button class="btn bg bsm" onclick="openGTSlabModal()">✎ Edit Price Slabs</button>
         </div>
       </div>
       <div id="mfwd-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Rate (₹)</label><input class="fi" type="number" id="mfwd-fix" value="230" oninput="LOGISTICS_SETTINGS.myn_fwd_fixed=+this.value;invalidateCalcCache()"></div>
@@ -1136,13 +1139,14 @@ body:has(#login-screen.active){overflow:hidden}
       </div>
       <div id="mfwd-cat" style="display:none">
         <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:520px" id="gt-cat-table">
-          <thead><tr>
-            <th>Category</th><th>0–1</th><th>2–99</th><th>100–300</th><th>300–500</th><th>500–1000</th><th>1000–2000</th><th style="color:var(--ac)">&gt;2000 ★</th>
-          </tr></thead>
+          <thead id="gt-cat-table-head"></thead>
           <tbody id="gt-cat-table-body"></tbody>
         </table></div>
         <div class="st" style="margin-top:6px">Shipping charged per category (same price bands). New categories start from their level's GT row.</div>
-        <button class="btn bp bsm" style="margin-top:12px" onclick="saveGTCharges()">✓ Save GT Charges</button>
+        <div class="flex gap8" style="margin-top:12px">
+          <button class="btn bp bsm" onclick="saveGTCharges()">✓ Save GT Charges</button>
+          <button class="btn bg bsm" onclick="openGTSlabModal()">✎ Edit Price Slabs</button>
+        </div>
       </div>
       <div style="margin-top:14px">
         <div class="fg"><label class="fl">Payment Gateway (₹)</label><input class="fi" type="number" id="myn-pg" value="50.22"></div>
@@ -1168,16 +1172,18 @@ body:has(#login-screen.active){overflow:hidden}
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Fixed</label>
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="cat" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Category-wise</label>
       </div></div>
-      <div id="mret-level"><table class="dt" style="font-size:12px" id="ret-table">
-        <thead><tr><th>Level</th><th>Return Fee (₹)</th></tr></thead>
+      <div id="mret-level"><div style="overflow-x:auto"><table class="dt" style="font-size:12px" id="ret-table">
+        <thead id="ret-table-head"></thead>
         <tbody id="ret-table-body"></tbody>
       </table></div>
+      <button class="btn bg bsm" style="margin-top:10px" onclick="openRevSlabModal()">✎ Edit Price Slabs</button></div>
       <div id="mret-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Return Rate (₹)</label><input class="fi" type="number" id="mret-fix" value="218" oninput="LOGISTICS_SETTINGS.myn_ret_fixed=+this.value;invalidateCalcCache()"></div></div>
-      <div id="mret-cat" style="display:none"><table class="dt" style="font-size:12px" id="ret-cat-table">
-        <thead><tr><th>Category</th><th>Return Fee (₹)</th></tr></thead>
+      <div id="mret-cat" style="display:none"><div style="overflow-x:auto"><table class="dt" style="font-size:12px" id="ret-cat-table">
+        <thead id="ret-cat-table-head"></thead>
         <tbody id="ret-cat-table-body"></tbody>
-      </table>
-      <div class="st" style="margin-top:6px">Return fee charged per category. New categories start from their level's reverse fee.</div></div>
+      </table></div>
+      <div class="st" style="margin-top:6px">Return fee charged per category. New categories start from their level's reverse fee.</div>
+      <button class="btn bg bsm" style="margin-top:10px" onclick="openRevSlabModal()">✎ Edit Price Slabs</button></div>
       <button class="btn bp bsm" style="margin-top:12px" onclick="saveLogisticsAll()">✓ Save All Logistics</button>
     </div></div>
   </div></div>
@@ -2365,10 +2371,15 @@ function _commToRows(myntra, ppmp, cc, amazon){
 
 function _rowsToComm(rows){
   const myntra={},ppmp={},cc={},amazon={};
+  // Myntra slab count is dynamic (editable slabs) — size arrays by the
+  // largest slab_index present, then validate contiguity below
+  let maxIdx=0;
+  for(const r of rows){ if(r.marketplace==='myntra'&&r.slab_index>maxIdx) maxIdx=r.slab_index; }
+  const slabCount=maxIdx+1;
   for(const r of rows){
     if(r.marketplace==='myntra'){
-      if(!myntra[r.category])myntra[r.category]=new Array(5).fill(null);
-      if(r.slab_index>=0&&r.slab_index<5) myntra[r.category][r.slab_index]=r.rate;
+      if(!myntra[r.category])myntra[r.category]=new Array(slabCount).fill(null);
+      if(r.slab_index>=0&&r.slab_index<slabCount) myntra[r.category][r.slab_index]=r.rate;
     }else if(r.marketplace==='ajio-ppmp'){
       ppmp[r.category]=r.rate;
     }else if(r.marketplace==='ajio-cc'){
@@ -2393,6 +2404,11 @@ async function dbSaveCommissions(myntra, ppmp, cc, amazon){
   const rows=_commToRows(myntra, ppmp, cc, amazon);
   const{error}=await db.from('pd_commissions').upsert(rows,{onConflict:'marketplace,category,slab_index'});
   if(error)throw new Error(`Commission save failed: ${error.message}`);
+  // If the slab count shrank, stale higher-index rows would poison the next
+  // load (contiguity validation) — remove them
+  const slabCount=SLABS.length;
+  const{error:delErr}=await db.from('pd_commissions').delete().eq('marketplace','myntra').gte('slab_index',slabCount);
+  if(delErr)console.warn('Stale commission slab cleanup failed:',delErr.message);
   _useCommTable=true;
   console.log(`✓ Saved ${rows.length} commission rows to pd_commissions`);
 }
@@ -2955,7 +2971,20 @@ let CAT_LEVEL = {
 };
 let CATS=['Kurta Sets','Lehenga Choli','Ethnic Dresses','Sarees','Co-Ords','Jumpsuit','Tops','Kurtas'];
 let LEVELS=['Level 1','Level 2','Level 3','Level 4'];
-const SLABS=[{label:'0–300',min:0,max:300},{label:'300–500',min:300,max:500},{label:'500–1000',min:500,max:1000},{label:'1000–2000',min:1000,max:2000},{label:'2000+',min:2000,max:Infinity}];
+// Commission price-slab bounds (₹ upper bounds, editable). SLABS is derived:
+// bounds [300,500] → 0–300, 300–500, 500+ (SLABS.length = bounds.length + 1)
+let COMM_SLABS=[300,500,1000,2000];
+function _slabsFromBounds(bounds){
+  const out=[];let prev=0;
+  bounds.forEach(b=>{out.push({label:`${prev}–${b}`,min:prev,max:b});prev=b;});
+  out.push({label:prev+'+',min:prev,max:Infinity});
+  return out;
+}
+let SLABS=_slabsFromBounds(COMM_SLABS);
+// Commission mode: 'level_slab' (per category, current default) or 'slab'
+// (one set of slab rates applied to every category)
+let COMM_MODE='level_slab';
+let COMM_SLAB_ONLY=[0,0,21.24,17.70,18.88];
 
 // ═══════════════════════════════════════════════════════
 // COMMISSION DATA
@@ -2999,9 +3028,12 @@ let editId=null;
 function autoGST(sp){return sp>=2500?0.18:0.05;}
 function gstBadge(sp){return sp>=2500?'<span class="gst18">18%</span>':'<span class="gst5">5%</span>';}
 function getMyntraComm(cat,sp){
-  const slabs=COMM_MYNTRA[cat];if(!slabs)return 18.88;
-  for(let i=0;i<SLABS.length;i++){if(sp>=SLABS[i].min&&sp<SLABS[i].max)return slabs[i];}
-  return slabs[slabs.length-1];
+  const slabs=COMM_MODE==='slab'?COMM_SLAB_ONLY:COMM_MYNTRA[cat];
+  if(!slabs||!slabs.length)return 18.88;
+  for(let i=0;i<SLABS.length;i++){
+    if(sp>=SLABS[i].min&&sp<SLABS[i].max)return +slabs[Math.min(i,slabs.length-1)];
+  }
+  return +slabs[slabs.length-1];
 }
 // GT_DATA is mutable — editable from Logistics page and saved to DB
 let GT_DATA = {
@@ -3026,8 +3058,14 @@ let COLL_FEE_DATA = {
   'Co-Ords':        [27, 27, 27, 27, 27, 45, 61],
 };
 // Category-wise logistics (Myntra) — used when mode = 'cat'
-let GT_CAT_DATA = {};   // {category: [7 GT band values]}
-let REV_CAT_DATA = {};  // {category: return fee ₹}
+let GT_CAT_DATA = {};   // {category: [GT value per price slab]}
+let REV_CAT_DATA = {};  // {category: return fee ₹ (scalar) or [fee per rev slab]}
+// Forward GT price-slab bounds (₹ upper bounds, editable).
+// Bounds [1,99,300] → columns 0–1, 2–99, 100–300, >300 (values = bounds+1)
+let GT_SLABS = [1,99,300,500,1000,2000];
+// Reverse-fee price-slab bounds. Empty = one flat fee per level/category
+// (the historical behaviour); adding bounds turns fees into per-slab arrays.
+let REV_SLABS = [];
 // Collection fee slab upper bounds (₹) — last slab is "> last bound"
 const COLL_SLABS_DEFAULT = [300,500,700,800,1000,2000];
 let COLL_SLABS = [...COLL_SLABS_DEFAULT];
@@ -3045,29 +3083,36 @@ function hydrateLogisticsDerived(){
   if(s.gt_cat_data)   GT_CAT_DATA=s.gt_cat_data;
   if(s.rev_cat_data)  REV_CAT_DATA=s.rev_cat_data;
   if(Array.isArray(s.coll_slabs)&&s.coll_slabs.length) COLL_SLABS=s.coll_slabs;
+  if(Array.isArray(s.gt_slabs)&&s.gt_slabs.length) GT_SLABS=s.gt_slabs;
+  if(Array.isArray(s.rev_slabs)) REV_SLABS=s.rev_slabs;
+  if(Array.isArray(s.comm_slabs)&&s.comm_slabs.length){COMM_SLABS=s.comm_slabs;SLABS=_slabsFromBounds(COMM_SLABS);}
+  if(s.comm_mode==='slab'||s.comm_mode==='level_slab') COMM_MODE=s.comm_mode;
+  if(Array.isArray(s.comm_slab_only)&&s.comm_slab_only.length) COMM_SLAB_ONLY=s.comm_slab_only;
 }
 
-function gtSlabValue(slabs, sp){
-  const price = sp || 0;
-  if(price <= 1)    return slabs[0];
-  if(price <= 99)   return slabs[1];
-  if(price <= 300)  return slabs[2];
-  if(price <= 500)  return slabs[3];
-  if(price <= 1000) return slabs[4];
-  if(price <= 2000) return slabs[5];
-  return slabs[6];
+// Pick a value from a per-price-slab array using upper-bound list `bounds`.
+// Scalars pass through (legacy flat fees); index clamps to array length.
+function slabPick(bounds, values, price){
+  if(!Array.isArray(values)) return +values||0;
+  if(!values.length) return 0;
+  const p=price||0;
+  for(let i=0;i<bounds.length;i++){
+    if(p<=bounds[i]) return +values[Math.min(i,values.length-1)]||0;
+  }
+  return +values[Math.min(bounds.length,values.length-1)]||0;
 }
+function gtSlabValue(slabs, sp){ return slabPick(GT_SLABS, slabs, sp); }
 function getMynFwd(level, sp, cat){
   const mode = LOGISTICS_SETTINGS.myn_fwd_mode || 'level';
   if(mode==='fixed') return +LOGISTICS_SETTINGS.myn_fwd_fixed || 0;
   if(mode==='cat' && cat && GT_CAT_DATA[cat]) return gtSlabValue(GT_CAT_DATA[cat], sp);
   return gtSlabValue(GT_DATA[level] || GT_DATA['Level 2'] || [0,1,83,83,118,195,230], sp);
 }
-function getMynRet(level, cat){
+function getMynRet(level, cat, price){
   const mode = LOGISTICS_SETTINGS.myn_ret_mode || 'level';
   if(mode==='fixed') return +LOGISTICS_SETTINGS.myn_ret_fixed || 218;
-  if(mode==='cat' && cat && REV_CAT_DATA[cat]!=null) return +REV_CAT_DATA[cat] || 0;
-  return REVERSE_FEES[level]||218;
+  if(mode==='cat' && cat && REV_CAT_DATA[cat]!=null) return slabPick(REV_SLABS, REV_CAT_DATA[cat], price);
+  return slabPick(REV_SLABS, REVERSE_FEES[level]??218, price);
 }
 function getMynColl(cat, sellerPrice){
   const slabs=COLL_FEE_DATA[cat]||[15,17,27,27,27,45,61];
@@ -3305,16 +3350,50 @@ function triggerRecalc(){invalidateCalcCache();['myntra','ajio-ppmp','ajio-cc','
 // ═══════════════════════════════════════════════════════
 // COMMISSION TABLES
 // ═══════════════════════════════════════════════════════
+// Normalize a per-slab rate array to the current slab count
+function _normSlabArr(arr, n, fill){
+  let a=Array.isArray(arr)?[...arr]:[];
+  if(a.length<n) a=[...a,...Array(n-a.length).fill(a.length?a[a.length-1]:(fill??0))];
+  if(a.length>n) a=a.slice(0,n);
+  return a;
+}
+
 function buildCommMyntra(){
   const t=el('comm-myntra-table');if(!t)return;
+  const n=SLABS.length;
+  const slabOnly=COMM_MODE==='slab';
+  const modeRadio=document.querySelector(`input[name="commmode"][value="${COMM_MODE}"]`);
+  if(modeRadio) modeRadio.checked=true;
+  const title=el('comm-myntra-title');
+  if(title) title.textContent=slabOnly?'Commission % — Price Slab only (all categories)':'Commission % — Category × Price Slab × Level';
+  COMM_SLAB_ONLY=_normSlabArr(COMM_SLAB_ONLY,n,18.88);
   let h=`<thead><tr><th>Category</th><th>Level</th>${SLABS.map(s=>`<th>${s.label}</th>`).join('')}</tr></thead><tbody>`;
-  CATS.forEach(cat=>{const sl=COMM_MYNTRA[cat]||[0,0,18.88,18.88,18.88];
+  if(slabOnly){
+    h+=`<tr style="background:rgba(240,177,42,.06)"><td><strong style="color:var(--ac)">★ All Categories</strong></td><td class="st" style="font-size:10px">slab-only</td>${
+      COMM_SLAB_ONLY.map((v,i)=>`<td><input class="ci" style="border-color:var(--ac)" value="${v}" onchange="COMM_SLAB_ONLY[${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')
+    }</tr>`;
+  }
+  CATS.forEach(cat=>{
+    const sl=_normSlabArr(COMM_MYNTRA[cat]||[0,0,18.88,18.88,18.88],n,18.88);
+    COMM_MYNTRA[cat]=sl;
     const curLvl=CAT_LEVEL[cat]||'Level 2';
     const lvlOpts=LEVELS.map(l=>`<option${l===curLvl?' selected':''}>${l}</option>`).join('');
     const skuCount=skuDB.filter(s=>s.category===cat).length;
     const skuBadge=skuCount?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(78,142,247,.12);color:var(--bl)">${skuCount}</span>`:'';
-    h+=`<tr><td><div class="flex gap8">${esc(cat)} ${skuBadge} <button class="btn br bxs" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}" onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
+    h+=`<tr${slabOnly?' style="opacity:.45"':''}><td><div class="flex gap8">${esc(cat)} ${skuBadge} <button class="btn br bxs" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}"${slabOnly?' disabled title="Ignored in slab-only mode"':''} onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
   t.innerHTML=h+'</tbody>';
+}
+
+function setCommMode(mode){
+  COMM_MODE=(mode==='slab')?'slab':'level_slab';
+  LOGISTICS_SETTINGS.comm_mode=COMM_MODE;
+  LOGISTICS_SETTINGS.comm_slab_only=COMM_SLAB_ONLY;
+  invalidateCalcCache();
+  buildCommMyntra();
+  save('logistics');
+  triggerRecalc();renderSKUs();
+  audit('commission_mode',`Myntra commission mode set to ${COMM_MODE==='slab'?'Slab only':'Level + Slab'}`);
+  toast(`Commission mode: ${COMM_MODE==='slab'?'Slab only (all categories)':'Level + Slab (per category)'}`,'blue');
 }
 function buildCommAjioPPMP(){
   const t=el('comm-ajio-ppmp-table');if(!t)return;
@@ -3347,7 +3426,15 @@ function buildCommAmazon(){
   CATS.forEach(cat=>{h+=`<tr><td>${esc(cat)}</td><td><input class="ci" value="${COMM_AMAZON[cat]||17}" onchange="COMM_AMAZON['${escAttr(cat)}']=+this.value;triggerRecalc()"></td></tr>`;});
   t.innerHTML=h+'</tbody>';
 }
-async function saveComm(){triggerRecalc();renderSKUs();for(const t of['cat_levels','comm_myntra','comm_ppmp','comm_cc','comm_amazon'])await save(t);audit('commission','Commission rates updated');toast('Commission saved','green');}
+async function saveComm(){
+  LOGISTICS_SETTINGS.comm_slabs=COMM_SLABS;
+  LOGISTICS_SETTINGS.comm_mode=COMM_MODE;
+  LOGISTICS_SETTINGS.comm_slab_only=COMM_SLAB_ONLY;
+  triggerRecalc();renderSKUs();
+  for(const t of['cat_levels','comm_myntra','comm_ppmp','comm_cc','comm_amazon','logistics'])await save(t);
+  audit('commission','Commission rates updated');
+  toast('Commission saved','green');
+}
 
 // ── Category Management ──────────────────────────────
 function openAddCategoryModal(){
@@ -5833,7 +5920,7 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
 }
 
 function exportData(){
-  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CATS,LEVELS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,GT_DATA,REVERSE_FEES,GT_CAT_DATA,REV_CAT_DATA,COLL_FEE_DATA,COLL_SLABS,LOGISTICS_SETTINGS,exportedAt:new Date().toISOString()},null,2);
+  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CATS,LEVELS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,GT_DATA,REVERSE_FEES,GT_CAT_DATA,REV_CAT_DATA,COLL_FEE_DATA,COLL_SLABS,GT_SLABS,REV_SLABS,COMM_SLABS,COMM_MODE,COMM_SLAB_ONLY,LOGISTICS_SETTINGS,exportedAt:new Date().toISOString()},null,2);
   const a=document.createElement('a');
   a.href='data:application/json,'+encodeURIComponent(data);
   a.download='pricedesk_backup_'+new Date().toISOString().slice(0,10)+'.json';
@@ -5864,6 +5951,11 @@ function importDataPrompt(){
         if(d.REV_CAT_DATA) REV_CAT_DATA=d.REV_CAT_DATA;
         if(d.COLL_FEE_DATA) COLL_FEE_DATA=d.COLL_FEE_DATA;
         if(d.COLL_SLABS)   COLL_SLABS=d.COLL_SLABS;
+        if(d.GT_SLABS)     GT_SLABS=d.GT_SLABS;
+        if(d.REV_SLABS)    REV_SLABS=d.REV_SLABS;
+        if(d.COMM_SLABS){COMM_SLABS=d.COMM_SLABS;SLABS=_slabsFromBounds(COMM_SLABS);}
+        if(d.COMM_MODE)    COMM_MODE=d.COMM_MODE;
+        if(d.COMM_SLAB_ONLY) COMM_SLAB_ONLY=d.COMM_SLAB_ONLY;
         if(d.LOGISTICS_SETTINGS) LOGISTICS_SETTINGS=d.LOGISTICS_SETTINGS;
         if(d.COMM_MYNTRA)    COMM_MYNTRA=d.COMM_MYNTRA;
         if(d.COMM_AJIO_PPMP) COMM_AJIO_PPMP=d.COMM_AJIO_PPMP;
@@ -6886,60 +6978,99 @@ function exportGSTBelow(){
 // ═══════════════════════════════════════════════════════
 // GT CHARGES + REVERSE FEES — editable tables
 // ═══════════════════════════════════════════════════════
-const GT_BANDS  = ['0–1','2–99','100–300','300–500','500–1000','1000–2000','>2000'];
+// GT band labels derived from GT_SLABS bounds: [1,99,300] → 0–1, 2–99, 100–300, >300
+function gtSlabLabels(){
+  const L=[];
+  GT_SLABS.forEach((b,i)=>L.push(`${i===0?0:GT_SLABS[i-1]+1}–${b}`));
+  L.push('>'+GT_SLABS[GT_SLABS.length-1]);
+  return L;
+}
+// Reverse-fee labels: no bounds = one flat fee column
+function revSlabLabels(){
+  if(!REV_SLABS.length) return ['Return Fee (₹)'];
+  const L=[];
+  REV_SLABS.forEach((b,i)=>L.push(`${i===0?0:REV_SLABS[i-1]}–${b}`));
+  L.push('>'+REV_SLABS[REV_SLABS.length-1]);
+  return L;
+}
+function _slabHeadHTML(firstCol, labels, starLast){
+  const n=labels.length;
+  return `<tr><th>${firstCol}</th>${labels.map((l,i)=>`<th${starLast&&i===n-1?' style="color:var(--ac)"':''}>${esc(l)}${starLast&&i===n-1?' ★':''}</th>`).join('')}</tr>`;
+}
 
 function renderGTTable(){
   const tbody = el('gt-table-body');
   if(!tbody) return;
+  const labels=gtSlabLabels(), n=labels.length;
+  const thead=el('gt-table-head');
+  if(thead) thead.innerHTML=_slabHeadHTML('Level',labels,true);
   tbody.innerHTML = LEVELS.map(lvl => {
-    const vals = GT_DATA[lvl] || [0,1,0,0,0,0,0];
+    const vals = GT_DATA[lvl] = _normSlabArr(GT_DATA[lvl]||[0,1,0,0,0,0,0], n, 0);
     return `<tr>${['<td><div class="flex gap8"><strong>'+esc(lvl)+`</strong><button class="btn br bxs" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td>`,
-      ...vals.map((v,i) => `<td><input class="ci" style="width:58px;${i===6?'border-color:var(--ac)':''}"
+      ...vals.map((v,i) => `<td><input class="ci" style="width:58px;${i===n-1?'border-color:var(--ac)':''}"
         value="${v}" oninput="GT_DATA['${escAttr(lvl)}'][${i}]=+this.value;invalidateCalcCache()">`+'</td>')
     ].join('')}</tr>`;
   }).join('');
 }
 
+// One return-fee row: scalar (flat) or per-slab array depending on REV_SLABS
+function _retRowCells(store, key, val, n){
+  if(!REV_SLABS.length){
+    const v=Array.isArray(val)?(+val[0]||0):(+val||0);
+    return `<td><input class="ci" style="width:80px" value="${v}"
+      oninput="${store}['${escAttr(key)}']=+this.value;invalidateCalcCache()"></td>
+      <td class="st">Half: ₹${(v/2).toFixed(1)}</td>`;
+  }
+  const arr=_normSlabArr(Array.isArray(val)?val:Array(n).fill(+val||0), n, +val||0);
+  (store==='REVERSE_FEES'?REVERSE_FEES:REV_CAT_DATA)[key]=arr;
+  return arr.map((v,i)=>`<td><input class="ci" style="width:64px;${i===n-1?'border-color:var(--ac)':''}" value="${v}" oninput="${store}['${escAttr(key)}'][${i}]=+this.value;invalidateCalcCache()"></td>`).join('');
+}
+
 function renderRetTable(){
   const tbody = el('ret-table-body');
   if(!tbody) return;
-  tbody.innerHTML = LEVELS.map(lvl => {
-    const v = REVERSE_FEES[lvl] || 0;
-    return `<tr><td><strong>${esc(lvl)}</strong></td>
-      <td><input class="ci" style="width:80px" value="${v}"
-        oninput="REVERSE_FEES['${escAttr(lvl)}']=+this.value;invalidateCalcCache()"></td>
-      <td class="st">Half: ₹${(v/2).toFixed(1)}</td></tr>`;
-  }).join('');
+  const labels=revSlabLabels(), n=REV_SLABS.length+1;
+  const thead=el('ret-table-head');
+  if(thead) thead.innerHTML=REV_SLABS.length
+    ? _slabHeadHTML('Level',labels,true)
+    : `<tr><th>Level</th><th>Return Fee (₹)</th><th></th></tr>`;
+  tbody.innerHTML = LEVELS.map(lvl =>
+    `<tr><td><strong>${esc(lvl)}</strong></td>${_retRowCells('REVERSE_FEES',lvl,REVERSE_FEES[lvl]??0,n)}</tr>`
+  ).join('');
 }
 
-// Category-wise Forward GT — rows = categories, same 7 GT price bands
+// Category-wise Forward GT — rows = categories, same GT price slabs
 function renderGTCatTable(){
   const tbody=el('gt-cat-table-body');if(!tbody)return;
+  const labels=gtSlabLabels(), n=labels.length;
+  const thead=el('gt-cat-table-head');
+  if(thead) thead.innerHTML=_slabHeadHTML('Category',labels,true);
   tbody.innerHTML=CATS.map(cat=>{
     if(!GT_CAT_DATA[cat]){
       const lvl=CAT_LEVEL[cat]||'Level 2';
       GT_CAT_DATA[cat]=[...(GT_DATA[lvl]||[0,1,83,83,118,195,230])];
     }
-    const vals=GT_CAT_DATA[cat];
+    const vals=GT_CAT_DATA[cat]=_normSlabArr(GT_CAT_DATA[cat],n,0);
     return`<tr><td style="white-space:nowrap"><strong style="font-size:11px">${esc(cat)}</strong></td>${
-      vals.map((v,i)=>`<td><input class="ci" style="width:58px;${i===6?'border-color:var(--ac)':''}" value="${v}" oninput="GT_CAT_DATA['${escAttr(cat)}'][${i}]=+this.value;invalidateCalcCache()"></td>`).join('')
+      vals.map((v,i)=>`<td><input class="ci" style="width:58px;${i===n-1?'border-color:var(--ac)':''}" value="${v}" oninput="GT_CAT_DATA['${escAttr(cat)}'][${i}]=+this.value;invalidateCalcCache()"></td>`).join('')
     }</tr>`;
   }).join('');
 }
 
-// Category-wise Return fees — one fee per category
+// Category-wise Return fees — flat fee or per-slab array per category
 function renderRetCatTable(){
   const tbody=el('ret-cat-table-body');if(!tbody)return;
+  const labels=revSlabLabels(), n=REV_SLABS.length+1;
+  const thead=el('ret-cat-table-head');
+  if(thead) thead.innerHTML=REV_SLABS.length
+    ? _slabHeadHTML('Category',labels,true)
+    : `<tr><th>Category</th><th>Return Fee (₹)</th><th></th></tr>`;
   tbody.innerHTML=CATS.map(cat=>{
     if(REV_CAT_DATA[cat]==null){
       const lvl=CAT_LEVEL[cat]||'Level 2';
-      REV_CAT_DATA[cat]=REVERSE_FEES[lvl]||218;
+      REV_CAT_DATA[cat]=REVERSE_FEES[lvl]??218;
     }
-    const v=REV_CAT_DATA[cat];
-    return`<tr><td><strong style="font-size:11px">${esc(cat)}</strong></td>
-      <td><input class="ci" style="width:80px" value="${v}"
-        oninput="REV_CAT_DATA['${escAttr(cat)}']=+this.value;invalidateCalcCache()"></td>
-      <td class="st">Half: ₹${(v/2).toFixed(1)}</td></tr>`;
+    return`<tr><td><strong style="font-size:11px">${esc(cat)}</strong></td>${_retRowCells('REV_CAT_DATA',cat,REV_CAT_DATA[cat],n)}</tr>`;
   }).join('');
 }
 
@@ -6977,29 +7108,48 @@ function saveCollFees(){
   renderSKUs();
 }
 
-// ── Collection Fee slab editor ───────────────────────
+// ── Generic price-slab editor (collection fee, GT, reverse, commission) ──
 function _collSlabRowHTML(v){
   return`<div class="flex gap8" style="margin-bottom:8px;align-items:center">
     <span class="st" style="width:52px">Upto ₹</span>
     <input class="fi coll-slab-inp" type="number" style="width:130px" value="${v}" min="1" placeholder="e.g. 1500">
     <button class="btn br bxs" onclick="this.parentElement.remove()" title="Remove slab">✕</button></div>`;
 }
-function openCollSlabModal(){
-  setModal(`<div class="mhdr"><div class="mtl">✎ Collection Fee Price Slabs</div><span class="mclose" onclick="closeModal()">×</span></div>
+let _slabEditorApply=null;
+let _slabEditorAllowEmpty=false;
+function openSlabEditor(cfg){
+  _slabEditorApply=cfg.onApply;
+  _slabEditorAllowEmpty=!!cfg.allowEmpty;
+  setModal(`<div class="mhdr"><div class="mtl">${cfg.title}</div><span class="mclose" onclick="closeModal()">×</span></div>
     <div class="mbody">
-      <div class="st" style="margin-bottom:12px">Each value is a slab's <strong>upper bound</strong> in ₹. Slabs become 0–v1, v1–v2, … plus a final "&gt;last" slab. Existing fees are remapped automatically; bounds are sorted for you.</div>
-      <div id="coll-slab-list">${COLL_SLABS.map(b=>_collSlabRowHTML(b)).join('')}</div>
+      <div class="st" style="margin-bottom:12px">${cfg.hint}</div>
+      <div id="coll-slab-list">${cfg.bounds.map(b=>_collSlabRowHTML(b)).join('')}</div>
       <button class="btn bg bsm" onclick="addCollSlabRow()">+ Add Slab</button>
     </div>
     <div class="mfoot">
       <button class="btn bg" onclick="closeModal()">Cancel</button>
-      <button class="btn bp" onclick="applyCollSlabs()">✓ Apply Slabs</button>
+      <button class="btn bp" onclick="applySlabEditor()">✓ Apply Slabs</button>
     </div>`);
 }
 function addCollSlabRow(){
   el('coll-slab-list')?.insertAdjacentHTML('beforeend',_collSlabRowHTML(''));
   const inps=document.querySelectorAll('.coll-slab-inp');
   inps[inps.length-1]?.focus();
+}
+function applySlabEditor(){
+  const vals=[...document.querySelectorAll('.coll-slab-inp')].map(i=>parseFloat(i.value)).filter(v=>isFinite(v)&&v>0);
+  const bounds=[...new Set(vals)].sort((a,b)=>a-b);
+  if(!bounds.length&&!_slabEditorAllowEmpty){toast('Add at least one slab bound','red');return;}
+  const fn=_slabEditorApply;
+  closeModal();
+  if(fn) fn(bounds);
+}
+
+const _SLAB_HINT='Each value is a slab\'s <strong>upper bound</strong> in ₹. Slabs become 0–v1, v1–v2, … plus a final "&gt;last" slab. Existing values are remapped automatically; bounds are sorted for you.';
+
+// Collection fee slabs
+function openCollSlabModal(){
+  openSlabEditor({title:'✎ Collection Fee Price Slabs',hint:_SLAB_HINT,bounds:COLL_SLABS,onApply:applyCollSlabs});
 }
 // Rebuild each category's fee array for new bounds — each new slab takes the
 // fee of the old slab that contained its upper bound
@@ -7014,10 +7164,7 @@ function remapCollFees(oldBounds,newBounds){
     COLL_FEE_DATA[cat]=[...newBounds.map(b=>feeAt(b)),feeAt(newBounds[newBounds.length-1]+1)];
   });
 }
-function applyCollSlabs(){
-  const vals=[...document.querySelectorAll('.coll-slab-inp')].map(i=>parseFloat(i.value)).filter(v=>isFinite(v)&&v>0);
-  const bounds=[...new Set(vals)].sort((a,b)=>a-b);
-  if(!bounds.length){toast('Add at least one slab bound','red');return;}
+function applyCollSlabs(bounds){
   if(JSON.stringify(COLL_SLABS)!==JSON.stringify(bounds)){
     remapCollFees(COLL_SLABS,bounds);
     COLL_SLABS=bounds;
@@ -7029,8 +7176,78 @@ function applyCollSlabs(){
     triggerRecalc();renderSKUs();
     audit('coll_slabs',`Collection fee slabs updated: ${bounds.join(', ')} (+ >${bounds[bounds.length-1]})`);
   }
-  closeModal();
   toast('✓ Collection fee slabs updated','green');
+}
+
+// Forward GT slabs — shared by the level table and the category-wise table
+function openGTSlabModal(){
+  openSlabEditor({title:'✎ Forward GT Price Slabs',hint:_SLAB_HINT,bounds:GT_SLABS,onApply:applyGTSlabs});
+}
+function applyGTSlabs(bounds){
+  if(JSON.stringify(GT_SLABS)===JSON.stringify(bounds)){toast('Slabs unchanged','blue');return;}
+  const old=GT_SLABS;
+  const remapRow=vals=>[...bounds.map(b=>slabPick(old,vals,b)),slabPick(old,vals,bounds[bounds.length-1]+1)];
+  Object.keys(GT_DATA).forEach(l=>{GT_DATA[l]=remapRow(GT_DATA[l]||[]);});
+  Object.keys(GT_CAT_DATA).forEach(c=>{GT_CAT_DATA[c]=remapRow(GT_CAT_DATA[c]||[]);});
+  GT_SLABS=bounds;
+  LOGISTICS_SETTINGS.gt_slabs=GT_SLABS;
+  LOGISTICS_SETTINGS.gt_cat_data=GT_CAT_DATA;
+  invalidateCalcCache();
+  save('logistics');
+  renderGTTable();renderGTCatTable();
+  triggerRecalc();renderSKUs();
+  audit('gt_slabs',`Forward GT price slabs updated: ${bounds.join(', ')}`);
+  toast('✓ GT price slabs updated','green');
+}
+
+// Reverse-fee slabs — empty bounds = one flat fee (historical behaviour)
+function openRevSlabModal(){
+  openSlabEditor({title:'✎ Return Fee Price Slabs',
+    hint:_SLAB_HINT+' Remove all slabs to go back to a single flat fee per level/category.',
+    bounds:REV_SLABS,onApply:applyRevSlabs,allowEmpty:true});
+}
+function applyRevSlabs(bounds){
+  if(JSON.stringify(REV_SLABS)===JSON.stringify(bounds)){toast('Slabs unchanged','blue');return;}
+  const old=REV_SLABS;
+  const remapVal=val=>{
+    if(!bounds.length) return slabPick(old,val,0); // collapse to flat fee
+    return [...bounds.map(b=>slabPick(old,val,b)),slabPick(old,val,bounds[bounds.length-1]+1)];
+  };
+  Object.keys(REVERSE_FEES).forEach(l=>{REVERSE_FEES[l]=remapVal(REVERSE_FEES[l]);});
+  Object.keys(REV_CAT_DATA).forEach(c=>{REV_CAT_DATA[c]=remapVal(REV_CAT_DATA[c]);});
+  REV_SLABS=bounds;
+  LOGISTICS_SETTINGS.rev_slabs=REV_SLABS;
+  LOGISTICS_SETTINGS.rev_cat_data=REV_CAT_DATA;
+  invalidateCalcCache();
+  save('logistics');
+  renderRetTable();renderRetCatTable();
+  triggerRecalc();renderSKUs();
+  audit('rev_slabs',`Return fee slabs updated: ${bounds.length?bounds.join(', '):'flat fee'}`);
+  toast('✓ Return fee slabs updated','green');
+}
+
+// Commission slabs (Myntra) — remaps per-category rates and slab-only rates
+function openCommSlabModal(){
+  openSlabEditor({title:'✎ Commission Price Slabs',hint:_SLAB_HINT+' Slabs apply to Seller Price.',bounds:COMM_SLABS,onApply:applyCommSlabs});
+}
+function applyCommSlabs(bounds){
+  if(JSON.stringify(COMM_SLABS)===JSON.stringify(bounds)){toast('Slabs unchanged','blue');return;}
+  const oldSlabs=SLABS;
+  const rateAt=(arr,p)=>{
+    if(!Array.isArray(arr)||!arr.length) return 18.88;
+    for(let i=0;i<oldSlabs.length;i++){ if(p>=oldSlabs[i].min&&p<oldSlabs[i].max) return +arr[Math.min(i,arr.length-1)]; }
+    return +arr[arr.length-1];
+  };
+  const newSlabs=_slabsFromBounds(bounds);
+  const remap=arr=>newSlabs.map(s=>rateAt(arr,s.min));
+  Object.keys(COMM_MYNTRA).forEach(cat=>{COMM_MYNTRA[cat]=remap(COMM_MYNTRA[cat]);});
+  COMM_SLAB_ONLY=remap(COMM_SLAB_ONLY);
+  COMM_SLABS=bounds;
+  SLABS=newSlabs;
+  invalidateCalcCache();
+  buildCommMyntra();
+  saveComm(); // persists rates (with stale slab-row cleanup) + slab config
+  audit('comm_slabs',`Commission price slabs updated: ${bounds.join(', ')}`);
 }
 
 // ── Level Management ────────────────────────────────
@@ -7058,8 +7275,8 @@ async function addLevel(){
   if(!name){toast('Enter a level name','red');return;}
   if(LEVELS.includes(name)){toast(`"${name}" already exists`,'red');return;}
   LEVELS.push(name);
-  GT_DATA[name]=[0,1,gtVal,gtVal,gtVal,gtVal,gtVal];
-  REVERSE_FEES[name]=revVal;
+  GT_DATA[name]=[0,1,...Array(Math.max(GT_SLABS.length-1,0)).fill(gtVal)];
+  REVERSE_FEES[name]=REV_SLABS.length?Array(REV_SLABS.length+1).fill(revVal):revVal;
   await save('levels');await save('logistics');
   renderGTTable();renderRetTable();buildCommMyntra();
   audit('level_add',`Level "${name}" added (GT:₹${gtVal}, Rev:₹${revVal})`);
@@ -7107,6 +7324,11 @@ function _syncMynLogisticsSettings(){
   LOGISTICS_SETTINGS.gt_cat_data   = GT_CAT_DATA;
   LOGISTICS_SETTINGS.rev_cat_data  = REV_CAT_DATA;
   LOGISTICS_SETTINGS.coll_slabs    = COLL_SLABS;
+  LOGISTICS_SETTINGS.gt_slabs      = GT_SLABS;
+  LOGISTICS_SETTINGS.rev_slabs     = REV_SLABS;
+  LOGISTICS_SETTINGS.comm_slabs    = COMM_SLABS;
+  LOGISTICS_SETTINGS.comm_mode     = COMM_MODE;
+  LOGISTICS_SETTINGS.comm_slab_only= COMM_SLAB_ONLY;
 }
 
 function saveGTCharges(){
@@ -7194,7 +7416,7 @@ const WF_LOOKUPS = {
     return 0;
   },
   retFee: ctx => {
-    if(ctx._mp==='myntra') return getMynRet(ctx.level||'Level 2', ctx.cat);
+    if(ctx._mp==='myntra') return getMynRet(ctx.level||'Level 2', ctx.cat, ctx.custPaid||0);
     if(ctx._mp==='amazon') return LOGISTICS_SETTINGS.amz_ret||55;
     return 0;
   },
@@ -7235,7 +7457,7 @@ function runWFEngine(marketplace, inputs){
     ...inputs,
     _mp: marketplace,
     getMynFwd: (lvl, sp, cat) => getMynFwd(lvl||inputs.level||'Level 2', sp, cat||inputs.cat),
-    getMynRet: (lvl, cat) => getMynRet(lvl||inputs.level||'Level 2', cat||inputs.cat),
+    getMynRet: (lvl, cat, price) => getMynRet(lvl||inputs.level||'Level 2', cat||inputs.cat, price),
     getMyntraComm: (cat, sp) => getMyntraComm(cat||inputs.cat||(CATS[0]||'Kurta Sets'), sp),
     autoGST: autoGST,
     REVERSE_FEES, LOGISTICS_SETTINGS, Math,
