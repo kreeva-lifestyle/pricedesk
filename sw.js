@@ -1,8 +1,12 @@
-const CACHE_NAME = 'pricedesk-v1';
+const CACHE_NAME = 'pricedesk-v2';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
+  './',
+  './index.html',
+  './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-512-maskable.png',
+  './icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (e) => {
@@ -23,20 +27,22 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // Only cache same-origin GET requests (not API calls)
+  // Only handle same-origin GET requests — API/CDN traffic passes through
   if (e.request.method !== 'GET') return;
   if (url.origin !== self.location.origin) return;
 
+  // Network-first so deploys reach users immediately; cache is the
+  // offline fallback (app shell keeps opening without a connection)
   e.respondWith(
     fetch(e.request)
       .then(resp => {
-        // Cache successful responses
         if (resp.ok) {
           const clone = resp.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
         }
         return resp;
       })
-      .catch(() => caches.match(e.request))
+      .catch(() => caches.match(e.request, { ignoreSearch: e.request.mode === 'navigate' })
+        .then(hit => hit || (e.request.mode === 'navigate' ? caches.match('./index.html') : undefined)))
   );
 });

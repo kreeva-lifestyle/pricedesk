@@ -1,17 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 // SYNC NOTE: Functions and default fixtures below are copied verbatim
 // from index.html. Update both places if any change.
-//   - GT_DATA:         index.html:2959
-//   - REVERSE_FEES:    index.html:2965
-//   - COLL_FEE_DATA:   index.html:2969
-//   - getMynFwd:       index.html:2986
-//   - getMynRet:       index.html:2997
-//   - getMynColl:      index.html:2998
+//   - GT_DATA:         index.html:3085
+//   - REVERSE_FEES:    index.html:3091
+//   - COLL_FEE_DATA:   index.html:3130
+//   - GT_SLABS:        index.html:3065
+//   - REV_SLABS:       index.html:3068
+//   - COLL_SLABS:      index.html:3070
+//   - slabPick:        index.html:3095
+//   - gtSlabValue:     index.html:3104
+//   - getMynFwd:       index.html:3105
+//   - getMynRet:       index.html:3111
+//   - getMynColl:      index.html:3117
 //
-// GT_DATA, REVERSE_FEES, and COLL_FEE_DATA are user-editable from
-// the Logistics page at runtime — these fixtures use the defaults
-// only to keep tests deterministic.
+// GT_DATA, REVERSE_FEES, COLL_FEE_DATA, the slab bounds, and the
+// mode settings are user-editable from the Logistics page at runtime —
+// these fixtures use the defaults only to keep tests deterministic.
 
 const GT_DATA = {
   'Level 1': [0,   1,  59,  59,  94, 171, 207],
@@ -20,7 +25,7 @@ const GT_DATA = {
   'Level 4': [0,   1, 100, 153, 189, 277, 313],
 };
 
-const REVERSE_FEES = {
+let REVERSE_FEES = {
   'Level 1': 167, 'Level 2': 218, 'Level 3': 259, 'Level 4': 331,
 };
 
@@ -36,31 +41,60 @@ const COLL_FEE_DATA = {
   'Co-Ords':        [27, 27, 27, 27, 27, 45, 61],
 };
 
-function getMynFwd(level, sp) {
-  const slabs = GT_DATA[level] || GT_DATA['Level 2'];
-  const price = sp || 0;
-  if (price <= 1)    return slabs[0];
-  if (price <= 99)   return slabs[1];
-  if (price <= 300)  return slabs[2];
-  if (price <= 500)  return slabs[3];
-  if (price <= 1000) return slabs[4];
-  if (price <= 2000) return slabs[5];
-  return slabs[6];
+// Editable slab bounds + mode settings (defaults mirror index.html)
+let GT_SLABS = [1,99,300,500,1000,2000];
+let REV_SLABS = [];
+let COLL_SLABS = [300,500,700,800,1000,2000];
+let GT_CAT_DATA = {};
+let REV_CAT_DATA = {};
+let LOGISTICS_SETTINGS = {
+  myn_fwd_mode: 'level', myn_ret_mode: 'level',
+  myn_fwd_fixed: 230, myn_ret_fixed: 218,
+};
+
+function slabPick(bounds, values, price){
+  if(!Array.isArray(values)) return +values||0;
+  if(!values.length) return 0;
+  const p=price||0;
+  for(let i=0;i<bounds.length;i++){
+    if(p<=bounds[i]) return +values[Math.min(i,values.length-1)]||0;
+  }
+  return +values[Math.min(bounds.length,values.length-1)]||0;
+}
+function gtSlabValue(slabs, sp){ return slabPick(GT_SLABS, slabs, sp); }
+function getMynFwd(level, sp, cat){
+  const mode = LOGISTICS_SETTINGS.myn_fwd_mode || 'level';
+  if(mode==='fixed') return +LOGISTICS_SETTINGS.myn_fwd_fixed || 0;
+  if(mode==='cat' && cat && GT_CAT_DATA[cat]) return gtSlabValue(GT_CAT_DATA[cat], sp);
+  return gtSlabValue(GT_DATA[level] || GT_DATA['Level 2'] || [0,1,83,83,118,195,230], sp);
+}
+function getMynRet(level, cat, price){
+  const mode = LOGISTICS_SETTINGS.myn_ret_mode || 'level';
+  if(mode==='fixed') return +LOGISTICS_SETTINGS.myn_ret_fixed || 218;
+  if(mode==='cat' && cat && REV_CAT_DATA[cat]!=null) return slabPick(REV_SLABS, REV_CAT_DATA[cat], price);
+  return slabPick(REV_SLABS, REVERSE_FEES[level]??218, price);
+}
+function getMynColl(cat, sellerPrice){
+  const slabs=COLL_FEE_DATA[cat]||[15,17,27,27,27,45,61];
+  const p=sellerPrice||0;
+  for(let i=0;i<COLL_SLABS.length;i++){
+    if(p<=COLL_SLABS[i]) return +slabs[Math.min(i,slabs.length-1)]||0;
+  }
+  return +slabs[Math.min(COLL_SLABS.length,slabs.length-1)]||0;
 }
 
-function getMynRet(level) { return REVERSE_FEES[level] || 218; }
-
-function getMynColl(cat, sellerPrice) {
-  const slabs = COLL_FEE_DATA[cat] || [15, 17, 27, 27, 27, 45, 61];
-  const p = sellerPrice || 0;
-  if (p <= 300)  return slabs[0];
-  if (p <= 500)  return slabs[1];
-  if (p <= 700)  return slabs[2];
-  if (p <= 800)  return slabs[3];
-  if (p <= 1000) return slabs[4];
-  if (p <= 2000) return slabs[5];
-  return slabs[6];
-}
+beforeEach(() => {
+  LOGISTICS_SETTINGS = {
+    myn_fwd_mode: 'level', myn_ret_mode: 'level',
+    myn_fwd_fixed: 230, myn_ret_fixed: 218,
+  };
+  GT_SLABS = [1,99,300,500,1000,2000];
+  REV_SLABS = [];
+  COLL_SLABS = [300,500,700,800,1000,2000];
+  GT_CAT_DATA = {};
+  REV_CAT_DATA = {};
+  REVERSE_FEES = { 'Level 1': 167, 'Level 2': 218, 'Level 3': 259, 'Level 4': 331 };
+});
 
 // ────────────────────────────────────────────────────────────────────
 describe('getMynFwd — forward shipping by level and seller price', () => {
@@ -99,6 +133,36 @@ describe('getMynFwd — forward shipping by level and seller price', () => {
       expect(getMynFwd('Level 2', null)).toBe(0);
     });
   });
+
+  describe('fixed mode', () => {
+    it('returns the flat fixed rate regardless of level and price', () => {
+      LOGISTICS_SETTINGS.myn_fwd_mode = 'fixed';
+      LOGISTICS_SETTINGS.myn_fwd_fixed = 123;
+      expect(getMynFwd('Level 1', 50)).toBe(123);
+      expect(getMynFwd('Level 4', 5000)).toBe(123);
+    });
+  });
+
+  describe('category-wise mode', () => {
+    it('uses the category row when present, level row otherwise', () => {
+      LOGISTICS_SETTINGS.myn_fwd_mode = 'cat';
+      GT_CAT_DATA['Sarees'] = [0, 1, 50, 60, 90, 150, 180];
+      expect(getMynFwd('Level 2', 450, 'Sarees')).toBe(60);
+      expect(getMynFwd('Level 2', 2500, 'Sarees')).toBe(180);
+      // Category without a row falls back to the level table
+      expect(getMynFwd('Level 2', 450, 'Tops')).toBe(83);
+    });
+  });
+
+  describe('editable GT slab bounds', () => {
+    it('lookup follows shortened bounds with clamped value arrays', () => {
+      GT_SLABS = [500, 2000];
+      // 3 values: <=500, <=2000, >2000
+      expect(gtSlabValue([83, 195, 230], 400)).toBe(83);
+      expect(gtSlabValue([83, 195, 230], 1500)).toBe(195);
+      expect(gtSlabValue([83, 195, 230], 2500)).toBe(230);
+    });
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────
@@ -109,6 +173,41 @@ describe('getMynRet — return shipping by level', () => {
   it('Level 4 → ₹331', () => expect(getMynRet('Level 4')).toBe(331));
   it('unknown level → ₹218 fallback', () => expect(getMynRet('Level X')).toBe(218));
   it('undefined level → ₹218 fallback', () => expect(getMynRet(undefined)).toBe(218));
+
+  describe('fixed mode', () => {
+    it('returns the flat fixed rate regardless of level', () => {
+      LOGISTICS_SETTINGS.myn_ret_mode = 'fixed';
+      LOGISTICS_SETTINGS.myn_ret_fixed = 200;
+      expect(getMynRet('Level 1')).toBe(200);
+      expect(getMynRet('Level 4')).toBe(200);
+    });
+  });
+
+  describe('category-wise mode', () => {
+    it('uses the category fee when present, level fee otherwise', () => {
+      LOGISTICS_SETTINGS.myn_ret_mode = 'cat';
+      REV_CAT_DATA['Sarees'] = 175;
+      expect(getMynRet('Level 1', 'Sarees')).toBe(175);
+      expect(getMynRet('Level 1', 'Tops')).toBe(167);
+    });
+  });
+
+  describe('editable reverse-fee price slabs', () => {
+    it('flat scalar fees ignore price (no bounds configured)', () => {
+      expect(getMynRet('Level 2', null, 5000)).toBe(218);
+    });
+    it('per-slab arrays pick by price when bounds exist', () => {
+      REV_SLABS = [1000];
+      REVERSE_FEES['Level 2'] = [100, 300];
+      expect(getMynRet('Level 2', null, 800)).toBe(100);
+      expect(getMynRet('Level 2', null, 1000)).toBe(100);
+      expect(getMynRet('Level 2', null, 1500)).toBe(300);
+    });
+    it('scalar fee still works when bounds exist (legacy data)', () => {
+      REV_SLABS = [1000];
+      expect(getMynRet('Level 1', null, 5000)).toBe(167);
+    });
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────
@@ -148,6 +247,17 @@ describe('getMynColl — collection (fixed) fee by category and seller price', (
     it('falsy sp treated as 0 (lowest band)', () => {
       expect(getMynColl('Kurta Sets', undefined)).toBe(0);
       expect(getMynColl('Kurta Sets', null)).toBe(0);
+    });
+  });
+
+  describe('editable collection slab bounds', () => {
+    it('lookup follows changed bounds and clamps short arrays', () => {
+      COLL_SLABS = [500, 1500, 3000];
+      // Kurta Sets array still has 7 entries; index clamps safely
+      expect(getMynColl('Kurta Sets', 400)).toBe(0);   // slab 0
+      expect(getMynColl('Kurta Sets', 1200)).toBe(5);  // slab 1
+      expect(getMynColl('Kurta Sets', 2800)).toBe(19); // slab 2
+      expect(getMynColl('Kurta Sets', 9000)).toBe(27); // > last bound
     });
   });
 });

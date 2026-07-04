@@ -29,16 +29,55 @@ describe('source drift detection — production strings must match test copies',
 
     it('getMynRet is unchanged (tests/calc/myntra-fees.test.js)', () => {
       expect(HTML).toContain(
-        'function getMynRet(level){return REVERSE_FEES[level]||218;}'
+        `function getMynRet(level, cat, price){
+  const mode = LOGISTICS_SETTINGS.myn_ret_mode || 'level';
+  if(mode==='fixed') return +LOGISTICS_SETTINGS.myn_ret_fixed || 218;
+  if(mode==='cat' && cat && REV_CAT_DATA[cat]!=null) return slabPick(REV_SLABS, REV_CAT_DATA[cat], price);
+  return slabPick(REV_SLABS, REVERSE_FEES[level]??218, price);
+}`
+      );
+    });
+
+    it('slabPick is unchanged (tests/calc/myntra-fees.test.js)', () => {
+      expect(HTML).toContain(
+        `function slabPick(bounds, values, price){
+  if(!Array.isArray(values)) return +values||0;
+  if(!values.length) return 0;
+  const p=price||0;
+  for(let i=0;i<bounds.length;i++){
+    if(p<=bounds[i]) return +values[Math.min(i,values.length-1)]||0;
+  }
+  return +values[Math.min(bounds.length,values.length-1)]||0;
+}`
+      );
+    });
+
+    it('getMyntraComm is unchanged (tests/calc/myntra-commission.test.js)', () => {
+      expect(HTML).toContain(
+        `function getMyntraComm(cat,sp){
+  const slabs=COMM_MODE==='slab'?COMM_SLAB_ONLY:COMM_MYNTRA[cat];
+  if(!slabs||!slabs.length)return 18.88;
+  for(let i=0;i<SLABS.length;i++){
+    if(sp>=SLABS[i].min&&sp<SLABS[i].max)return +slabs[Math.min(i,slabs.length-1)];
+  }
+  return +slabs[slabs.length-1];
+}`
       );
     });
   });
 
   describe('inline lookup tables', () => {
-    it('SLABS is unchanged (tests/calc/myntra-commission.test.js)', () => {
+    it('SLABS derivation is unchanged (tests/calc/myntra-commission.test.js)', () => {
+      expect(HTML).toContain('let COMM_SLABS=[300,500,1000,2000];');
       expect(HTML).toContain(
-        "const SLABS=[{label:'0–300',min:0,max:300},{label:'300–500',min:300,max:500},{label:'500–1000',min:500,max:1000},{label:'1000–2000',min:1000,max:2000},{label:'2000+',min:2000,max:Infinity}];"
+        `function _slabsFromBounds(bounds){
+  const out=[];let prev=0;
+  bounds.forEach(b=>{out.push({label:\`\${prev}–\${b}\`,min:prev,max:b});prev=b;});
+  out.push({label:prev+'+',min:prev,max:Infinity});
+  return out;
+}`
       );
+      expect(HTML).toContain('let SLABS=_slabsFromBounds(COMM_SLABS);');
     });
 
     it('COMM_AMAZON is unchanged (tests/calc/calc-sku.test.js)', () => {
