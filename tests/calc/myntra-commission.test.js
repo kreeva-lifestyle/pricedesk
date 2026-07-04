@@ -1,32 +1,39 @@
 import { describe, it, expect } from 'vitest';
 
 // SYNC NOTE: The fixtures and function below mirror index.html.
-//   - SLABS:          index.html:2910
-//   - COMM_MYNTRA:    index.html:2915 (default values; user-editable
-//                     from the Commission page at runtime)
-//   - getMyntraComm:  index.html:2953
+//   - COMM_SLABS:       index.html:2976 (editable slab bounds)
+//   - _slabsFromBounds: index.html:2977
+//   - SLABS:            index.html:2983 (derived from COMM_SLABS)
+//   - COMM_MODE:        index.html:2986 ('level_slab' | 'slab')
+//   - COMM_SLAB_ONLY:   index.html:2987 (slab-only mode rates)
+//   - COMM_MYNTRA:      index.html:2993 (default values; user-editable
+//                       from the Commission page at runtime)
+//   - getMyntraComm:    index.html:3030
 // If you change any of these in index.html, update this file too or
 // these tests will silently pass while live behavior diverges.
 
-const SLABS = [
-  { label: '0–300',    min: 0,    max: 300 },
-  { label: '300–500',  min: 300,  max: 500 },
-  { label: '500–1000', min: 500,  max: 1000 },
-  { label: '1000–2000',min: 1000, max: 2000 },
-  { label: '2000+',    min: 2000, max: Infinity },
-];
+let COMM_SLABS = [300, 500, 1000, 2000];
+function _slabsFromBounds(bounds){
+  const out=[];let prev=0;
+  bounds.forEach(b=>{out.push({label:`${prev}–${b}`,min:prev,max:b});prev=b;});
+  out.push({label:prev+'+',min:prev,max:Infinity});
+  return out;
+}
+let SLABS = _slabsFromBounds(COMM_SLABS);
 
-// Test-controlled fixture (the real COMM_MYNTRA is user-editable;
+// Test-controlled fixtures (the real values are user-editable;
 // tests must not depend on whatever happens to be saved in prod).
 let COMM_MYNTRA;
+let COMM_MODE = 'level_slab';
+let COMM_SLAB_ONLY = [0, 0, 21.24, 17.70, 18.88];
 
-function getMyntraComm(cat, sp) {
-  const slabs = COMM_MYNTRA[cat];
-  if (!slabs) return 18.88;
-  for (let i = 0; i < SLABS.length; i++) {
-    if (sp >= SLABS[i].min && sp < SLABS[i].max) return slabs[i];
+function getMyntraComm(cat,sp){
+  const slabs=COMM_MODE==='slab'?COMM_SLAB_ONLY:COMM_MYNTRA[cat];
+  if(!slabs||!slabs.length)return 18.88;
+  for(let i=0;i<SLABS.length;i++){
+    if(sp>=SLABS[i].min&&sp<SLABS[i].max)return +slabs[Math.min(i,slabs.length-1)];
   }
-  return slabs[slabs.length - 1];
+  return +slabs[slabs.length-1];
 }
 
 describe('getMyntraComm — commission rate by category and seller price', () => {
@@ -123,6 +130,39 @@ describe('getMyntraComm — commission rate by category and seller price', () =>
     it('sp = -100 falls through to last slab rate (current behavior)', () => {
       COMM_MYNTRA = { Tops: [0, 0, 22.42, 21.24, 18.88] };
       expect(getMyntraComm('Tops', -100)).toBe(18.88);
+    });
+  });
+
+  describe('slab-only mode (COMM_MODE = "slab")', () => {
+    it('ignores the category and uses COMM_SLAB_ONLY rates', () => {
+      COMM_MODE = 'slab';
+      COMM_SLAB_ONLY = [1, 2, 3, 4, 5];
+      COMM_MYNTRA = { Tops: [9, 9, 9, 9, 9] };
+      expect(getMyntraComm('Tops', 350)).toBe(2);
+      expect(getMyntraComm('UnknownCategory', 350)).toBe(2);
+      expect(getMyntraComm('Tops', 5000)).toBe(5);
+      COMM_MODE = 'level_slab';
+    });
+
+    it('short rate arrays clamp to their last entry', () => {
+      COMM_MODE = 'slab';
+      COMM_SLAB_ONLY = [10, 20];
+      expect(getMyntraComm('Any', 5000)).toBe(20);
+      COMM_MODE = 'level_slab';
+    });
+  });
+
+  describe('editable slab bounds', () => {
+    it('derived SLABS follows changed COMM_SLABS bounds', () => {
+      const saved = { COMM_SLABS, SLABS };
+      COMM_SLABS = [500, 1500];
+      SLABS = _slabsFromBounds(COMM_SLABS);
+      COMM_MYNTRA = { Tops: [10, 20, 30] };
+      expect(SLABS.map(s => s.label)).toEqual(['0–500', '500–1500', '1500+']);
+      expect(getMyntraComm('Tops', 450)).toBe(10);
+      expect(getMyntraComm('Tops', 900)).toBe(20);
+      expect(getMyntraComm('Tops', 5000)).toBe(30);
+      COMM_SLABS = saved.COMM_SLABS; SLABS = saved.SLABS;
     });
   });
 });
