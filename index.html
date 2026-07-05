@@ -446,8 +446,11 @@ body:has(#login-screen.active){overflow:hidden}
   .filter-clear{width:100%;padding:9px;text-align:center}
   /* Hide the desktop-centric tip banner on phones to reclaim space */
   .sku-tip{display:none}
-  /* Show SKU cards, hide the wide table — except while inline-editing/adding */
-  .ss-wrap{display:none}
+  /* Show SKU cards, hide the wide table — except while inline-editing/adding.
+     Scoped to #page-skus so it does NOT hide the Archive table (a .ss table
+     with no card fallback) — that scoping bug made all archived SKUs invisible
+     on mobile even though the count/pagination showed them present. */
+  #page-skus .ss-wrap{display:none}
   #sku-cards{display:flex;flex-direction:column;gap:10px}
   #page-skus.editing .ss-wrap{display:block}
   #page-skus.editing #sku-cards{display:none}
@@ -457,10 +460,11 @@ body:has(#login-screen.active){overflow:hidden}
   .ss{min-width:1100px}
   .ss th,.ss td{padding:5px 6px;font-size:11px}
 
-  /* Hide Style ID (col 2), Brand (col 4), Tags (col 5) on mobile */
-  .ss th:nth-child(2),.ss td:nth-child(2){display:none}
-  .ss th:nth-child(4),.ss td:nth-child(4){display:none}
-  .ss th:nth-child(5),.ss td:nth-child(5){display:none}
+  /* Hide Style ID (col 2), Brand (col 4), Tags (col 5) on mobile — SKU table
+     only; the Archive table has different columns and scrolls to show them all */
+  #page-skus .ss th:nth-child(2),#page-skus .ss td:nth-child(2){display:none}
+  #page-skus .ss th:nth-child(4),#page-skus .ss td:nth-child(4){display:none}
+  #page-skus .ss th:nth-child(5),#page-skus .ss td:nth-child(5){display:none}
 
   /* Global search: compact on mobile */
   #global-search{width:130px!important;font-size:12px!important;padding:6px 10px 6px 26px!important}
@@ -689,7 +693,7 @@ body:has(#login-screen.active){overflow:hidden}
   .thr-row .flex{width:100%;justify-content:space-between}
 
   /* SKU table: hide more columns for very small screens */
-  .ss th:nth-child(8),.ss td:nth-child(8){display:none}
+  #page-skus .ss th:nth-child(8),#page-skus .ss td:nth-child(8){display:none}
   .ss{min-width:1000px}
 
   /* Page title */
@@ -3989,10 +3993,26 @@ function renderDashboardWidgets(){
   invalidateCalcCache();
   const loader=el('dash-loader');
   const dashContent=el('dash-content');
+  // While data is still loading, keep the loader up and repaint when it lands
+  // (mirrors renderSKUs) rather than flashing an empty dashboard.
+  if(!_dataReady){
+    if(loader) loader.style.display='';
+    if(dashContent) dashContent.style.display='none';
+    if(!_dashRenderRetry&&_dashRenderRetryCount<150){
+      _dashRenderRetryCount++;
+      _dashRenderRetry=setTimeout(()=>{_dashRenderRetry=null;renderDashboardWidgets();},400);
+    }
+    return;
+  }
+  if(_dashRenderRetry){clearTimeout(_dashRenderRetry);_dashRenderRetry=null;}
+  _dashRenderRetryCount=0;
   if(loader) loader.style.display='none';
   if(dashContent) dashContent.style.display='';
-  if(!skuDB.length) return;
   const activeSKUs=skuDB.filter(s=>!s.archived);
+  // "Total SKUs" stat (active count). Previously written only by renderSKUs, so
+  // it read 0 on the dashboard until the SKUs page was opened.
+  el('dash-sku')&&(el('dash-sku').textContent=activeSKUs.length);
+  if(!skuDB.length) return;
   if(!activeSKUs.length) return;
   // Exclude ignored threshold SKUs from all dashboard metrics
   const countableSKUs=activeSKUs.filter(s=>!s.ignoreThreshold);
@@ -4541,6 +4561,10 @@ function switchSKUTab(tab, mp){
 let _dataReady=false;
 let _skuRenderRetry=null;
 let _skuRenderRetryCount=0; // capped so a permanently failed load can't poll forever
+// Same self-healing pattern for the dashboard + archive renders: if they run
+// before the data load finishes, keep the loading state and repaint when ready.
+let _dashRenderRetry=null, _dashRenderRetryCount=0;
+let _archiveRenderRetry=null, _archiveRenderRetryCount=0;
 // Debounced render for type-ahead filters — a keystroke must not trigger a
 // full filter+calc pass on every character
 let _skuSearchTimer=null;
@@ -5123,6 +5147,19 @@ async function unarchiveSKU(id){
 
 let _archivePage=1;
 function renderArchivedSKUs(){
+  // Self-heal if the archive is opened before the data load finishes, so the
+  // list fills in when SKUs arrive instead of showing an empty page.
+  if(!_dataReady){
+    const b=el('archive-body');
+    if(b) b.innerHTML=`<tr><td colspan="10" style="text-align:center;padding:28px;color:var(--tx3)"><div style="animation:pulse 1.5s infinite">Loading archived SKUs…</div></td></tr>`;
+    if(!_archiveRenderRetry&&_archiveRenderRetryCount<150){
+      _archiveRenderRetryCount++;
+      _archiveRenderRetry=setTimeout(()=>{_archiveRenderRetry=null;renderArchivedSKUs();},400);
+    }
+    return;
+  }
+  if(_archiveRenderRetry){clearTimeout(_archiveRenderRetry);_archiveRenderRetry=null;}
+  _archiveRenderRetryCount=0;
   invalidateCalcCache();
   const q=(el('archive-search')?.value||'').toLowerCase();
   const archived=skuDB.filter(s=>s.archived&&(!q||s.styleId?.toLowerCase().includes(q)||(s.sku||'').toLowerCase().includes(q)));
@@ -9510,6 +9547,7 @@ async function handleRealtimeUpdate(key, newValue){
   if(type==='skus'||type==='brands'){
     invalidateCalcCache();
     if(activePage==='skus') renderSKUs();
+    if(activePage==='archive') renderArchivedSKUs();
     if(activePage==='dashboard'){renderBrandSummary();renderDashboardWidgets();updateAlerts();}
     if(activePage==='thresholds'){renderBreachList?.();}
   }
