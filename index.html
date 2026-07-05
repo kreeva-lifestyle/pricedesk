@@ -8693,8 +8693,10 @@ function runBugDetector(){
       const varsBefore = new Set(rows.slice(0,idx).map(r=>r.var).filter(Boolean));
       // Add input keys
       Object.keys(inputs).forEach(k => varsBefore.add(k));
-      // Extract variable names from expr
-      const refs = (row.expr.match(/\b[a-z][a-zA-Z0-9_]*\b/g)||[])
+      // Extract variable names from expr — strip property accesses first so
+      // method names like the "ceil" in Math.ceil() don't read as variables
+      const bareExpr = row.expr.replace(/\.\s*[A-Za-z_$][\w$]*/g, '');
+      const refs = (bareExpr.match(/\b[a-z][a-zA-Z0-9_]*\b/g)||[])
         .filter(v => !['Math','true','false','null','undefined','return','if','else'].includes(v))
         .filter(v => isNaN(v));
       refs.forEach(ref => {
