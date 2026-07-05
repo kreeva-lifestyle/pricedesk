@@ -2492,6 +2492,38 @@ async function dbLoadAllCommissions(){
 // ── Audit log table operations (append-only, replaces capped JSONB array) ──
 let _useAuditTable=false;
 
+// Retry an Edge Function write a few times before giving up, so a transient
+// blip (cold start, momentary 5xx/network) no longer silently drops an
+// audit or history record. Throws after the final attempt.
+async function _edgeWriteWithRetry(fnName, payload, attempts=3){
+  let lastErr;
+  for(let i=0;i<attempts;i++){
+    try{
+      const resp=await fetch(`${SUPABASE_URL}/functions/v1/${fnName}`,{
+        method:'POST',
+        headers:{
+          'Authorization':`Bearer ${SUPABASE_ANON}`,
+          'apikey':SUPABASE_ANON,
+          'Content-Type':'application/json',
+        },
+        body:JSON.stringify(payload),
+      });
+      if(resp.ok) return;
+      const err=await resp.json().catch(()=>({error:`HTTP ${resp.status}`}));
+      const msg=err.error||err.message||`HTTP ${resp.status}`;
+      // 4xx = malformed request; retrying won't help, so stop immediately.
+      // Only transient 5xx / network errors are worth retrying.
+      if(resp.status>=400&&resp.status<500){ const e=new Error(msg); e._noRetry=true; throw e; }
+      throw new Error(msg);
+    }catch(e){
+      lastErr=e;
+      if(e._noRetry) break;
+      if(i<attempts-1) await new Promise(r=>setTimeout(r,400*Math.pow(2,i)));
+    }
+  }
+  throw lastErr;
+}
+
 async function dbInsertAudit(entry){
   // Audit inserts go through the audit-log-write Edge Function (service-role
   // INSERT). Anon clients cannot write to pd_audit_log directly anymore — the
@@ -2499,28 +2531,16 @@ async function dbInsertAudit(entry){
   // sizes, and uses the database's NOW() for the timestamp (so a client
   // can't backdate or futuredate an audit row).
   try{
-    const resp=await fetch(`${SUPABASE_URL}/functions/v1/audit-log-write`,{
-      method:'POST',
-      headers:{
-        'Authorization':`Bearer ${SUPABASE_ANON}`,
-        'apikey':SUPABASE_ANON,
-        'Content-Type':'application/json',
-      },
-      body:JSON.stringify({entry:{
-        user:entry.user||null,
-        userId:entry.userId||null,
-        action:entry.action,
-        details:entry.details||null,
-        extra:entry.extra||null,
-      }}),
-    });
-    if(!resp.ok){
-      const err=await resp.json().catch(()=>({error:`HTTP ${resp.status}`}));
-      throw new Error(err.error||err.message||`HTTP ${resp.status}`);
-    }
+    await _edgeWriteWithRetry('audit-log-write',{entry:{
+      user:entry.user||null,
+      userId:entry.userId||null,
+      action:entry.action,
+      details:entry.details||null,
+      extra:entry.extra||null,
+    }});
     _useAuditTable=true;
   }catch(e){
-    console.warn('Audit Edge Function failed:',e.message);
+    console.warn('Audit Edge Function failed after retries:',e.message);
     _useAuditTable=false;
   }
 }
@@ -2567,27 +2587,15 @@ async function dbInsertSkuHistory(skuId, field, oldVal, newVal, userName){
   // Like audit-log-write: anon can no longer INSERT directly. The Edge
   // Function validates field lengths and uses DB DEFAULT NOW() for ts.
   try{
-    const resp=await fetch(`${SUPABASE_URL}/functions/v1/sku-history-write`,{
-      method:'POST',
-      headers:{
-        'Authorization':`Bearer ${SUPABASE_ANON}`,
-        'apikey':SUPABASE_ANON,
-        'Content-Type':'application/json',
-      },
-      body:JSON.stringify({entry:{
-        sku_id:skuId, field,
-        old_val:String(oldVal??''),
-        new_val:String(newVal??''),
-        user_name:userName||null,
-      }}),
-    });
-    if(!resp.ok){
-      const err=await resp.json().catch(()=>({error:`HTTP ${resp.status}`}));
-      throw new Error(err.error||err.message||`HTTP ${resp.status}`);
-    }
+    await _edgeWriteWithRetry('sku-history-write',{entry:{
+      sku_id:skuId, field,
+      old_val:String(oldVal??''),
+      new_val:String(newVal??''),
+      user_name:userName||null,
+    }});
     _useSkuHistoryTable=true;
   }catch(e){
-    console.warn('SKU history Edge Function failed:',e.message);
+    console.warn('SKU history Edge Function failed after retries:',e.message);
     _useSkuHistoryTable=false;
   }
 }
@@ -6437,90 +6445,23 @@ function openForgotPassword(){
   overlay.innerHTML = `
     <div style="background:var(--s);border:1px solid var(--bd2);border-radius:12px;width:360px;padding:28px">
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Reset Password</div>
-      <div style="font-size:13px;color:var(--tx3);margin-bottom:20px">Enter your email address. We'll send you a password reset link.</div>
-      <div id="forgot-err" style="background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--re);margin-bottom:14px;display:none"></div>
-      <div id="forgot-ok" style="background:rgba(45,212,160,.08);border:1px solid rgba(45,212,160,.2);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--gr);margin-bottom:14px;display:none"></div>
-      <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px">Email Address</label>
-      <input id="forgot-email" class="fi" type="email" placeholder="your@email.com" style="margin-bottom:16px" onkeydown="if(event.key==='Enter')doForgotPassword()">
+      <div style="font-size:13px;color:var(--tx3);margin-bottom:20px">Password resets are handled by your administrator. Contact them and they'll issue you a reset link or a new temporary password.</div>
       <div style="display:flex;gap:10px">
-        <button class="btn bg" style="flex:1" onclick="document.getElementById('forgot-overlay').remove()">Cancel</button>
-        <button class="btn bp" style="flex:1" onclick="doForgotPassword()">Send Reset Link</button>
+        <button class="btn bp" style="flex:1" onclick="document.getElementById('forgot-overlay').remove()">Got it</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  setTimeout(()=>document.getElementById('forgot-email')?.focus(), 100);
 }
 
 function generateResetToken(){
   return crypto.getRandomValues(new Uint8Array(16)).reduce((s,b)=>s+b.toString(16).padStart(2,'0'),'');
 }
 
-async function doForgotPassword(){
-  const email = document.getElementById('forgot-email')?.value.trim().toLowerCase();
-  const errEl = document.getElementById('forgot-err');
-  const okEl  = document.getElementById('forgot-ok');
-  if(!email||!email.includes('@')){
-    if(errEl){errEl.textContent='Enter a valid email address.';errEl.style.display='block';}
-    return;
-  }
-  const genericMsg = 'If an account exists with that email, a password reset link has been sent.';
-  const baseUrl = window.location.origin + window.location.pathname;
-
-  // Try server-side reset first
-  try{
-    const resp=await fetch(`${SUPABASE_URL}/functions/v1/reset-password`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_ANON}`,'apikey':SUPABASE_ANON},
-      body:JSON.stringify({action:'request',email})
-    });
-    const data=await resp.json();
-    if(resp.ok&&data.token){
-      const resetLink = baseUrl + '?reset=' + data.token;
-      if(emailReady()&&data.userName){
-        sendEmail(EMAIL_CONFIG.templateReset,{
-          to_name:data.userName, to_email:data.userEmail||email,
-          reset_link:resetLink, login_url:baseUrl, reset_token:data.token
-        });
-        if(okEl){okEl.textContent='✓ Reset link sent to your email. Check your inbox.';okEl.style.display='block';}
-      } else {
-        if(okEl){okEl.innerHTML=`✓ Reset link:<br><a href="${esc(resetLink)}" style="color:var(--ac);word-break:break-all;font-size:11px">${esc(resetLink)}</a><br><span style="font-size:11px;color:var(--tx3)">Email not configured — copy this link manually.</span>`;okEl.style.display='block';}
-      }
-      if(errEl) errEl.style.display='none';
-      if(emailReady()) setTimeout(()=>document.getElementById('forgot-overlay')?.remove(), 8000);
-      return;
-    }
-    // Server returned ok but no token (user not found) — show generic
-    if(resp.ok){
-      if(okEl){okEl.textContent=genericMsg;okEl.style.display='block';}
-      if(errEl) errEl.style.display='none';
-      return;
-    }
-  }catch(e){/* Edge Function not available, fall back to client-side */}
-
-  // Fallback: client-side reset token handling
-  const user = users.find(u=>u.email.toLowerCase()===email);
-  if(!user){
-    if(okEl){okEl.textContent=genericMsg;okEl.style.display='block';}
-    if(errEl) errEl.style.display='none';
-    return;
-  }
-  const token = generateResetToken();
-  const tokens = await dbGet(DB_KEYS.reset_tokens) || {};
-  tokens[token] = { userId: user.id, email: user.email, expires: Date.now() + 30*60*1000 };
-  await dbSet(DB_KEYS.reset_tokens, tokens);
-  const resetLink = baseUrl + '?reset=' + token;
-  if(emailReady()){
-    sendEmail(EMAIL_CONFIG.templateReset,{
-      to_name: user.name, to_email: user.email,
-      reset_link: resetLink, login_url: baseUrl, reset_token: token
-    });
-    if(okEl){okEl.textContent='✓ Reset link sent to your email. Check your inbox.';okEl.style.display='block';}
-  } else {
-    if(okEl){okEl.innerHTML=`✓ Reset link:<br><a href="${esc(resetLink)}" style="color:var(--ac);word-break:break-all;font-size:11px">${esc(resetLink)}</a><br><span style="font-size:11px;color:var(--tx3)">Email not configured — copy this link manually.</span>`;okEl.style.display='block';}
-  }
-  if(errEl) errEl.style.display='none';
-  if(emailReady()) setTimeout(()=>document.getElementById('forgot-overlay')?.remove(), 8000);
-}
+// Self-service password reset was removed: with no out-of-band email
+// delivery, any reset link generated here would be shown directly to
+// whoever typed the email — an account-takeover vector on the public login
+// screen. Resets are now admin-mediated (User Access → Reset Password),
+// which generates a link the admin shares out-of-band.
 
 // ── Password Reset Page (shown when ?reset=TOKEN is in URL) ──
 function showResetPasswordPage(token){
