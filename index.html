@@ -107,6 +107,10 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .cb{padding:17px}
 /* GRIDS */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+/* Grid children default to min-width:auto, so a wide table inside a column
+   blows the 1fr track past the container instead of letting its own
+   overflow-x:auto engage (clipped the Collection Fee card on desktop). */
+.g2>*{min-width:0}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
 /* DASHBOARD DRAG-AND-DROP */
@@ -215,10 +219,35 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .sku-menu-item{padding:7px 14px;font-size:12px;cursor:pointer;color:var(--tx2);transition:background .1s}
 .sku-menu-item:hover{background:var(--s2);color:var(--tx)}
 /* THRESHOLD */
-.thr-row{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--bd)}
+.thr-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--bd)}
 .thr-row:last-child{border-bottom:none}
+.thr-cat{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.thr-count{font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(78,142,247,.12);color:var(--bl);white-space:nowrap}
+.thr-amt{display:flex;align-items:center;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;padding-left:9px;transition:border-color .15s}
+.thr-amt:focus-within{border-color:var(--ac)}
+.thr-amt .pfx{font-size:12px;color:var(--ac);font-family:var(--mono)}
+.thr-amt .thr-input{background:transparent;border:none;width:80px;padding:7px 9px}
+.thr-status{min-width:86px;display:inline-flex;justify-content:center}
 .thr-input{width:90px;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-family:var(--mono);padding:6px 10px;text-align:right;font-size:13px}
 .thr-input:focus{outline:none;border-color:var(--ac)}
+/* ── Settings polish: segmented mode controls + ghost row actions ── */
+.seg{display:inline-flex;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg-opt{position:relative;display:inline-flex;align-items:center;padding:5px 12px;border-radius:6px;font-size:12px;color:var(--tx3);cursor:pointer;user-select:none;white-space:nowrap;transition:background .15s,color .15s}
+.seg-opt input{position:absolute;opacity:0;pointer-events:none}
+.seg-opt:hover{color:var(--tx2)}
+.seg-opt:has(input:checked){background:var(--s);color:var(--tx);box-shadow:inset 0 0 0 1px var(--bd2),0 1px 4px rgba(0,0,0,.35)}
+.row-del{background:transparent;border:1px solid transparent;color:var(--tx3);opacity:.5;border-radius:5px;padding:4px 7px;min-height:0;cursor:pointer;font-size:10px;display:inline-flex;align-items:center;justify-content:center;transition:opacity .15s,color .15s,border-color .15s,background .15s}
+.row-del:hover{opacity:1;color:var(--re);border-color:rgba(245,87,92,.4);background:rgba(245,87,92,.08)}
+.u-av{width:26px;height:26px;border-radius:50%;background:rgba(240,177,42,.15);color:var(--ac);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.comm-table tbody tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+.comm-table tbody tr:hover td{background:rgba(255,255,255,.035)}
+.ci:focus{outline:none;border-color:var(--ac)}
+#myn-pg{max-width:200px}
+@media(hover:hover){#users-table-body .btn{opacity:.7}#users-table-body tr:hover .btn{opacity:1}}
+.empty-state{text-align:center;padding:26px 16px;color:var(--tx3)}
+.empty-state .es-ic{opacity:.4;margin-bottom:8px}
+.empty-state .es-t{font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:2px}
+.empty-state .es-h{font-size:11px}
 /* FILTER BAR */
 .sku-mp-tab{padding:8px 18px;font-size:12px;font-weight:600;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
 .sku-mp-tab:hover{color:var(--tx)}
@@ -517,7 +546,7 @@ body:has(#login-screen.active){overflow:hidden}
   .ci{width:56px}
 
   /* Threshold rows */
-  .thr-row{gap:10px;flex-wrap:wrap}
+  .thr-row{gap:10px}
   .thr-input{width:80px}
 
   /* Modals: full-width sheet from bottom */
@@ -689,8 +718,10 @@ body:has(#login-screen.active){overflow:hidden}
   .ci{width:50px;padding:3px 5px}
 
   /* Threshold page: stack */
-  .thr-row{flex-direction:column;align-items:flex-start;gap:6px}
-  .thr-row .flex{width:100%;justify-content:space-between}
+  /* Category name spans the full first row; input + status align beneath */
+  .thr-row{grid-template-columns:1fr auto;row-gap:8px}
+  .thr-cat{grid-column:1/-1}
+  .thr-amt{justify-self:start}
 
   /* SKU table: hide more columns for very small screens */
   #page-skus .ss th:nth-child(8),#page-skus .ss td:nth-child(8){display:none}
@@ -1237,9 +1268,9 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
   </div>
   <div id="comm-myntra">
     <div class="success mb12">Myntra charges by <strong>category + seller price slab</strong>. Set the <strong>level</strong> per category for logistics, edit commission cells, and Save.</div>
-    <div class="fg" style="margin-bottom:10px"><label class="fl">Commission Mode</label><div class="flex gap12">
-      <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="commmode" value="level_slab" checked style="accent-color:var(--ac);margin-right:4px" onchange="setCommMode(this.value)"> Level + Slab (per category)</label>
-      <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="commmode" value="slab" style="accent-color:var(--ac);margin-right:4px" onchange="setCommMode(this.value)"> Slab only (same for all categories)</label>
+    <div class="fg" style="margin-bottom:10px"><label class="fl">Commission Mode</label><div class="seg">
+      <label class="seg-opt"><input type="radio" name="commmode" value="level_slab" checked onchange="setCommMode(this.value)"> Level + Slab (per category)</label>
+      <label class="seg-opt"><input type="radio" name="commmode" value="slab" onchange="setCommMode(this.value)"> Slab only (same for all categories)</label>
     </div></div>
     <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600" id="comm-myntra-title">Commission % — Category × Price Slab × Level</div><div class="flex gap8"><button class="btn bg bsm" onclick="openCommSlabModal()"><span class="ic-h" data-icon="edit" data-size="12"></span> Edit Slabs</button><button class="btn bg bsm" onclick="openAddCategoryModal()">+ Add Category</button><button class="btn bp bsm" onclick="saveComm()"><span class="ic-h" data-icon="check" data-size="13"></span> Save & Apply</button></div></div>
     <div style="padding:0;overflow-x:auto"><table class="comm-table" id="comm-myntra-table"></table></div></div>
@@ -1265,10 +1296,10 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
   </div>
   <div id="log-myntra"><div class="g2 mb16">
     <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="truck" data-size="15"></span> Forward (GT Charges)</div></div><div class="cb">
-      <div class="fg"><label class="fl">Mode</label><div class="flex gap12">
-        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="level" checked style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Level-based</label>
-        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Fixed</label>
-        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="cat" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Category-wise</label>
+      <div class="fg"><label class="fl">Mode</label><div class="seg">
+        <label class="seg-opt"><input type="radio" name="mfwd" value="level" checked onchange="logMode('mfwd',this.value)"> Level-based</label>
+        <label class="seg-opt"><input type="radio" name="mfwd" value="fixed" onchange="logMode('mfwd',this.value)"> Fixed</label>
+        <label class="seg-opt"><input type="radio" name="mfwd" value="cat" onchange="logMode('mfwd',this.value)"> Category-wise</label>
       </div></div>
       <div id="mfwd-level">
         <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:520px" id="gt-table">
@@ -1315,10 +1346,10 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
     </div></div>
 
     <div class="card" style="margin-top:16px"><div class="ch"><div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="return" data-size="15"></span> Return (Reverse Fees)</div></div><div class="cb">
-      <div class="fg"><label class="fl">Mode</label><div class="flex gap12">
-        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="level" checked style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Level-based</label>
-        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Fixed</label>
-        <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="cat" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Category-wise</label>
+      <div class="fg"><label class="fl">Mode</label><div class="seg">
+        <label class="seg-opt"><input type="radio" name="mret" value="level" checked onchange="logMode('mret',this.value)"> Level-based</label>
+        <label class="seg-opt"><input type="radio" name="mret" value="fixed" onchange="logMode('mret',this.value)"> Fixed</label>
+        <label class="seg-opt"><input type="radio" name="mret" value="cat" onchange="logMode('mret',this.value)"> Category-wise</label>
       </div></div>
       <div id="mret-level"><div style="overflow-x:auto"><table class="dt" style="font-size:12px" id="ret-table">
         <thead id="ret-table-head"></thead>
@@ -1700,7 +1731,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
       <div class="card mb16">
         <div class="ch">
           <div>
-            <div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="mail" data-size="15"></span> Email Settings</div>
+            <div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="mail" data-size="15"></span> Email Settings <span id="email-status-pill" class="bdg bi" style="display:none;margin-left:6px;vertical-align:middle"></span></div>
             <div class="st" style="margin-top:2px">Paste your keys from emailjs.com — no code editing needed</div>
           </div>
           <button class="btn bp bsm" onclick="saveEmailSettings()"><span class="ic-h" data-icon="check" data-size="13"></span> Save & Activate</button>
@@ -1765,6 +1796,10 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
           <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn bg bsm" onclick="exportData()"><span class="ic-h" data-icon="download" data-size="13"></span> Backup</button>
             <button class="btn bg bsm" onclick="importDataPrompt()"><span class="ic-h" data-icon="upload" data-size="13"></span> Restore</button>
+          </div>
+          <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(245,87,92,.25)">
+            <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--re);font-weight:700;margin-bottom:3px">Danger zone</div>
+            <div class="st" style="margin-bottom:9px">Irreversible — wipes SKUs, brands & settings.</div>
             <button class="btn br bsm" onclick="confirmClearData()" aria-label="Clear all data"><span class="ic-h" data-icon="x" data-size="12"></span> Clear All Data</button>
           </div>
         </div>
@@ -3666,7 +3701,7 @@ function buildCommMyntra(){
     const lvlOpts=LEVELS.map(l=>`<option${l===curLvl?' selected':''}>${l}</option>`).join('');
     const skuCount=skuDB.filter(s=>s.category===cat).length;
     const skuBadge=skuCount?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(78,142,247,.12);color:var(--bl)">${skuCount}</span>`:'';
-    h+=`<tr${slabOnly?' style="opacity:.45"':''}><td><div class="flex gap8">${esc(cat)} ${skuBadge} <button class="btn br bxs" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">${icon('x',{size:11})}</button></div></td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}"${slabOnly?' disabled title="Ignored in slab-only mode"':''} onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value||0;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
+    h+=`<tr${slabOnly?' style="opacity:.45"':''}><td><div class="flex gap8">${esc(cat)} ${skuBadge} <button class="row-del" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="margin-left:auto">${icon('x',{size:11})}</button></div></td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}"${slabOnly?' disabled title="Ignored in slab-only mode"':''} onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value||0;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 
@@ -3829,15 +3864,15 @@ function renderThresholds(){
     const breachedSKUs=skuDB.filter(s=>!s.archived&&s.category===cat&&!s.ignoreThreshold&&calcSKU(s).isBreach);
     const status=breachedSKUs.length?`<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(245,87,92,.12);color:var(--re)">${breachedSKUs.length} breach${breachedSKUs.length>1?'es':''}</span>`:`<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(45,212,160,.12);color:var(--gr)">✓ OK</span>`;
     return`<div class="thr-row">
-      <div style="flex:1">
+      <div class="thr-cat">
         <strong>${esc(cat)}</strong>
-        <div class="st" style="margin-top:2px">${skuDB.filter(s=>s.category===cat).length} SKUs</div>
+        <span class="thr-count">${skuDB.filter(s=>s.category===cat).length} SKUs</span>
       </div>
-      <div class="flex gap8" style="align-items:center">
-        <span style="font-size:13px;color:var(--ac)">₹</span>
+      <div class="thr-amt">
+        <span class="pfx">₹</span>
         <input class="thr-input" type="number" data-cat="${esc(cat)}" value="${THRESHOLDS[cat]||0}" min="0" oninput="THRESHOLDS['${escAttr(cat)}']=+this.value||0;updateAlerts();renderBreachList()">
       </div>
-      ${status}
+      <span class="thr-status">${status}</span>
     </div>`;
   }).join('');
   renderBreachList();
@@ -3945,12 +3980,12 @@ function renderBrands(){
           <div style="font-size:14px;font-weight:700">${esc(b.name)}</div>
           <div class="flex gap8" style="margin-top:5px;flex-wrap:wrap">
             <span class="tag ${mpTags[b.model]||'ta'}">${esc(b.marketplace)}</span>
-            <span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${esc(modelLabels[b.model])}</span>
+            ${modelLabels[b.model]!==b.marketplace?`<span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${esc(modelLabels[b.model])}</span>`:''}
           </div>
         </div>
         <div class="flex gap8">
           <button class="btn bg bxs" onclick="openBrandModal('${escAttr(b.id)}')" aria-label="Edit brand">${icon('edit',{size:13})}</button>
-          <button class="btn br bxs" onclick="deleteBrand('${escAttr(b.id)}')" aria-label="Delete brand">${icon('x',{size:13})}</button>
+          <button class="row-del" style="padding:6px 8px" onclick="deleteBrand('${escAttr(b.id)}')" aria-label="Delete brand">${icon('x',{size:13})}</button>
         </div>
       </div>
       ${b.commOverride!=null?`<div class="st mb8">${icon('lock',{size:12})} Commission override: <span class="mono" style="color:var(--ac)">${b.commOverride}%</span></div>`:'<div class="st mb8">Auto commission from settings</div>'}
@@ -5304,9 +5339,9 @@ function renderUsers(){
     const isRevoked=u.revoked;
     const revokedBadge=isRevoked?'<span style="font-size:10px;background:rgba(245,87,92,.15);color:var(--re);padding:1px 6px;border-radius:3px;margin-left:6px">REVOKED</span>':'';
     return`<tr${isRevoked?' style="opacity:.5"':''}>
-    <td><strong>${esc(u.name)}</strong>${revokedBadge}</td>
+    <td><div class="flex gap8"><span class="u-av">${esc((u.name||'?').trim().charAt(0).toUpperCase())}</span><strong>${esc(u.name)}</strong>${revokedBadge}</div></td>
     <td class="mono st">${esc(u.email)}</td>
-    <td><span class="bdg ${ROLE_COLORS[u.role]}">${esc(ROLE_LABELS[u.role])}</span></td>
+    <td><span class="bdg ${ROLE_COLORS[u.role]||'bi'}">${esc(ROLE_LABELS[u.role]||u.role||'—')}</span></td>
     <td class="st">${esc(u.added)}</td>
     <td><div class="flex gap8">
       <button class="btn bg bxs" onclick="openUserModal('${escAttr(u.id)}')" aria-label="Edit user">${icon('edit',{size:13})} Edit</button>
@@ -6640,8 +6675,10 @@ function loadConfig(){
 }
 
 function populateSettingsPage(){
-  // Read from EMAIL_CONFIG (already loaded from DB)
-  const set = (id, val) => { const e=el(id); if(e&&val) e.value=val; };
+  // Read from EMAIL_CONFIG (already loaded from DB).
+  // Skip the YOUR_* sentinels — filling them in made unconfigured fields look
+  // configured and hid the real placeholder hints.
+  const set = (id, val) => { const e=el(id); if(e&&val&&!/^YOUR_/.test(val)) e.value=val; };
   set('cfg-service-id',  EMAIL_CONFIG.serviceId);
   set('cfg-tpl-welcome', EMAIL_CONFIG.templateWelcome);
   set('cfg-tpl-reset',   EMAIL_CONFIG.templateReset);
@@ -6658,14 +6695,23 @@ function populateSettingsPage(){
     } catch(e){}
   }
   // Show email status
+  const emailActive = EMAIL_CONFIG.publicKey && EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY';
   const statusBox = el('email-cfg-status');
   if(statusBox){
     statusBox.style.display = '';
-    if(EMAIL_CONFIG.publicKey && EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY'){
+    if(emailActive){
       statusBox.innerHTML = '<div class="success" style="margin:0">✓ EmailJS keys loaded — emails are active. Fields are pre-filled above.</div>';
     } else {
       statusBox.innerHTML = '<div class="warn" style="margin:0">⚠ Not configured yet — paste your EmailJS keys above and click Save & Activate</div>';
     }
+  }
+  // Glanceable pill in the card header (same condition as the box above)
+  const pill = el('email-status-pill');
+  if(pill){
+    pill.style.display='';
+    pill.textContent = emailActive ? 'Active' : 'Not set up';
+    pill.style.background = emailActive ? 'rgba(45,212,160,.12)' : 'rgba(240,177,42,.12)';
+    pill.style.color = emailActive ? 'var(--gr)' : 'var(--ac)';
   }
   // Show Supabase status
   const sbBox = el('sb-cfg-status');
@@ -7496,7 +7542,7 @@ function renderGTTable(){
   if(thead) thead.innerHTML=_slabHeadHTML('Level',labels,true);
   tbody.innerHTML = LEVELS.map(lvl => {
     const vals = GT_DATA[lvl] = _normSlabArr(GT_DATA[lvl]||[0,1,0,0,0,0,0], n, 0);
-    return `<tr>${['<td><div class="flex gap8"><strong>'+esc(lvl)+`</strong><button class="btn br bxs" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">${icon('x',{size:11})}</button></div></td>`,
+    return `<tr>${['<td><div class="flex gap8"><strong>'+esc(lvl)+`</strong><button class="row-del" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="margin-left:auto">${icon('x',{size:11})}</button></div></td>`,
       ...vals.map((v,i) => `<td><input class="ci" style="width:58px;${i===n-1?'border-color:var(--ac)':''}"
         value="${v}" oninput="GT_DATA['${escAttr(lvl)}'][${i}]=+this.value||0;invalidateCalcCache()">`+'</td>')
     ].join('')}</tr>`;
@@ -9072,7 +9118,7 @@ function renderAuditLog(){
   const start=(_auditPage-1)*AUDIT_PAGE_SIZE;
   const page=filtered.slice(start,start+AUDIT_PAGE_SIZE);
 
-  if(!page.length){body.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--tx3);padding:20px">No activity recorded yet</td></tr>';
+  if(!page.length){body.innerHTML=`<tr><td colspan="4"><div class="empty-state"><div class="es-ic">${icon('history',{size:22})}</div><div class="es-t">No activity yet</div><div class="es-h">Edits, imports and logins will appear here</div></div></td></tr>`;
     const pg=el('audit-pagination');if(pg)pg.innerHTML='';return;}
 
   const actionLabels={sku_add:'SKU Added',sku_edit:'SKU Edited',sku_delete:'SKU Deleted',brand_add:'Brand Added',brand_edit:'Brand Edited',brand_delete:'Brand Deleted',bulk_import:'Bulk Import',user_add:'User Added',user_edit:'User Edited',user_revoke:'User Revoked',user_reinstate:'User Restored',commission:'Commission Saved',threshold:'Threshold Saved',login:'Login',tags_edit:'Tags Edited',image_set:'Image Set'};
@@ -9343,7 +9389,7 @@ function logBulkImport(fileName, addedCount, updatedCount, errorCount){
 
 function renderImportLog(){
   const body=el('import-log-body');if(!body)return;
-  if(!importLogData.length){body.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--tx3);padding:14px">No imports recorded yet</td></tr>';return;}
+  if(!importLogData.length){body.innerHTML=`<tr><td colspan="6"><div class="empty-state"><div class="es-ic">${icon('upload',{size:22})}</div><div class="es-t">No imports yet</div><div class="es-h">Bulk SKU imports will be logged here</div></div></td></tr>`;return;}
   body.innerHTML=importLogData.map(e=>{
     const d=new Date(e.ts);
     const when=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
