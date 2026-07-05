@@ -136,6 +136,22 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 /* TABLES */
 .dt{width:100%;border-collapse:collapse}
 .dt th{background:var(--s2);font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;padding:9px 13px;text-align:left;border-bottom:1px solid var(--bd);font-weight:600}
+/* Numeric columns read as an even grid only when right-aligned with
+   tabular figures — templates tag value cells/headers with .num */
+.dt th.num,.dt td.num{text-align:right}
+.dt td.num{font-variant-numeric:tabular-nums}
+/* Side-by-side Top/Bottom-5 tables: fixed layout so both twins share
+   identical column widths instead of sizing to their own content */
+.dt-five{table-layout:fixed}
+.dt-five th:nth-child(1){width:20%}
+.dt-five th:nth-child(2){width:24%}
+.dt-five th:nth-child(3){width:24%}
+.dt-five th:nth-child(4){width:15%}
+.dt-five th:nth-child(5){width:17%}
+.dt-five td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Input grids: center the fixed-width inputs in their cells so columns
+   don't show a ragged one-sided gap */
+.comm-table td:has(>.ci),.dt td:has(>.ci){text-align:center}
 .dt td{padding:9px 13px;font-size:12px;border-bottom:1px solid var(--bd)}
 .dt tr:last-child td{border-bottom:none}.dt tr:hover td{background:rgba(255,255,255,.015)}
 /* FORMS */
@@ -1107,7 +1123,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
       </div>
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600">Category Breakdown</div></div>
-        <div class="cb" style="padding:0;max-height:220px;overflow-y:auto"><table class="dt" style="font-size:12px"><thead><tr><th>Category</th><th>SKUs</th><th>Avg Profit</th><th>Min</th><th>Max</th></tr></thead><tbody id="dash-cat-split"></tbody></table></div>
+        <div class="cb" style="padding:0;max-height:220px;overflow-y:auto"><table class="dt" style="font-size:12px"><thead><tr><th>Category</th><th class="num">SKUs</th><th class="num">Avg Profit</th><th class="num">Min</th><th class="num">Max</th></tr></thead><tbody id="dash-cat-split"></tbody></table></div>
       </div>
     </div>
   </div>
@@ -1116,11 +1132,11 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
     <div class="g2 mb0">
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600;color:var(--gr)">Top 5 Most Profitable SKUs</div></div>
-        <div class="cb" style="padding:0"><table class="dt" style="font-size:12px"><thead><tr><th>SKU</th><th>Brand</th><th>Category</th><th>SP</th><th>Profit</th></tr></thead><tbody id="dash-top5"></tbody></table></div>
+        <div class="cb" style="padding:0"><table class="dt dt-five" style="font-size:12px"><thead><tr><th>SKU</th><th>Brand</th><th>Category</th><th class="num">SP</th><th class="num">Profit</th></tr></thead><tbody id="dash-top5"></tbody></table></div>
       </div>
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600;color:var(--re)">Bottom 5 Least Profitable SKUs</div></div>
-        <div class="cb" style="padding:0"><table class="dt" style="font-size:12px"><thead><tr><th>SKU</th><th>Brand</th><th>Category</th><th>SP</th><th>Profit</th></tr></thead><tbody id="dash-bottom5"></tbody></table></div>
+        <div class="cb" style="padding:0"><table class="dt dt-five" style="font-size:12px"><thead><tr><th>SKU</th><th>Brand</th><th>Category</th><th class="num">SP</th><th class="num">Profit</th></tr></thead><tbody id="dash-bottom5"></tbody></table></div>
       </div>
     </div>
   </div>
@@ -1128,7 +1144,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
   <div class="dash-block" data-dash-id="cat-profit">
     <div class="card mb0">
       <div class="ch"><div style="font-size:13px;font-weight:600">Category Profit Summary</div></div>
-      <div class="cb" style="padding:0;overflow-x:auto"><table class="dt" style="font-size:12px"><thead><tr><th>Category</th><th>SKUs</th><th>Avg Profit (₹)</th><th>Avg Margin %</th><th>Breaches</th><th>Health</th></tr></thead><tbody id="dash-cat-profit"></tbody></table></div>
+      <div class="cb" style="padding:0;overflow-x:auto"><table class="dt" style="font-size:12px"><thead><tr><th>Category</th><th class="num">SKUs</th><th class="num">Avg Profit (₹)</th><th class="num">Avg Margin %</th><th class="num">Breaches</th><th>Health</th></tr></thead><tbody id="dash-cat-profit"></tbody></table></div>
     </div>
   </div>
 
@@ -1144,7 +1160,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
   <div class="dash-block" data-dash-id="brand-summary">
     <div class="card mb0" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
       <div class="ch"><div style="font-size:13px;font-weight:600">Profit by Brand & Commission Model</div></div>
-      <table class="dt" style="min-width:600px"><thead><tr><th>Brand</th><th>Marketplace</th><th>Model</th><th>SKUs</th><th>Avg Commission</th><th>Avg Net Profit (₹)</th><th>Status</th></tr></thead><tbody id="brand-summary-body"></tbody></table>
+      <table class="dt" style="min-width:600px"><thead><tr><th>Brand</th><th>Marketplace</th><th>Model</th><th class="num">SKUs</th><th class="num">Avg Commission</th><th class="num">Avg Net Profit (₹)</th><th>Status</th></tr></thead><tbody id="brand-summary-body"></tbody></table>
     </div>
   </div>
 
@@ -1683,7 +1699,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
         <div class="ch"><div style="font-size:13px;font-weight:600">Bulk Import History</div></div>
         <div class="cb" style="padding:0;max-height:300px;overflow-y:auto">
           <table class="dt" style="font-size:12px">
-            <thead><tr><th>Date</th><th>By</th><th>File</th><th>Added</th><th>Updated</th><th>Errors</th></tr></thead>
+            <thead><tr><th>Date</th><th>By</th><th>File</th><th class="num">Added</th><th class="num">Updated</th><th class="num">Errors</th></tr></thead>
             <tbody id="import-log-body"></tbody>
           </table>
         </div>
@@ -3889,11 +3905,11 @@ function renderBreachList(){
   if(_breachPage>totalPages)_breachPage=totalPages;
   const startIdx=(_breachPage-1)*BREACH_PAGE_SIZE;
   const pageList=breached.slice(startIdx,startIdx+BREACH_PAGE_SIZE);
-  let h=`<table class="dt"><thead><tr><th>SKU</th><th>Category</th><th>Brand</th><th>Net Profit (₹)</th><th>Threshold (₹)</th><th></th></tr></thead><tbody>`;
+  let h=`<table class="dt"><thead><tr><th>SKU</th><th>Category</th><th>Brand</th><th class="num">Net Profit (₹)</th><th class="num">Threshold (₹)</th><th></th></tr></thead><tbody>`;
   h+=pageList.map(s=>{
     const c=calcSKU(s);
     const brand=brands.find(b=>b.id===s.brandId);
-    return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${esc(s.sku||s.styleId||'—')}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:4px 8px;white-space:nowrap">${icon('slash',{size:12})} Ignore</button></td></tr>`;
+    return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${esc(s.sku||s.styleId||'—')}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono num" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono num">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:4px 8px;white-space:nowrap">${icon('slash',{size:12})} Ignore</button></td></tr>`;
   }).join('');
   h+='</tbody></table>';
   if(totalPages>1){
@@ -4006,7 +4022,7 @@ function renderBrandSummary(){
   const modelLabels={'myntra':'Standard','ajio-ppmp':'PPMP','ajio-cc':'CC','amazon':'Fixed'};
   t.innerHTML=brands.map(b=>{
     const skus=skuDB.filter(s=>s.brandId===b.id&&!s.archived&&!s.ignoreThreshold);
-    if(!skus.length)return`<tr><td><strong>${esc(b.name)}</strong></td><td><span class="tag ${mpTags[b.model]||'ta'}">${esc(b.marketplace)}</span></td><td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${esc(modelLabels[b.model])}</span></td><td class="mono st">0</td><td>—</td><td>—</td><td><span class="tag bs">No SKUs</span></td></tr>`;
+    if(!skus.length)return`<tr><td><strong>${esc(b.name)}</strong></td><td><span class="tag ${mpTags[b.model]||'ta'}">${esc(b.marketplace)}</span></td><td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${esc(modelLabels[b.model])}</span></td><td class="mono st num">0</td><td class="num">—</td><td class="num">—</td><td><span class="tag bs">No SKUs</span></td></tr>`;
     const calcs=skus.map(s=>calcSKU(s));
     const avgComm=(calcs.reduce((a,c)=>a+c.comm,0)/calcs.length).toFixed(1);
     const avgProfit=(calcs.reduce((a,c)=>a+c.profitRs,0)/calcs.length).toFixed(0);
@@ -4015,9 +4031,9 @@ function renderBrandSummary(){
       <td><strong>${esc(b.name)}</strong></td>
       <td><span class="tag ${mpTags[b.model]||'ta'}">${esc(b.marketplace)}</span></td>
       <td><span class="bdg ${b.model==='ajio-ppmp'?'bppmp':b.model==='ajio-cc'?'bcc':'bi'}">${esc(modelLabels[b.model])}</span></td>
-      <td class="mono">${skus.length}</td>
-      <td class="mono">${avgComm}%</td>
-      <td class="mono" style="color:${parseFloat(avgProfit)>0?'var(--gr)':'var(--re)'}">₹${avgProfit}</td>
+      <td class="mono num">${skus.length}</td>
+      <td class="mono num">${avgComm}%</td>
+      <td class="mono num" style="color:${parseFloat(avgProfit)>0?'var(--gr)':'var(--re)'}">₹${avgProfit}</td>
       <td>${breached?`<span class="tag tr">⚠ ${breached} breach${breached>1?'es':''}</span>`:'<span class="tag tg">✓ Healthy</span>'}</td>
     </tr>`;
   }).join('');
@@ -4099,10 +4115,10 @@ function renderDashboardWidgets(){
       const avg=Math.round(d.profits.reduce((a,b)=>a+b,0)/d.count);
       return`<tr>
         <td style="font-weight:500">${esc(cat)}</td>
-        <td class="mono">${d.count}</td>
-        <td class="mono" style="color:${avg>=0?'var(--gr)':'var(--re)'}">₹${avg}</td>
-        <td class="mono" style="color:var(--re);font-size:11px">₹${Math.round(d.min)}</td>
-        <td class="mono" style="color:var(--gr);font-size:11px">₹${Math.round(d.max)}</td>
+        <td class="mono num">${d.count}</td>
+        <td class="mono num" style="color:${avg>=0?'var(--gr)':'var(--re)'}">₹${avg}</td>
+        <td class="mono num" style="color:var(--re);font-size:11px">₹${Math.round(d.min)}</td>
+        <td class="mono num" style="color:var(--gr);font-size:11px">₹${Math.round(d.max)}</td>
       </tr>`;
     }).join('')||'<tr><td colspan="5" class="st" style="text-align:center;padding:12px">No SKUs yet</td></tr>';
   }
@@ -4113,8 +4129,8 @@ function renderDashboardWidgets(){
     <td class="mono" style="font-size:11px;font-weight:600">${esc(s.sku||s.styleId||'—')}</td>
     <td style="font-size:11px">${esc(b.name)}</td>
     <td><span class="tag tb" style="font-size:9px">${esc(s.category)}</span></td>
-    <td class="mono" style="font-size:11px">₹${Math.round(c.sp)}</td>
-    <td class="mono" style="font-weight:600;color:${c.profitRs>=0?'var(--gr)':'var(--re)'}">₹${Math.round(c.profitRs)}</td>
+    <td class="mono num" style="font-size:11px">₹${Math.round(c.sp)}</td>
+    <td class="mono num" style="font-weight:600;color:${c.profitRs>=0?'var(--gr)':'var(--re)'}">₹${Math.round(c.profitRs)}</td>
   </tr>`;
   const top5El=el('dash-top5');
   if(top5El) top5El.innerHTML=sorted.slice(0,5).map(renderProfitRow).join('')||'<tr><td colspan="5" class="st" style="text-align:center;padding:12px">—</td></tr>';
@@ -4139,10 +4155,10 @@ function renderDashboardWidgets(){
       const barColor=healthPct>=80?'var(--gr)':healthPct>=50?'var(--ac)':'var(--re)';
       return`<tr>
         <td style="font-weight:600">${esc(cat)}</td>
-        <td class="mono">${d.count}</td>
-        <td class="mono" style="color:${avg>=0?'var(--gr)':'var(--re)'}">₹${avg}</td>
-        <td class="mono">${margin}%</td>
-        <td class="mono" style="color:${d.breaches?'var(--re)':'var(--tx3)'}">${d.breaches}</td>
+        <td class="mono num">${d.count}</td>
+        <td class="mono num" style="color:${avg>=0?'var(--gr)':'var(--re)'}">₹${avg}</td>
+        <td class="mono num">${margin}%</td>
+        <td class="mono num" style="color:${d.breaches?'var(--re)':'var(--tx3)'}">${d.breaches}</td>
         <td><div style="display:flex;align-items:center;gap:6px">
           <div style="flex:1;height:6px;border-radius:3px;background:var(--s2);min-width:50px"><div style="width:${healthPct}%;height:100%;border-radius:3px;background:${barColor}"></div></div>
           <span class="mono" style="font-size:10px;color:${barColor}">${healthPct}%</span>
@@ -4237,16 +4253,16 @@ function renderPricingIntel(){
         <strong>Recommendation:</strong> ${aboveCandidates.length} SKU${aboveCandidates.length>1?'s':''} have Customer Paid just above ₹2,500 (18% GST). Reducing to ₹2,499 (5% GST) could increase total profit by <strong style="color:var(--gr)">+₹${Math.round(totalProfitGain).toLocaleString('en-IN')}</strong> and If Delivered by <strong style="color:var(--gr)">+₹${Math.round(totalIfdGain).toLocaleString('en-IN')}</strong>.
       </div>`;
       html+=`<div style="max-height:220px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;margin-bottom:12px"><table class="dt" style="font-size:11px">
-        <thead><tr><th>SKU</th><th>Category</th><th>Cust. Paid</th><th>Current Disc</th><th>Rec. Disc</th><th>Profit Change</th><th>If Delivered Change</th></tr></thead><tbody>`;
+        <thead><tr><th>SKU</th><th>Category</th><th class="num">Cust. Paid</th><th class="num">Current Disc</th><th class="num">Rec. Disc</th><th class="num">Profit Change</th><th class="num">If Delivered Change</th></tr></thead><tbody>`;
       rows.slice(0,20).forEach(r=>{
         html+=`<tr>
           <td class="mono" style="font-size:10px">${esc(r.s.sku||r.s.styleId)}</td>
           <td>${esc(r.s.category)}</td>
-          <td class="mono">₹${r.currentCP.toLocaleString('en-IN')} <span class="gst18">18%</span></td>
-          <td class="mono">${r.s.discount||0}%</td>
-          <td class="mono" style="color:var(--ac);font-weight:600">${r.neededDisc}%</td>
-          <td class="mono" style="color:${r.profitGain>=0?'var(--gr)':'var(--re)'};font-weight:600">${r.profitGain>=0?'+':''}₹${Math.round(r.profitGain)}</td>
-          <td class="mono" style="color:${r.ifdGain>=0?'var(--gr)':'var(--re)'}">${r.ifdGain>=0?'+':''}₹${Math.round(r.ifdGain)}</td>
+          <td class="mono num">₹${r.currentCP.toLocaleString('en-IN')} <span class="gst18">18%</span></td>
+          <td class="mono num">${r.s.discount||0}%</td>
+          <td class="mono num" style="color:var(--ac);font-weight:600">${r.neededDisc}%</td>
+          <td class="mono num" style="color:${r.profitGain>=0?'var(--gr)':'var(--re)'};font-weight:600">${r.profitGain>=0?'+':''}₹${Math.round(r.profitGain)}</td>
+          <td class="mono num" style="color:${r.ifdGain>=0?'var(--gr)':'var(--re)'}">${r.ifdGain>=0?'+':''}₹${Math.round(r.ifdGain)}</td>
         </tr>`;
       });
       html+=`</tbody></table></div>`;
@@ -4276,15 +4292,15 @@ function renderPricingIntel(){
         <strong>5% GST Advantage:</strong> ${belowCandidates.length} SKU${belowCandidates.length>1?'s':''} have Customer Paid in the ₹2,300–2,499 range (5% GST). Staying below ₹2,500 saves <strong style="color:var(--gr)">₹${Math.round(totalSaving).toLocaleString('en-IN')}</strong> in profit and <strong style="color:var(--gr)">₹${Math.round(totalIfdSaving).toLocaleString('en-IN')}</strong> in If Delivered vs crossing to 18% GST. <em>Monitor discount changes to avoid accidentally crossing the threshold.</em>
       </div>`;
       html+=`<div style="max-height:220px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;margin-bottom:12px"><table class="dt" style="font-size:11px">
-        <thead><tr><th>SKU</th><th>Category</th><th>Cust. Paid</th><th>GST</th><th>Profit Saved</th><th>If Delivered Saved</th></tr></thead><tbody>`;
+        <thead><tr><th>SKU</th><th>Category</th><th class="num">Cust. Paid</th><th class="num">GST</th><th class="num">Profit Saved</th><th class="num">If Delivered Saved</th></tr></thead><tbody>`;
       bRows.slice(0,20).forEach(r=>{
         html+=`<tr>
           <td class="mono" style="font-size:10px">${esc(r.s.sku||r.s.styleId)}</td>
           <td>${esc(r.s.category)}</td>
-          <td class="mono">₹${r.currentCP.toLocaleString('en-IN')} <span class="gst5">5%</span></td>
-          <td class="mono" style="color:var(--gr);font-weight:600">5% ✓</td>
-          <td class="mono" style="color:${r.profitSaving>=0?'var(--gr)':'var(--re)'};font-weight:600">${r.profitSaving>=0?'+':''}₹${Math.round(r.profitSaving)}</td>
-          <td class="mono" style="color:${r.ifdSaving>=0?'var(--gr)':'var(--re)'}">${r.ifdSaving>=0?'+':''}₹${Math.round(r.ifdSaving)}</td>
+          <td class="mono num">₹${r.currentCP.toLocaleString('en-IN')} <span class="gst5">5%</span></td>
+          <td class="mono num" style="color:var(--gr);font-weight:600">5% ✓</td>
+          <td class="mono num" style="color:${r.profitSaving>=0?'var(--gr)':'var(--re)'};font-weight:600">${r.profitSaving>=0?'+':''}₹${Math.round(r.profitSaving)}</td>
+          <td class="mono num" style="color:${r.ifdSaving>=0?'var(--gr)':'var(--re)'}">${r.ifdSaving>=0?'+':''}₹${Math.round(r.ifdSaving)}</td>
         </tr>`;
       });
       html+=`</tbody></table></div>`;
@@ -7569,7 +7585,7 @@ function renderRetTable(){
   const thead=el('ret-table-head');
   if(thead) thead.innerHTML=REV_SLABS.length
     ? _slabHeadHTML('Level',labels,true)
-    : `<tr><th>Level</th><th>Return Fee (₹)</th><th></th></tr>`;
+    : `<tr><th>Level</th><th>Return Fee (₹)</th><th>Half Rate</th></tr>`;
   tbody.innerHTML = LEVELS.map(lvl =>
     `<tr><td><strong>${esc(lvl)}</strong></td>${_retRowCells('REVERSE_FEES',lvl,REVERSE_FEES[lvl]??0,n)}</tr>`
   ).join('');
@@ -9397,9 +9413,9 @@ function renderImportLog(){
       <td class="mono st" style="font-size:11px;white-space:nowrap">${when}</td>
       <td style="font-weight:500">${esc(e.user)}</td>
       <td class="mono" style="font-size:11px">${esc(e.file)}</td>
-      <td style="color:var(--gr);font-weight:600">${e.added}</td>
-      <td style="color:var(--ac);font-weight:600">${e.updated}</td>
-      <td style="color:${e.errors?'var(--re)':'var(--tx3)'}">${e.errors}</td>
+      <td class="num" style="color:var(--gr);font-weight:600">${e.added}</td>
+      <td class="num" style="color:var(--ac);font-weight:600">${e.updated}</td>
+      <td class="num" style="color:${e.errors?'var(--re)':'var(--tx3)'}">${e.errors}</td>
     </tr>`;
   }).join('');
 }
