@@ -12,7 +12,7 @@
 - Legacy key-value: `app_data` (logistics, wireframe, users, sessions, etc.)
 - Realtime: per-row events on `pd_skus_v2`, `pd_brands`, `pd_categories`, `pd_commissions`, `pd_thresholds`; `pd_sync` carries notifications for the remaining `app_data` keys
 - Backups: `pd_backups` (7-day rolling, GitHub Actions cron at midnight IST)
-- Server-side auth: `login`, `reset-password` Edge Functions (service-role)
+- Server-side auth: `login`, `reset-password`, `webauthn` (passkeys) Edge Functions (service-role)
 - AI: `claude-chat` Edge Function
 - Bulk imports: `batch-import` Edge Function (atomic transactional upsert)
 - Deployment: GitHub Pages via GitHub Actions; `dist/index.html` is the built artifact
@@ -40,6 +40,7 @@
 ## Edge Functions
 - `login` — server-side password verification + rate limiting; client uses with anon JWT
 - `reset-password` — token request + reset (server-stored tokens)
+- `webauthn` — passkey (Face ID / fingerprint) registration + sign-in via `@simplewebauthn/server`; credentials live in `app_data` key `pd_passkeys`, pending challenges in `pd_webauthn_challenges` (5-min TTL); only this function writes either key; rpId is derived per allowed origin so passkeys are per-domain
 - `claude-chat` — proxies to Anthropic API (needs `ANTHROPIC_API_KEY` env)
 - `batch-import` — atomic bulk SKU upsert; called by `confirmImport` with fallback to legacy `_doSaveSKUs`
 
