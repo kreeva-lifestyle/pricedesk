@@ -1640,7 +1640,9 @@ function sanitizeExpr(expr){
   if(!expr) return '0';
   // Allow: numbers, decimals, operators, parens, commas, spaces, Math.*, known variable names
   // Block: assignment, function calls to non-Math, property access beyond Math, semicolons, brackets
-  const blocked = /[;{}\[\]\\`]|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\b)/;
+  // Denylist: brackets/backtick, bare assignment (but NOT ==, ===, !=, >=,
+  // <=, =>), and any reachable global that could exfiltrate or mutate state.
+  const blocked = /[;{}\[\]\\`]|((^|[^=!<>])=([^=>]|$))|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|location|localStorage|sessionStorage|history|navigator|top|parent|open|Object|Reflect|Proxy|crypto|indexedDB|caches|postMessage|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\b)/;
   if(blocked.test(expr)){
     console.warn('Blocked unsafe expression:', expr);
     return '0';
@@ -2022,8 +2024,17 @@ function _rowToSku(r){
 }
 
 // Upsert one or more SKUs (atomic per-row)
+// Collision-resistant SKU id — Date.now() alone repeats across tabs in the
+// same millisecond, and upsert(onConflict:'id') would then overwrite one SKU
+function _genSkuId(){
+  return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+}
+
 async function dbSaveSKU(...skus){
   const db=getDB();if(!db)throw new Error('No DB');
+  // Defensive: if the per-row table isn't in use (e.g. pd_skus_v2 missing),
+  // fall through to the whole-blob save so archive/tag/add still persist
+  if(!_useSkuTable){ await _doSaveSKUs(); return; }
   _lastWriteTs=Date.now();
   updateSyncBadge(false);
   const rows=skus.map(_skuToRow);
@@ -2037,6 +2048,9 @@ async function dbSaveSKU(...skus){
 // Delete one SKU by ID (atomic)
 async function dbDeleteSKU(id){
   const db=getDB();if(!db)throw new Error('No DB');
+  // Defensive: blob mode has no per-row delete — the caller has already
+  // removed the SKU from skuDB, so persist the whole blob instead
+  if(!_useSkuTable){ await _doSaveSKUs(); return; }
   _lastWriteTs=Date.now();
   updateSyncBadge(false);
   const{error}=await db.from('pd_skus_v2').delete().eq('id',id);
@@ -3149,7 +3163,18 @@ function calcSKU(s){
   const cached = _calcCache.get(cacheKey);
   if(cached) return cached;
 
-  const brand=brands.find(b=>b.id===s.brandId)||{model:'myntra',commOverride:null};
+  const realBrand=brands.find(b=>b.id===s.brandId);
+  // A dangling brandId (brand deleted in another tab, or legacy data) would
+  // otherwise be silently repriced as Myntra-zero-commission. Warn once so
+  // it's diagnosable rather than a silent wrong number.
+  if(!realBrand&&s.brandId){
+    if(!calcSKU._warnedBrands) calcSKU._warnedBrands=new Set();
+    if(!calcSKU._warnedBrands.has(s.brandId)){
+      calcSKU._warnedBrands.add(s.brandId);
+      console.warn(`SKU ${s.sku||s.id} references missing brand ${s.brandId} — priced as Myntra fallback`);
+    }
+  }
+  const brand=realBrand||{model:'myntra',commOverride:null};
   const mp = brand.model || 'myntra';
   // Auto-derive level from category
   const level = CAT_LEVEL[s.category] || s.level || 'Level 2';
@@ -4060,7 +4085,20 @@ function saveBrand(eid){
   else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});audit('brand_add',`${name} added (${model})`);toast(`✓ ${name} added`,'green');}
   closeModal();renderBrands();populateFilters();renderSKUs();save('brands').catch(e=>toast('Brand save failed: '+e.message,'red'));
 }
-async function deleteBrand(id){const b=brands.find(x=>x.id===id);if(!confirm('Delete brand? SKUs assigned to this brand will still exist.'))return false;brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();if(_useBrandTable){await dbDeleteBrand(id);}else{await save('brands');}audit('brand_delete',`${b?.name||id} deleted`);toast('Brand deleted','red');return true;}
+async function deleteBrand(id){
+  const b=brands.find(x=>x.id===id);
+  // Block deletion while SKUs reference this brand — otherwise those SKUs
+  // keep a dangling brandId and calcSKU silently reprices them as Myntra
+  // (wrong model/commission). Mirrors the deleteLevel guard.
+  const refCount=skuDB.filter(s=>s.brandId===id).length;
+  if(refCount){
+    toast(`Cannot delete "${b?.name||id}" — ${refCount} SKU${refCount>1?'s':''} still assigned. Reassign or delete them first.`,'red');
+    return false;
+  }
+  if(!confirm(`Delete brand "${b?.name||id}"?`))return false;
+  brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();
+  if(_useBrandTable){await dbDeleteBrand(id);}else{await save('brands');}
+  audit('brand_delete',`${b?.name||id} deleted`);toast('Brand deleted','red');return true;}
 
 // ═══════════════════════════════════════════════════════
 // SKU SHEET
@@ -4529,18 +4567,28 @@ function saveNew(){
   // Create one SKU per selected brand
   let count=0;
   const newSKUs=[];
-  selectedBrands.forEach((brandId,i)=>{
-    const ts=Date.now()+i;
-    const s={id:'s'+ts,sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,ignoreThreshold:false,archived:false,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  selectedBrands.forEach((brandId)=>{
+    const s={id:_genSkuId(),sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,ignoreThreshold:false,archived:false,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
     skuDB.push(s);
     newSKUs.push(s);
     count++;
   });
   invalidateCalcCache();
   editId=null;renderSKUs();renderBrands();updateAlerts();
-  dbSaveSKU(...newSKUs).then(()=>toast(`✓ ${skuCode||sid||'SKU'} saved to database`,'green')).catch(e=>toast('Save failed: '+e.message,'red'));
-  audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
   toast(`✓ ${skuCode||sid||'SKU'} added — saving...`, 'green');
+  // Await the save and roll back the in-memory rows on failure, so a failed
+  // write never leaves phantom SKUs that vanish on the next reload
+  dbSaveSKU(...newSKUs)
+    .then(()=>{
+      audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
+      toast(`✓ ${skuCode||sid||'SKU'} saved to database`,'green');
+    })
+    .catch(e=>{
+      const ids=new Set(newSKUs.map(s=>s.id));
+      skuDB=skuDB.filter(s=>!ids.has(s.id));
+      invalidateCalcCache();renderSKUs();renderBrands();updateAlerts();
+      toast('Save failed — SKU not added: '+e.message,'red');
+    });
 }
 
 async function saveEdit(id){
@@ -5584,7 +5632,7 @@ function previewImport(input){
           if(!brand){errors.push(`Row ${i+2} (${skuCode}): Unknown brand "${bname}"`);return;}
           const validCat=CATS.includes(cat)?cat:CATS[0];
           const level=(brand.model==='myntra'&&CAT_LEVEL[validCat])?CAT_LEVEL[validCat]:'Level 2';
-          importRows.push({id:'s'+Date.now()+i+'_'+bi,sku:skuCode,styleId:sid||'',brandId:brand.id,category:validCat,level,cost,markup:mkp||0,discount:disc||0,ignoreThreshold:false,archived:false});
+          importRows.push({id:_genSkuId(),sku:skuCode,styleId:sid||'',brandId:brand.id,category:validCat,level,cost,markup:mkp||0,discount:disc||0,ignoreThreshold:false,archived:false});
           preview.push({sku:skuCode,sid,brand:brand.name,cat:validCat,cost,mkp,disc});
         });
       });
@@ -8377,24 +8425,56 @@ function addTagFromSuggestion(tag){
   }
 }
 
-function saveSkuTags(){
+// Keep the STOCK OUT tag and the archived flag in sync (CLAUDE.md: tag
+// auto-applied on archive, auto-removed on unarchive). Returns a snapshot
+// for rollback.
+function _syncStockOutArchive(s){
+  const prev={tags:[...(s.tags||[])],archived:!!s.archived};
+  const hasSO=(s.tags||[]).includes('STOCK OUT');
+  if(hasSO && !s.archived) s.archived=true;
+  else if(!hasSO && s.archived){
+    // removing STOCK OUT from an archived SKU un-archives it, matching reload
+    s.archived=false;
+  }
+  return prev;
+}
+
+async function saveSkuTags(){
   const s=skuDB.find(x=>x.id===_tagModalSkuId);if(!s)return;
+  const prevNote=s.note, prevTags=[...(s.tags||[])], prevArchived=!!s.archived, prevUpd=s.updatedAt;
   s.note=document.getElementById('sku-note')?.value.trim()||'';
   // Also grab any text left in the input that wasn't submitted
   const pending=document.getElementById('tag-new-input')?.value.replace(/,/g,'').trim();
   if(pending&&!_tagModalTags.includes(pending)) _tagModalTags.push(pending);
   s.tags=[..._tagModalTags];
   s.updatedAt=new Date().toISOString();
-  closeModal();dbSaveSKU(s).catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
-  audit('tags_edit',`${s.sku||s.styleId}: tags=[${s.tags.join(',')}]`);
-  toast('Tags saved','green');
+  _syncStockOutArchive(s);
+  closeModal();invalidateCalcCache();populateTagFilter();renderSKUs();
+  try{
+    await dbSaveSKU(s);
+    audit('tags_edit',`${s.sku||s.styleId}: tags=[${s.tags.join(',')}]`);
+    toast('Tags saved','green');
+  }catch(e){
+    s.note=prevNote;s.tags=prevTags;s.archived=prevArchived;s.updatedAt=prevUpd;
+    invalidateCalcCache();populateTagFilter();renderSKUs();
+    toast('Save failed — tags not saved: '+e.message,'red');
+  }
 }
 
-function removeTagFromSku(skuId,tag){
+async function removeTagFromSku(skuId,tag){
   const s=skuDB.find(x=>x.id===skuId);if(!s||!s.tags)return;
+  const prevTags=[...s.tags], prevArchived=!!s.archived, prevUpd=s.updatedAt;
   s.tags=s.tags.filter(t=>t!==tag);
   s.updatedAt=new Date().toISOString();
-  dbSaveSKU(s).catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
+  _syncStockOutArchive(s);
+  invalidateCalcCache();populateTagFilter();renderSKUs();
+  try{
+    await dbSaveSKU(s);
+  }catch(e){
+    s.tags=prevTags;s.archived=prevArchived;s.updatedAt=prevUpd;
+    invalidateCalcCache();populateTagFilter();renderSKUs();
+    toast('Save failed — tag not removed: '+e.message,'red');
+  }
 }
 
 // ═══════════════════════════════════════════════════════
