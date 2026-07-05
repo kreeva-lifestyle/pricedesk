@@ -559,6 +559,18 @@ body:has(#login-screen.active){overflow:hidden}
   .af-chip{flex-shrink:0}
 }
 
+/* Tablet: desktop layout stays (sidebar visible, SKU table, inline edit,
+   centered modals) but with fewer columns and comfier touch targets. */
+@media(min-width:769px) and (max-width:1024px){
+  .g4{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(2,1fr)}
+  .content{padding:18px 16px}
+  .btn{min-height:38px}
+  .bsm{min-height:34px}
+  .nav-item{padding:10px 16px;font-size:13.5px}
+  .tab,.sku-mp-tab{padding:9px 14px}
+  .settings-hub{grid-template-columns:repeat(2,1fr)}
+}
 @media(max-width:480px){
   .g4{grid-template-columns:repeat(2,1fr);gap:8px}
   .g3{grid-template-columns:1fr;gap:10px}
@@ -4649,10 +4661,11 @@ function toggleSkuMenuCard(event,id){
   hideSkuMenus();
   if(!wasOpen&&menu){
     const rect=event.currentTarget.getBoundingClientRect();
-    menu.style.top=Math.min(rect.bottom+2,window.innerHeight-180)+'px';
+    menu.style.top=(rect.bottom+2)+'px';
     menu.style.left=Math.max(8,rect.right-160)+'px';
     menu.style.right='auto';
     menu.style.display='block';
+    _clampFixed(menu);
   }
 }
 
@@ -4757,6 +4770,7 @@ function toggleBrandPicker(){
   p.style.left=r.left+'px';
   p.style.top=(r.bottom+4)+'px';
   p.style.display='';
+  _clampFixed(p);
 }
 // Close brand picker when clicking outside
 document.addEventListener('click',e=>{
@@ -4795,6 +4809,17 @@ function liveCalcRow(row){
 }
 
 function addRow(){ if(_isMobile()){ openSkuFormModal('new'); return; } editId='new';renderSKUs();setTimeout(()=>el('n-sku')?.focus(),50);}
+// Keep a fixed-positioned popup fully inside the viewport (both axes).
+function _clampFixed(elm,pad){
+  pad=pad||8;
+  const r=elm.getBoundingClientRect();
+  let top=r.top,left=r.left;
+  if(r.right>window.innerWidth-pad) left-=r.right-(window.innerWidth-pad);
+  if(r.bottom>window.innerHeight-pad) top=r.top-(r.bottom-(window.innerHeight-pad));
+  if(left<pad) left=pad;
+  if(top<pad) top=pad;
+  elm.style.left=left+'px';elm.style.top=top+'px';
+}
 function toggleSkuMenu(event,id){
   event.stopPropagation();
   const menu=document.getElementById('sku-menu-'+id);
@@ -4808,6 +4833,7 @@ function toggleSkuMenu(event,id){
     menu.style.left=Math.max(8,rect.right-140)+'px';
     menu.style.right='auto';
     menu.style.display='block';
+    _clampFixed(menu);
   }
 }
 function hideSkuMenus(){document.querySelectorAll('.sku-menu').forEach(m=>m.style.display='none');}
