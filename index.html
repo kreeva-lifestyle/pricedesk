@@ -31,6 +31,25 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .nav-item{display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;color:var(--tx2);font-size:13px;font-weight:500;transition:all .12s;border-left:3px solid transparent}
 .nav-item:hover{background:var(--s2);color:var(--tx)}
 .nav-item.active{background:var(--s2);color:var(--ac);border-left-color:var(--ac)}
+/* Settings hub */
+.settings-hub{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:22px}
+.shub-card{display:flex;align-items:center;gap:13px;background:var(--s);border:1px solid var(--bd2);border-radius:12px;padding:15px 16px;cursor:pointer;transition:border-color .15s,background .15s}
+.shub-card:hover{border-color:var(--ac);background:var(--s2)}
+.shub-card>.ic-h:first-child{color:var(--ac);flex-shrink:0}
+.shub-t{font-size:14px;font-weight:600;color:var(--tx)}
+.shub-d{font-size:11.5px;color:var(--tx3);margin-top:2px;line-height:1.4}
+.shub-card>div{flex:1;min-width:0}
+.shub-arrow{color:var(--tx3);transform:rotate(-90deg);flex-shrink:0}
+/* Mobile SKU form live preview */
+.skf-preview{margin-top:6px;background:var(--s2);border:1px solid var(--bd2);border-radius:10px;padding:12px 13px}
+.skf-hint{color:var(--tx3);font-size:12px;text-align:center;padding:6px}
+.skf-hero{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:10px;margin-bottom:10px;border-bottom:1px dashed var(--bd)}
+.skf-hero span{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);font-weight:600}
+.skf-hero b{font-family:var(--mono);font-size:22px;font-weight:700}
+.skf-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 14px}
+.skf-grid>div{display:flex;justify-content:space-between;align-items:baseline;font-size:12px}
+.skf-grid span{font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:var(--tx3)}
+.skf-grid b{font-family:var(--mono);font-weight:600;color:var(--tx)}
 .ni{width:16px;height:16px;text-align:center;font-size:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 .ni svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 /* Custom line-icon set (see ICONS/icon() in JS). Inherits currentColor. */
@@ -471,6 +490,31 @@ body:has(#login-screen.active){overflow:hidden}
   @keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
   .mbody{padding:16px}
   .mhdr{padding:14px 16px}
+  /* Calc breakdown modal: reflow the 3-col table into stacked rows */
+  .calc-table thead{display:none}
+  .calc-table tr{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;padding:9px 15px;border-bottom:1px solid var(--bd)}
+  .calc-table td{padding:0!important;font-size:13px!important}
+  .calc-table td:nth-child(1){flex:1;min-width:110px;color:var(--tx2)}
+  .calc-table td:nth-child(2){font-size:14px!important;font-weight:600;text-align:right!important}
+  .calc-table td:nth-child(3){flex-basis:100%;font-size:10px!important;color:var(--tx3);order:3;margin-top:1px}
+  .calc-table td:nth-child(3):empty{display:none}
+  .calc-table tr.calc-section td{flex-basis:100%;font-weight:700;font-size:11px!important;text-transform:uppercase;letter-spacing:.4px;color:var(--tx3)}
+  /* Dense config matrices: freeze the first (label) column so the header
+     category/level stays visible while scrolling the slab columns. */
+  .comm-table th:first-child,.comm-table td:first-child,
+  .dash-block .dt th:first-child,.dash-block .dt td:first-child,
+  #gt-table th:first-child,#gt-table td:first-child,
+  #gt-cat-table th:first-child,#gt-cat-table td:first-child,
+  #coll-table th:first-child,#coll-table td:first-child,
+  #ret-table th:first-child,#ret-table td:first-child,
+  #ret-cat-table th:first-child,#ret-cat-table td:first-child{
+    position:sticky;left:0;z-index:2;background:var(--s);box-shadow:1px 0 0 var(--bd2)}
+  .comm-table thead th:first-child,.dash-block .dt thead th:first-child,
+  #gt-table thead th:first-child,#gt-cat-table thead th:first-child,
+  #coll-table thead th:first-child,#ret-table thead th:first-child,
+  #ret-cat-table thead th:first-child{background:var(--s3);z-index:3}
+  /* smooth momentum scroll + a subtle right-edge cue that there's more */
+  .cb,.ss-wrap{-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
   /* Footer buttons clear the home indicator on bottom-sheet + fullscreen modals */
   .mfoot{padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
 
@@ -515,6 +559,18 @@ body:has(#login-screen.active){overflow:hidden}
   .af-chip{flex-shrink:0}
 }
 
+/* Tablet: desktop layout stays (sidebar visible, SKU table, inline edit,
+   centered modals) but with fewer columns and comfier touch targets. */
+@media(min-width:769px) and (max-width:1024px){
+  .g4{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(2,1fr)}
+  .content{padding:18px 16px}
+  .btn{min-height:38px}
+  .bsm{min-height:34px}
+  .nav-item{padding:10px 16px;font-size:13.5px}
+  .tab,.sku-mp-tab{padding:9px 14px}
+  .settings-hub{grid-template-columns:repeat(2,1fr)}
+}
 @media(max-width:480px){
   .g4{grid-template-columns:repeat(2,1fr);gap:8px}
   .g3{grid-template-columns:1fr;gap:10px}
@@ -897,22 +953,11 @@ body:has(#login-screen.active){overflow:hidden}
 <div class="sidebar" id="sidebar" style="display:none">
   <div class="logo"><div class="logo-text">PriceDesk</div><div class="logo-sub">Marketplace Pricing</div></div>
   <nav class="nav">
-    <div class="nav-sec">Main</div>
     <div class="nav-item active" data-page="dashboard" onclick="nav('dashboard')"><span class="ni"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span> Dashboard</div>
-    <div class="nav-item" data-page="pricing" onclick="nav('pricing')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span> Pricing Tables</div>
-    <div class="nav-item" data-page="thresholds" onclick="nav('thresholds')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Thresholds</div>
-    <div class="nav-sec">Configuration</div>
-    <div class="nav-item" data-page="brands" onclick="nav('brands')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span> Brands</div>
-    <div class="nav-item" data-page="commission" onclick="nav('commission')"><span class="ni"><svg viewBox="0 0 24 24"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span> Commission Settings</div>
-    <div class="nav-item" data-page="logistics" onclick="nav('logistics')"><span class="ni"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span> Logistics</div>
-    <div class="nav-sec">Products</div>
     <div class="nav-item" data-page="skus" onclick="nav('skus')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span> SKUs</div>
+    <div class="nav-item" data-page="pricing" onclick="nav('pricing')"><span class="ni"><svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="8" y2="10.01"/><line x1="12" y1="10" x2="12" y2="10.01"/><line x1="16" y1="10" x2="16" y2="10.01"/><line x1="8" y1="14" x2="8" y2="14.01"/><line x1="12" y1="14" x2="12" y2="14.01"/><line x1="16" y1="14" x2="16" y2="14.01"/><line x1="8" y1="18" x2="16" y2="18"/></svg></span> Price Calculator</div>
     <div class="nav-item" data-page="archive" onclick="nav('archive')"><span class="ni"><svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg></span> Archive <span id="nav-archive-count" style="margin-left:auto;font-size:10px;font-weight:600;background:rgba(245,87,92,.15);color:var(--re);border-radius:10px;padding:1px 7px;min-width:20px;text-align:center;display:none"></span></div>
-    <div class="nav-sec">Admin</div>
-    <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span> Wireframe Builder</div>
-    <div class="nav-item" data-page="activity" onclick="nav('activity')"><span class="ni"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Activity Log</div>
-    <div class="nav-item" data-page="users" onclick="nav('users')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></span> User Access</div>
-    <div class="nav-item" data-page="settings" onclick="nav('settings')"><span class="ni"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span> App Settings</div>
+    <div class="nav-item" data-page="settings" onclick="nav('settings')"><span class="ni"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span> Settings</div>
   </nav>
   <div class="sb-btm">
     <div class="flex gap8" style="margin-bottom:10px"><div class="ava" id="sb-ava">A</div><div><div style="font-size:12px;color:var(--tx2)" id="sb-uname">Admin User</div><div style="font-size:10px;color:var(--tx3)" id="sb-role">Administrator</div></div></div>
@@ -926,6 +971,7 @@ body:has(#login-screen.active){overflow:hidden}
       <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">
         <span></span><span></span><span></span>
       </button>
+      <button id="page-back" onclick="nav('settings')" aria-label="Back to Settings" style="display:none;align-items:center;gap:4px;background:none;border:none;color:var(--ac);cursor:pointer;font-size:13px;font-weight:600;padding:4px 6px"><span class="ic-h" data-icon="arrowLeft" data-size="16"></span> Settings</button>
       <div class="pt" id="pageTitle">Dashboard</div>
     </div>
     <div class="flex gap12" style="align-items:center">
@@ -1589,6 +1635,17 @@ body:has(#login-screen.active){overflow:hidden}
 
 <!-- ═══ APP SETTINGS ═══ -->
 <div class="page" id="page-settings">
+  <!-- Settings hub: navigable sections consolidated from the old sidebar -->
+  <div class="settings-hub" id="settings-hub">
+    <div class="shub-card" onclick="nav('brands')"><span class="ic-h" data-icon="tag" data-size="20"></span><div><div class="shub-t">Brands</div><div class="shub-d">Marketplace brands & commission overrides</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('commission')"><span class="ic-h" data-icon="wallet" data-size="20"></span><div><div class="shub-t">Commissions</div><div class="shub-d">Rates by category × price slab</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('logistics')"><span class="ic-h" data-icon="truck" data-size="20"></span><div><div class="shub-t">Shipping & Fees</div><div class="shub-d">GT charges, returns & collection fees</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('thresholds')"><span class="ic-h" data-icon="alert" data-size="20"></span><div><div class="shub-t">Profit Alerts</div><div class="shub-d">Minimum-profit thresholds & email alerts</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('wireframe')"><span class="ic-h" data-icon="link" data-size="20"></span><div><div class="shub-t">Formula Builder</div><div class="shub-d">Edit the pricing calculation wireframe</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('activity')"><span class="ic-h" data-icon="history" data-size="20"></span><div><div class="shub-t">Activity</div><div class="shub-d">Audit log, SKU history & import log</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('users')"><span class="ic-h" data-icon="lock" data-size="20"></span><div><div class="shub-t">Users</div><div class="shub-d">Team members & access roles</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+  </div>
+  <div class="nav-sec" style="padding-left:2px;margin-bottom:8px">App configuration</div>
   <div class="g2">
     <div>
       <div class="card mb16">
@@ -4604,10 +4661,11 @@ function toggleSkuMenuCard(event,id){
   hideSkuMenus();
   if(!wasOpen&&menu){
     const rect=event.currentTarget.getBoundingClientRect();
-    menu.style.top=Math.min(rect.bottom+2,window.innerHeight-180)+'px';
+    menu.style.top=(rect.bottom+2)+'px';
     menu.style.left=Math.max(8,rect.right-160)+'px';
     menu.style.right='auto';
     menu.style.display='block';
+    _clampFixed(menu);
   }
 }
 
@@ -4712,6 +4770,7 @@ function toggleBrandPicker(){
   p.style.left=r.left+'px';
   p.style.top=(r.bottom+4)+'px';
   p.style.display='';
+  _clampFixed(p);
 }
 // Close brand picker when clicking outside
 document.addEventListener('click',e=>{
@@ -4749,7 +4808,18 @@ function liveCalcRow(row){
   else if(gsDisp){gsDisp.innerHTML='—';gsDisp.classList.add('na');}
 }
 
-function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sku')?.focus(),50);}
+function addRow(){ if(_isMobile()){ openSkuFormModal('new'); return; } editId='new';renderSKUs();setTimeout(()=>el('n-sku')?.focus(),50);}
+// Keep a fixed-positioned popup fully inside the viewport (both axes).
+function _clampFixed(elm,pad){
+  pad=pad||8;
+  const r=elm.getBoundingClientRect();
+  let top=r.top,left=r.left;
+  if(r.right>window.innerWidth-pad) left-=r.right-(window.innerWidth-pad);
+  if(r.bottom>window.innerHeight-pad) top=r.top-(r.bottom-(window.innerHeight-pad));
+  if(left<pad) left=pad;
+  if(top<pad) top=pad;
+  elm.style.left=left+'px';elm.style.top=top+'px';
+}
 function toggleSkuMenu(event,id){
   event.stopPropagation();
   const menu=document.getElementById('sku-menu-'+id);
@@ -4763,17 +4833,86 @@ function toggleSkuMenu(event,id){
     menu.style.left=Math.max(8,rect.right-140)+'px';
     menu.style.right='auto';
     menu.style.display='block';
+    _clampFixed(menu);
   }
 }
 function hideSkuMenus(){document.querySelectorAll('.sku-menu').forEach(m=>m.style.display='none');}
 document.addEventListener('click',hideSkuMenus);
 
+function _isMobile(){ return window.matchMedia('(max-width:768px)').matches; }
 function startEdit(id){
   const s=skuDB.find(x=>x.id===id);
   if(s&&s.archived){toast('Cannot edit archived SKU — restore it first','red');return;}
+  if(_isMobile()){ openSkuFormModal('edit',id); return; }
   editId=id;renderSKUs();setTimeout(()=>el('e-sid')?.focus(),50);
 }
 function cancelEdit(){editId=null;renderSKUs();}
+
+// Mobile edit/add: a bottom-sheet form reusing the SAME field ids and the
+// SAME saveEdit/saveNew handlers as the desktop inline editor (no calc/logic
+// change). The live preview only reads values through calcSKU for display.
+function openSkuFormModal(mode,id){
+  const isEdit=mode==='edit';
+  const s=isEdit?skuDB.find(x=>x.id===id):null;
+  if(isEdit&&!s) return;
+  const pre=isEdit?'e':'n';
+  const catOpts=CATS.map(c=>`<option ${isEdit&&c===s.category?'selected':''}>${esc(c)}</option>`).join('');
+  const brandBlock=isEdit
+    ? `<div class="fg"><label class="fl">Brand</label><select class="fi" id="e-brand" onchange="_skfPreview('edit')">${brands.map(b=>`<option value="${b.id}" ${b.id===s.brandId?'selected':''}>${esc(b.name)}</option>`).join('')}</select></div>`
+    : `<div class="fg"><label class="fl">Brands <span style="color:var(--tx3);font-weight:400">(one or more)</span></label><div style="max-height:150px;overflow-y:auto;border:1px solid var(--bd2);border-radius:8px;padding:6px">${brands.map(b=>`<label style="display:flex;align-items:center;gap:9px;padding:8px 6px;font-size:14px;cursor:pointer"><input type="checkbox" class="n-brand-chk" value="${b.id}" onchange="_skfPreview('new')" style="width:18px;height:18px;accent-color:var(--ac)">${esc(b.name)} <span style="color:var(--tx3);font-size:11px">${_MP_LABEL[b.model]||''}</span></label>`).join('')||'<div class="st" style="padding:8px">No brands yet — add one in Settings → Brands.</div>'}</div></div>`;
+  setModal(`<div class="mhdr"><div class="mtl">${icon(isEdit?'edit':'plus',{size:16})} ${isEdit?'Edit SKU':'Add SKU'}</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="frow">
+        <div class="fg"><label class="fl">SKU code${isEdit?'':' *'}</label><input class="fi" id="${pre}-sku" value="${isEdit?esc(s.sku||''):''}" placeholder="e.g. DRS143-XS"></div>
+        <div class="fg"><label class="fl">Style ID</label><input class="fi" id="${pre}-sid" value="${isEdit?esc(s.styleId||''):''}" placeholder="Myntra style ID"></div>
+      </div>
+      <div class="fg"><label class="fl">Category</label><select class="fi" id="${pre}-cat" onchange="_skfPreview('${mode}')">${catOpts}</select></div>
+      ${brandBlock}
+      <div class="frow" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="fg"><label class="fl">Cost ₹${isEdit?'':' *'}</label><input class="fi" id="${pre}-cost" type="number" inputmode="decimal" value="${isEdit?s.cost:''}" placeholder="₹" oninput="_skfPreview('${mode}')"></div>
+        <div class="fg"><label class="fl">Markup %${isEdit?'':' *'}</label><input class="fi" id="${pre}-mkp" type="number" inputmode="decimal" value="${isEdit?s.markup:''}" placeholder="%" oninput="_skfPreview('${mode}')"></div>
+        <div class="fg"><label class="fl">Discount %</label><input class="fi" id="${pre}-disc" type="number" inputmode="decimal" value="${isEdit?(s.discount||0):''}" placeholder="%" oninput="_skfPreview('${mode}')"></div>
+      </div>
+      <div id="skf-preview" class="skf-preview"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg" onclick="closeModal()">Cancel</button>
+      <button class="btn bp" onclick="${isEdit?`saveEdit('${escAttr(id)}')`:'saveNew()'}">${icon('check',{size:14})} ${isEdit?'Save changes':'Add SKU'}</button>
+    </div>`);
+  _skfPreview(mode);
+  setTimeout(()=>el(pre+'-'+(isEdit?'sku':'sku'))?.focus(),60);
+}
+// Live profit preview for the mobile SKU form — display only (calcSKU on a
+// throwaway object; does not touch stored data).
+function _skfPreview(mode){
+  const pre=mode==='edit'?'e':'n';
+  const cost=parseFloat(el(pre+'-cost')?.value)||0;
+  const mkp=parseFloat(el(pre+'-mkp')?.value)||0;
+  const disc=parseFloat(el(pre+'-disc')?.value)||0;
+  const cat=el(pre+'-cat')?.value||(CATS[0]||'Kurta Sets');
+  let brandId;
+  if(mode==='edit') brandId=el('e-brand')?.value;
+  else { const chk=document.querySelector('.n-brand-chk:checked'); brandId=chk?chk.value:(brands[0]&&brands[0].id); }
+  const box=el('skf-preview'); if(!box) return;
+  if(!cost||!mkp){ box.innerHTML='<div class="skf-hint">Enter cost & markup to preview profit</div>'; return; }
+  const tmp={id:'__skf_preview__',sku:'',styleId:'',brandId,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc};
+  invalidateCalcCache();
+  const c=calcSKU(tmp);
+  const brand=brands.find(b=>b.id===brandId);
+  const isMyn=brand&&brand.model==='myntra';
+  const pc=c.profitRs<0?'var(--re)':(c.isBreach?'var(--ac)':'var(--gr)');
+  const inr=n=>'₹'+Math.round(n).toLocaleString('en-IN');
+  box.innerHTML=`
+    <div class="skf-hero"><span>Net Profit</span><b style="color:${pc}">₹${c.profitRs.toFixed(0)}</b></div>
+    <div class="skf-grid">
+      <div><span>MRP</span><b>${inr(c.mrp)}</b></div>
+      <div><span>Seller</span><b style="color:var(--bl)">${inr(c.sp)}</b></div>
+      <div><span>Cust Paid</span><b>${inr(c.custPaid)}</b></div>
+      <div><span>If Delivered</span><b style="color:${c.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${c.ifDelivered.toFixed(0)}</b></div>
+      ${isMyn?`<div><span>Gross Sett.</span><b style="color:${c.grossSettlement>=0?'var(--bl)':'var(--re)'}">₹${c.grossSettlement.toFixed(0)}</b></div>`:''}
+    </div>`;
+  invalidateCalcCache();
+}
 
 
 function saveNew(){
@@ -4816,7 +4955,7 @@ function saveNew(){
     count++;
   });
   invalidateCalcCache();
-  editId=null;renderSKUs();renderBrands();updateAlerts();
+  editId=null;closeModal();renderSKUs();renderBrands();updateAlerts();
   toast(`${skuCode||sid||'SKU'} added — saving...`, 'green');
   // Await the save and roll back the in-memory rows on failure, so a failed
   // write never leaves phantom SKUs that vanish on the next reload
@@ -4866,7 +5005,7 @@ async function saveEdit(id){
     trackSkuSnapshot(id,beforeSnap,afterSnap);
   }
   invalidateCalcCache();
-  editId=null;renderSKUs();renderBrands();updateAlerts();
+  editId=null;closeModal();renderSKUs();renderBrands();updateAlerts();
   // Save the edited SKU — await to confirm persistence
   try{
     await dbSaveSKU(s);
@@ -5030,7 +5169,7 @@ function showCalcModal(skuId){
   for(const row of rows){
     if(row.hidden)continue;
     if(row.t==='section'){
-      tableHtml+=`<tr style="background:var(--s2)"><td colspan="3" style="font-weight:600;padding:8px 11px;font-size:12px">${esc(row.l)}</td></tr>`;
+      tableHtml+=`<tr class="calc-section" style="background:var(--s2)"><td colspan="3" style="font-weight:600;padding:8px 11px;font-size:12px">${esc(row.l)}</td></tr>`;
       continue;
     }
     const val=row.var?result[row.var]:null;
@@ -5058,7 +5197,7 @@ function showCalcModal(skuId){
         ${mp==='myntra'?`<span><strong>Level:</strong> ${esc(level)}</span>`:''}
         <span><strong>Marketplace:</strong> ${esc({'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'}[mp]||mp)}</span>
       </div>
-      <table style="width:100%;border-collapse:collapse">
+      <table class="calc-table" style="width:100%;border-collapse:collapse">
         <thead><tr style="background:var(--s3)">
           <th style="text-align:left;padding:8px 11px;font-size:11px">Row</th>
           <th style="text-align:right;padding:8px 11px;font-size:11px">Value</th>
@@ -5521,14 +5660,20 @@ function addWFPreset(preset){
 // ═══════════════════════════════════════════════════════
 // NAV & TABS
 // ═══════════════════════════════════════════════════════
-const TITLES={dashboard:'Dashboard',pricing:'Pricing Tables',thresholds:'Thresholds',brands:'Brands',commission:'Commission Settings',logistics:'Logistics Settings',skus:'SKUs',archive:'Archive',categories:'Categories',wireframe:'Wireframe Builder',activity:'Activity Log',users:'User Access',settings:'App Settings'};
+const TITLES={dashboard:'Dashboard',pricing:'Price Calculator',thresholds:'Profit Alerts',brands:'Brands',commission:'Commissions',logistics:'Shipping & Fees',skus:'SKUs',archive:'Archive',categories:'Categories',wireframe:'Formula Builder',activity:'Activity',users:'Users',settings:'Settings'};
+// Pages that now live under the Settings hub (no dedicated sidebar item).
+// When one is open, the Settings sidebar entry is highlighted.
+const SETTINGS_GROUP=new Set(['brands','commission','logistics','thresholds','wireframe','activity','users']);
 function nav(p){
   document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
-  const navEl=document.querySelector(`.nav-item[data-page="${p}"]`);
+  const navKey=SETTINGS_GROUP.has(p)?'settings':p;
+  const navEl=document.querySelector(`.nav-item[data-page="${navKey}"]`);
   if(navEl) navEl.classList.add('active');
   const pg=el('page-'+p);if(pg)pg.classList.add('active');
   el('pageTitle').textContent=TITLES[p]||p;
+  // Show "← Settings" back affordance on hub sub-pages
+  const backBtn=el('page-back'); if(backBtn) backBtn.style.display=SETTINGS_GROUP.has(p)?'inline-flex':'none';
   // Update URL hash for shareable links
   if(location.hash!=='#/'+p) history.pushState(null,TITLES[p]||p,'#/'+p);
   try{sessionStorage.setItem('pd_current_page',p);}catch(e){}
