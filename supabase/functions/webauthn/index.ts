@@ -16,7 +16,11 @@ import {
   generateRegistrationOptions,
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
-} from "npm:@simplewebauthn/server@10.0.1";
+// v11+ is required: this code reads registrationInfo.credential and passes
+// `credential:` to verifyAuthenticationResponse — v10 exposed those as
+// credentialID/credentialPublicKey and an `authenticator:` param instead,
+// which crashed register-verify with "Cannot read properties of undefined".
+} from "npm:@simplewebauthn/server@11.0.0";
 import {
   CHALLENGE_TTL_MS,
   cleanDeviceName,
