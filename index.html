@@ -40,6 +40,16 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .shub-d{font-size:11.5px;color:var(--tx3);margin-top:2px;line-height:1.4}
 .shub-card>div{flex:1;min-width:0}
 .shub-arrow{color:var(--tx3);transform:rotate(-90deg);flex-shrink:0}
+/* Mobile SKU form live preview */
+.skf-preview{margin-top:6px;background:var(--s2);border:1px solid var(--bd2);border-radius:10px;padding:12px 13px}
+.skf-hint{color:var(--tx3);font-size:12px;text-align:center;padding:6px}
+.skf-hero{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:10px;margin-bottom:10px;border-bottom:1px dashed var(--bd)}
+.skf-hero span{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);font-weight:600}
+.skf-hero b{font-family:var(--mono);font-size:22px;font-weight:700}
+.skf-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 14px}
+.skf-grid>div{display:flex;justify-content:space-between;align-items:baseline;font-size:12px}
+.skf-grid span{font-size:9px;text-transform:uppercase;letter-spacing:.3px;color:var(--tx3)}
+.skf-grid b{font-family:var(--mono);font-weight:600;color:var(--tx)}
 .ni{width:16px;height:16px;text-align:center;font-size:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 .ni svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 /* Custom line-icon set (see ICONS/icon() in JS). Inherits currentColor. */
@@ -4759,7 +4769,7 @@ function liveCalcRow(row){
   else if(gsDisp){gsDisp.innerHTML='—';gsDisp.classList.add('na');}
 }
 
-function addRow(){editId='new';renderSKUs();setTimeout(()=>el('n-sku')?.focus(),50);}
+function addRow(){ if(_isMobile()){ openSkuFormModal('new'); return; } editId='new';renderSKUs();setTimeout(()=>el('n-sku')?.focus(),50);}
 function toggleSkuMenu(event,id){
   event.stopPropagation();
   const menu=document.getElementById('sku-menu-'+id);
@@ -4778,12 +4788,80 @@ function toggleSkuMenu(event,id){
 function hideSkuMenus(){document.querySelectorAll('.sku-menu').forEach(m=>m.style.display='none');}
 document.addEventListener('click',hideSkuMenus);
 
+function _isMobile(){ return window.matchMedia('(max-width:768px)').matches; }
 function startEdit(id){
   const s=skuDB.find(x=>x.id===id);
   if(s&&s.archived){toast('Cannot edit archived SKU — restore it first','red');return;}
+  if(_isMobile()){ openSkuFormModal('edit',id); return; }
   editId=id;renderSKUs();setTimeout(()=>el('e-sid')?.focus(),50);
 }
 function cancelEdit(){editId=null;renderSKUs();}
+
+// Mobile edit/add: a bottom-sheet form reusing the SAME field ids and the
+// SAME saveEdit/saveNew handlers as the desktop inline editor (no calc/logic
+// change). The live preview only reads values through calcSKU for display.
+function openSkuFormModal(mode,id){
+  const isEdit=mode==='edit';
+  const s=isEdit?skuDB.find(x=>x.id===id):null;
+  if(isEdit&&!s) return;
+  const pre=isEdit?'e':'n';
+  const catOpts=CATS.map(c=>`<option ${isEdit&&c===s.category?'selected':''}>${esc(c)}</option>`).join('');
+  const brandBlock=isEdit
+    ? `<div class="fg"><label class="fl">Brand</label><select class="fi" id="e-brand" onchange="_skfPreview('edit')">${brands.map(b=>`<option value="${b.id}" ${b.id===s.brandId?'selected':''}>${esc(b.name)}</option>`).join('')}</select></div>`
+    : `<div class="fg"><label class="fl">Brands <span style="color:var(--tx3);font-weight:400">(one or more)</span></label><div style="max-height:150px;overflow-y:auto;border:1px solid var(--bd2);border-radius:8px;padding:6px">${brands.map(b=>`<label style="display:flex;align-items:center;gap:9px;padding:8px 6px;font-size:14px;cursor:pointer"><input type="checkbox" class="n-brand-chk" value="${b.id}" onchange="_skfPreview('new')" style="width:18px;height:18px;accent-color:var(--ac)">${esc(b.name)} <span style="color:var(--tx3);font-size:11px">${_MP_LABEL[b.model]||''}</span></label>`).join('')||'<div class="st" style="padding:8px">No brands yet — add one in Settings → Brands.</div>'}</div></div>`;
+  setModal(`<div class="mhdr"><div class="mtl">${icon(isEdit?'edit':'plus',{size:16})} ${isEdit?'Edit SKU':'Add SKU'}</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="frow">
+        <div class="fg"><label class="fl">SKU code${isEdit?'':' *'}</label><input class="fi" id="${pre}-sku" value="${isEdit?esc(s.sku||''):''}" placeholder="e.g. DRS143-XS"></div>
+        <div class="fg"><label class="fl">Style ID</label><input class="fi" id="${pre}-sid" value="${isEdit?esc(s.styleId||''):''}" placeholder="Myntra style ID"></div>
+      </div>
+      <div class="fg"><label class="fl">Category</label><select class="fi" id="${pre}-cat" onchange="_skfPreview('${mode}')">${catOpts}</select></div>
+      ${brandBlock}
+      <div class="frow" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="fg"><label class="fl">Cost ₹${isEdit?'':' *'}</label><input class="fi" id="${pre}-cost" type="number" inputmode="decimal" value="${isEdit?s.cost:''}" placeholder="₹" oninput="_skfPreview('${mode}')"></div>
+        <div class="fg"><label class="fl">Markup %${isEdit?'':' *'}</label><input class="fi" id="${pre}-mkp" type="number" inputmode="decimal" value="${isEdit?s.markup:''}" placeholder="%" oninput="_skfPreview('${mode}')"></div>
+        <div class="fg"><label class="fl">Discount %</label><input class="fi" id="${pre}-disc" type="number" inputmode="decimal" value="${isEdit?(s.discount||0):''}" placeholder="%" oninput="_skfPreview('${mode}')"></div>
+      </div>
+      <div id="skf-preview" class="skf-preview"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg" onclick="closeModal()">Cancel</button>
+      <button class="btn bp" onclick="${isEdit?`saveEdit('${escAttr(id)}')`:'saveNew()'}">${icon('check',{size:14})} ${isEdit?'Save changes':'Add SKU'}</button>
+    </div>`);
+  _skfPreview(mode);
+  setTimeout(()=>el(pre+'-'+(isEdit?'sku':'sku'))?.focus(),60);
+}
+// Live profit preview for the mobile SKU form — display only (calcSKU on a
+// throwaway object; does not touch stored data).
+function _skfPreview(mode){
+  const pre=mode==='edit'?'e':'n';
+  const cost=parseFloat(el(pre+'-cost')?.value)||0;
+  const mkp=parseFloat(el(pre+'-mkp')?.value)||0;
+  const disc=parseFloat(el(pre+'-disc')?.value)||0;
+  const cat=el(pre+'-cat')?.value||(CATS[0]||'Kurta Sets');
+  let brandId;
+  if(mode==='edit') brandId=el('e-brand')?.value;
+  else { const chk=document.querySelector('.n-brand-chk:checked'); brandId=chk?chk.value:(brands[0]&&brands[0].id); }
+  const box=el('skf-preview'); if(!box) return;
+  if(!cost||!mkp){ box.innerHTML='<div class="skf-hint">Enter cost & markup to preview profit</div>'; return; }
+  const tmp={id:'__skf_preview__',sku:'',styleId:'',brandId,category:cat,level:CAT_LEVEL[cat]||'Level 2',cost,markup:mkp,discount:disc};
+  invalidateCalcCache();
+  const c=calcSKU(tmp);
+  const brand=brands.find(b=>b.id===brandId);
+  const isMyn=brand&&brand.model==='myntra';
+  const pc=c.profitRs<0?'var(--re)':(c.isBreach?'var(--ac)':'var(--gr)');
+  const inr=n=>'₹'+Math.round(n).toLocaleString('en-IN');
+  box.innerHTML=`
+    <div class="skf-hero"><span>Net Profit</span><b style="color:${pc}">₹${c.profitRs.toFixed(0)}</b></div>
+    <div class="skf-grid">
+      <div><span>MRP</span><b>${inr(c.mrp)}</b></div>
+      <div><span>Seller</span><b style="color:var(--bl)">${inr(c.sp)}</b></div>
+      <div><span>Cust Paid</span><b>${inr(c.custPaid)}</b></div>
+      <div><span>If Delivered</span><b style="color:${c.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${c.ifDelivered.toFixed(0)}</b></div>
+      ${isMyn?`<div><span>Gross Sett.</span><b style="color:${c.grossSettlement>=0?'var(--bl)':'var(--re)'}">₹${c.grossSettlement.toFixed(0)}</b></div>`:''}
+    </div>`;
+  invalidateCalcCache();
+}
 
 
 function saveNew(){
@@ -4826,7 +4904,7 @@ function saveNew(){
     count++;
   });
   invalidateCalcCache();
-  editId=null;renderSKUs();renderBrands();updateAlerts();
+  editId=null;closeModal();renderSKUs();renderBrands();updateAlerts();
   toast(`${skuCode||sid||'SKU'} added — saving...`, 'green');
   // Await the save and roll back the in-memory rows on failure, so a failed
   // write never leaves phantom SKUs that vanish on the next reload
@@ -4876,7 +4954,7 @@ async function saveEdit(id){
     trackSkuSnapshot(id,beforeSnap,afterSnap);
   }
   invalidateCalcCache();
-  editId=null;renderSKUs();renderBrands();updateAlerts();
+  editId=null;closeModal();renderSKUs();renderBrands();updateAlerts();
   // Save the edited SKU — await to confirm persistence
   try{
     await dbSaveSKU(s);
