@@ -13,7 +13,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 function sanitizeExpr(expr) {
   if (!expr) return '0';
-  const blocked = /[;{}\[\]\\`]|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\b)/;
+  const blocked = /[;{}\[\]\\`]|((^|[^=!<>])=([^=>]|$))|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|location|localStorage|sessionStorage|history|navigator|top|parent|open|Object|Reflect|Proxy|crypto|indexedDB|caches|postMessage|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\b)/;
   if (blocked.test(expr)) {
     console.warn('Blocked unsafe expression:', expr);
     return '0';
@@ -159,11 +159,44 @@ describe('sanitizeExpr — blocks unsafe formula content', () => {
       ['try',                 'try foo'],
       ['catch',               'catch(e) e'],
       ['finally',             'finally bar'],
+      // Globals reachable with only dots/parens (denylist gaps closed)
+      ['location',            'location.href'],
+      ['localStorage',        'localStorage.clear()'],
+      ['sessionStorage',      'sessionStorage.x'],
+      ['history',             'history.back()'],
+      ['navigator',           'navigator.sendBeacon("/x", cost)'],
+      ['top',                 'top.location'],
+      ['parent',              'parent.postMessage(1)'],
+      ['open',                'open("http://evil")'],
+      ['Object',              'Object.assign(a, b)'],
+      ['Reflect',             'Reflect.get(a, "x")'],
+      ['Proxy',               'Proxy'],
+      ['crypto',              'crypto.subtle'],
+      ['indexedDB',           'indexedDB.open("x")'],
+      ['caches',              'caches.keys()'],
+      ['postMessage',         'postMessage(1)'],
+      // Assignment — mutating shared config objects via ctx references
+      ['bare assignment',        'LOGISTICS_SETTINGS.myn_pg_fee = 0'],
+      ['bare assignment tight',  'a=1'],
+      ['compound assignment',    'REVERSE_FEES.x += 5'],
     ])('blocks %s', (_label, expr) => {
       expect(sanitizeExpr(expr)).toBe('0');
     });
 
     spy.mockRestore();
+  });
+
+  describe('comparison/arrow operators are NOT mistaken for assignment', () => {
+    it.each([
+      ['>= comparison',  'sp >= 2500 ? 0.18 : 0.05'],
+      ['<= comparison',  'cost <= 100 ? 1 : 0'],
+      ['== equality',    '(a == b) * 1'],
+      ['=== strict',     '(a === b) * 1'],
+      ['!= inequality',  '(a != b) * 1'],
+      ['!== strict',     '(a !== b) * 1'],
+    ])('allows %s', (_label, expr) => {
+      expect(sanitizeExpr(expr)).toBe(expr);
+    });
   });
 });
 

@@ -164,7 +164,7 @@ describe('source drift detection — production strings must match test copies',
   describe('security-critical function: sanitizeExpr blocked-token regex', () => {
     it('blocked-token regex is unchanged (tests/calc/wf-engine.test.js)', () => {
       expect(HTML).toContain(
-        "const blocked = /[;{}\\[\\]\\\\`]|(\\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\\b)/;"
+        "const blocked = /[;{}\\[\\]\\\\`]|((^|[^=!<>])=([^=>]|$))|(\\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|location|localStorage|sessionStorage|history|navigator|top|parent|open|Object|Reflect|Proxy|crypto|indexedDB|caches|postMessage|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\\b)/;"
       );
     });
   });

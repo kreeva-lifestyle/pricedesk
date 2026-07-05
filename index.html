@@ -1640,7 +1640,9 @@ function sanitizeExpr(expr){
   if(!expr) return '0';
   // Allow: numbers, decimals, operators, parens, commas, spaces, Math.*, known variable names
   // Block: assignment, function calls to non-Math, property access beyond Math, semicolons, brackets
-  const blocked = /[;{}\[\]\\`]|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\b)/;
+  // Denylist: brackets/backtick, bare assignment (but NOT ==, ===, !=, >=,
+  // <=, =>), and any reachable global that could exfiltrate or mutate state.
+  const blocked = /[;{}\[\]\\`]|((^|[^=!<>])=([^=>]|$))|(\b(eval|Function|constructor|prototype|__proto__|import|require|fetch|XMLHttpRequest|document|window|globalThis|self|location|localStorage|sessionStorage|history|navigator|top|parent|open|Object|Reflect|Proxy|crypto|indexedDB|caches|postMessage|alert|prompt|confirm|setTimeout|setInterval|setImmediate|arguments|await|async|new|class|function|this|delete|void|typeof|instanceof|with|debugger|yield|throw|try|catch|finally)\b)/;
   if(blocked.test(expr)){
     console.warn('Blocked unsafe expression:', expr);
     return '0';
@@ -2022,8 +2024,17 @@ function _rowToSku(r){
 }
 
 // Upsert one or more SKUs (atomic per-row)
+// Collision-resistant SKU id — Date.now() alone repeats across tabs in the
+// same millisecond, and upsert(onConflict:'id') would then overwrite one SKU
+function _genSkuId(){
+  return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+}
+
 async function dbSaveSKU(...skus){
   const db=getDB();if(!db)throw new Error('No DB');
+  // Defensive: if the per-row table isn't in use (e.g. pd_skus_v2 missing),
+  // fall through to the whole-blob save so archive/tag/add still persist
+  if(!_useSkuTable){ await _doSaveSKUs(); return; }
   _lastWriteTs=Date.now();
   updateSyncBadge(false);
   const rows=skus.map(_skuToRow);
@@ -2037,6 +2048,9 @@ async function dbSaveSKU(...skus){
 // Delete one SKU by ID (atomic)
 async function dbDeleteSKU(id){
   const db=getDB();if(!db)throw new Error('No DB');
+  // Defensive: blob mode has no per-row delete — the caller has already
+  // removed the SKU from skuDB, so persist the whole blob instead
+  if(!_useSkuTable){ await _doSaveSKUs(); return; }
   _lastWriteTs=Date.now();
   updateSyncBadge(false);
   const{error}=await db.from('pd_skus_v2').delete().eq('id',id);
@@ -2478,6 +2492,38 @@ async function dbLoadAllCommissions(){
 // ── Audit log table operations (append-only, replaces capped JSONB array) ──
 let _useAuditTable=false;
 
+// Retry an Edge Function write a few times before giving up, so a transient
+// blip (cold start, momentary 5xx/network) no longer silently drops an
+// audit or history record. Throws after the final attempt.
+async function _edgeWriteWithRetry(fnName, payload, attempts=3){
+  let lastErr;
+  for(let i=0;i<attempts;i++){
+    try{
+      const resp=await fetch(`${SUPABASE_URL}/functions/v1/${fnName}`,{
+        method:'POST',
+        headers:{
+          'Authorization':`Bearer ${SUPABASE_ANON}`,
+          'apikey':SUPABASE_ANON,
+          'Content-Type':'application/json',
+        },
+        body:JSON.stringify(payload),
+      });
+      if(resp.ok) return;
+      const err=await resp.json().catch(()=>({error:`HTTP ${resp.status}`}));
+      const msg=err.error||err.message||`HTTP ${resp.status}`;
+      // 4xx = malformed request; retrying won't help, so stop immediately.
+      // Only transient 5xx / network errors are worth retrying.
+      if(resp.status>=400&&resp.status<500){ const e=new Error(msg); e._noRetry=true; throw e; }
+      throw new Error(msg);
+    }catch(e){
+      lastErr=e;
+      if(e._noRetry) break;
+      if(i<attempts-1) await new Promise(r=>setTimeout(r,400*Math.pow(2,i)));
+    }
+  }
+  throw lastErr;
+}
+
 async function dbInsertAudit(entry){
   // Audit inserts go through the audit-log-write Edge Function (service-role
   // INSERT). Anon clients cannot write to pd_audit_log directly anymore — the
@@ -2485,28 +2531,16 @@ async function dbInsertAudit(entry){
   // sizes, and uses the database's NOW() for the timestamp (so a client
   // can't backdate or futuredate an audit row).
   try{
-    const resp=await fetch(`${SUPABASE_URL}/functions/v1/audit-log-write`,{
-      method:'POST',
-      headers:{
-        'Authorization':`Bearer ${SUPABASE_ANON}`,
-        'apikey':SUPABASE_ANON,
-        'Content-Type':'application/json',
-      },
-      body:JSON.stringify({entry:{
-        user:entry.user||null,
-        userId:entry.userId||null,
-        action:entry.action,
-        details:entry.details||null,
-        extra:entry.extra||null,
-      }}),
-    });
-    if(!resp.ok){
-      const err=await resp.json().catch(()=>({error:`HTTP ${resp.status}`}));
-      throw new Error(err.error||err.message||`HTTP ${resp.status}`);
-    }
+    await _edgeWriteWithRetry('audit-log-write',{entry:{
+      user:entry.user||null,
+      userId:entry.userId||null,
+      action:entry.action,
+      details:entry.details||null,
+      extra:entry.extra||null,
+    }});
     _useAuditTable=true;
   }catch(e){
-    console.warn('Audit Edge Function failed:',e.message);
+    console.warn('Audit Edge Function failed after retries:',e.message);
     _useAuditTable=false;
   }
 }
@@ -2553,27 +2587,15 @@ async function dbInsertSkuHistory(skuId, field, oldVal, newVal, userName){
   // Like audit-log-write: anon can no longer INSERT directly. The Edge
   // Function validates field lengths and uses DB DEFAULT NOW() for ts.
   try{
-    const resp=await fetch(`${SUPABASE_URL}/functions/v1/sku-history-write`,{
-      method:'POST',
-      headers:{
-        'Authorization':`Bearer ${SUPABASE_ANON}`,
-        'apikey':SUPABASE_ANON,
-        'Content-Type':'application/json',
-      },
-      body:JSON.stringify({entry:{
-        sku_id:skuId, field,
-        old_val:String(oldVal??''),
-        new_val:String(newVal??''),
-        user_name:userName||null,
-      }}),
-    });
-    if(!resp.ok){
-      const err=await resp.json().catch(()=>({error:`HTTP ${resp.status}`}));
-      throw new Error(err.error||err.message||`HTTP ${resp.status}`);
-    }
+    await _edgeWriteWithRetry('sku-history-write',{entry:{
+      sku_id:skuId, field,
+      old_val:String(oldVal??''),
+      new_val:String(newVal??''),
+      user_name:userName||null,
+    }});
     _useSkuHistoryTable=true;
   }catch(e){
-    console.warn('SKU history Edge Function failed:',e.message);
+    console.warn('SKU history Edge Function failed after retries:',e.message);
     _useSkuHistoryTable=false;
   }
 }
@@ -3149,7 +3171,18 @@ function calcSKU(s){
   const cached = _calcCache.get(cacheKey);
   if(cached) return cached;
 
-  const brand=brands.find(b=>b.id===s.brandId)||{model:'myntra',commOverride:null};
+  const realBrand=brands.find(b=>b.id===s.brandId);
+  // A dangling brandId (brand deleted in another tab, or legacy data) would
+  // otherwise be silently repriced as Myntra-zero-commission. Warn once so
+  // it's diagnosable rather than a silent wrong number.
+  if(!realBrand&&s.brandId){
+    if(!calcSKU._warnedBrands) calcSKU._warnedBrands=new Set();
+    if(!calcSKU._warnedBrands.has(s.brandId)){
+      calcSKU._warnedBrands.add(s.brandId);
+      console.warn(`SKU ${s.sku||s.id} references missing brand ${s.brandId} — priced as Myntra fallback`);
+    }
+  }
+  const brand=realBrand||{model:'myntra',commOverride:null};
   const mp = brand.model || 'myntra';
   // Auto-derive level from category
   const level = CAT_LEVEL[s.category] || s.level || 'Level 2';
@@ -4060,7 +4093,20 @@ function saveBrand(eid){
   else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});audit('brand_add',`${name} added (${model})`);toast(`✓ ${name} added`,'green');}
   closeModal();renderBrands();populateFilters();renderSKUs();save('brands').catch(e=>toast('Brand save failed: '+e.message,'red'));
 }
-async function deleteBrand(id){const b=brands.find(x=>x.id===id);if(!confirm('Delete brand? SKUs assigned to this brand will still exist.'))return false;brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();if(_useBrandTable){await dbDeleteBrand(id);}else{await save('brands');}audit('brand_delete',`${b?.name||id} deleted`);toast('Brand deleted','red');return true;}
+async function deleteBrand(id){
+  const b=brands.find(x=>x.id===id);
+  // Block deletion while SKUs reference this brand — otherwise those SKUs
+  // keep a dangling brandId and calcSKU silently reprices them as Myntra
+  // (wrong model/commission). Mirrors the deleteLevel guard.
+  const refCount=skuDB.filter(s=>s.brandId===id).length;
+  if(refCount){
+    toast(`Cannot delete "${b?.name||id}" — ${refCount} SKU${refCount>1?'s':''} still assigned. Reassign or delete them first.`,'red');
+    return false;
+  }
+  if(!confirm(`Delete brand "${b?.name||id}"?`))return false;
+  brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();
+  if(_useBrandTable){await dbDeleteBrand(id);}else{await save('brands');}
+  audit('brand_delete',`${b?.name||id} deleted`);toast('Brand deleted','red');return true;}
 
 // ═══════════════════════════════════════════════════════
 // SKU SHEET
@@ -4529,18 +4575,28 @@ function saveNew(){
   // Create one SKU per selected brand
   let count=0;
   const newSKUs=[];
-  selectedBrands.forEach((brandId,i)=>{
-    const ts=Date.now()+i;
-    const s={id:'s'+ts,sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,ignoreThreshold:false,archived:false,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  selectedBrands.forEach((brandId)=>{
+    const s={id:_genSkuId(),sku:skuCode,styleId:sid||'',brandId,category:cat,level:lvl,cost,markup:mkp,discount:disc,ignoreThreshold:false,archived:false,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
     skuDB.push(s);
     newSKUs.push(s);
     count++;
   });
   invalidateCalcCache();
   editId=null;renderSKUs();renderBrands();updateAlerts();
-  dbSaveSKU(...newSKUs).then(()=>toast(`✓ ${skuCode||sid||'SKU'} saved to database`,'green')).catch(e=>toast('Save failed: '+e.message,'red'));
-  audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
   toast(`✓ ${skuCode||sid||'SKU'} added — saving...`, 'green');
+  // Await the save and roll back the in-memory rows on failure, so a failed
+  // write never leaves phantom SKUs that vanish on the next reload
+  dbSaveSKU(...newSKUs)
+    .then(()=>{
+      audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
+      toast(`✓ ${skuCode||sid||'SKU'} saved to database`,'green');
+    })
+    .catch(e=>{
+      const ids=new Set(newSKUs.map(s=>s.id));
+      skuDB=skuDB.filter(s=>!ids.has(s.id));
+      invalidateCalcCache();renderSKUs();renderBrands();updateAlerts();
+      toast('Save failed — SKU not added: '+e.message,'red');
+    });
 }
 
 async function saveEdit(id){
@@ -5584,7 +5640,7 @@ function previewImport(input){
           if(!brand){errors.push(`Row ${i+2} (${skuCode}): Unknown brand "${bname}"`);return;}
           const validCat=CATS.includes(cat)?cat:CATS[0];
           const level=(brand.model==='myntra'&&CAT_LEVEL[validCat])?CAT_LEVEL[validCat]:'Level 2';
-          importRows.push({id:'s'+Date.now()+i+'_'+bi,sku:skuCode,styleId:sid||'',brandId:brand.id,category:validCat,level,cost,markup:mkp||0,discount:disc||0,ignoreThreshold:false,archived:false});
+          importRows.push({id:_genSkuId(),sku:skuCode,styleId:sid||'',brandId:brand.id,category:validCat,level,cost,markup:mkp||0,discount:disc||0,ignoreThreshold:false,archived:false});
           preview.push({sku:skuCode,sid,brand:brand.name,cat:validCat,cost,mkp,disc});
         });
       });
@@ -6389,90 +6445,23 @@ function openForgotPassword(){
   overlay.innerHTML = `
     <div style="background:var(--s);border:1px solid var(--bd2);border-radius:12px;width:360px;padding:28px">
       <div style="font-size:16px;font-weight:600;margin-bottom:6px">Reset Password</div>
-      <div style="font-size:13px;color:var(--tx3);margin-bottom:20px">Enter your email address. We'll send you a password reset link.</div>
-      <div id="forgot-err" style="background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--re);margin-bottom:14px;display:none"></div>
-      <div id="forgot-ok" style="background:rgba(45,212,160,.08);border:1px solid rgba(45,212,160,.2);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--gr);margin-bottom:14px;display:none"></div>
-      <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px">Email Address</label>
-      <input id="forgot-email" class="fi" type="email" placeholder="your@email.com" style="margin-bottom:16px" onkeydown="if(event.key==='Enter')doForgotPassword()">
+      <div style="font-size:13px;color:var(--tx3);margin-bottom:20px">Password resets are handled by your administrator. Contact them and they'll issue you a reset link or a new temporary password.</div>
       <div style="display:flex;gap:10px">
-        <button class="btn bg" style="flex:1" onclick="document.getElementById('forgot-overlay').remove()">Cancel</button>
-        <button class="btn bp" style="flex:1" onclick="doForgotPassword()">Send Reset Link</button>
+        <button class="btn bp" style="flex:1" onclick="document.getElementById('forgot-overlay').remove()">Got it</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  setTimeout(()=>document.getElementById('forgot-email')?.focus(), 100);
 }
 
 function generateResetToken(){
   return crypto.getRandomValues(new Uint8Array(16)).reduce((s,b)=>s+b.toString(16).padStart(2,'0'),'');
 }
 
-async function doForgotPassword(){
-  const email = document.getElementById('forgot-email')?.value.trim().toLowerCase();
-  const errEl = document.getElementById('forgot-err');
-  const okEl  = document.getElementById('forgot-ok');
-  if(!email||!email.includes('@')){
-    if(errEl){errEl.textContent='Enter a valid email address.';errEl.style.display='block';}
-    return;
-  }
-  const genericMsg = 'If an account exists with that email, a password reset link has been sent.';
-  const baseUrl = window.location.origin + window.location.pathname;
-
-  // Try server-side reset first
-  try{
-    const resp=await fetch(`${SUPABASE_URL}/functions/v1/reset-password`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_ANON}`,'apikey':SUPABASE_ANON},
-      body:JSON.stringify({action:'request',email})
-    });
-    const data=await resp.json();
-    if(resp.ok&&data.token){
-      const resetLink = baseUrl + '?reset=' + data.token;
-      if(emailReady()&&data.userName){
-        sendEmail(EMAIL_CONFIG.templateReset,{
-          to_name:data.userName, to_email:data.userEmail||email,
-          reset_link:resetLink, login_url:baseUrl, reset_token:data.token
-        });
-        if(okEl){okEl.textContent='✓ Reset link sent to your email. Check your inbox.';okEl.style.display='block';}
-      } else {
-        if(okEl){okEl.innerHTML=`✓ Reset link:<br><a href="${esc(resetLink)}" style="color:var(--ac);word-break:break-all;font-size:11px">${esc(resetLink)}</a><br><span style="font-size:11px;color:var(--tx3)">Email not configured — copy this link manually.</span>`;okEl.style.display='block';}
-      }
-      if(errEl) errEl.style.display='none';
-      if(emailReady()) setTimeout(()=>document.getElementById('forgot-overlay')?.remove(), 8000);
-      return;
-    }
-    // Server returned ok but no token (user not found) — show generic
-    if(resp.ok){
-      if(okEl){okEl.textContent=genericMsg;okEl.style.display='block';}
-      if(errEl) errEl.style.display='none';
-      return;
-    }
-  }catch(e){/* Edge Function not available, fall back to client-side */}
-
-  // Fallback: client-side reset token handling
-  const user = users.find(u=>u.email.toLowerCase()===email);
-  if(!user){
-    if(okEl){okEl.textContent=genericMsg;okEl.style.display='block';}
-    if(errEl) errEl.style.display='none';
-    return;
-  }
-  const token = generateResetToken();
-  const tokens = await dbGet(DB_KEYS.reset_tokens) || {};
-  tokens[token] = { userId: user.id, email: user.email, expires: Date.now() + 30*60*1000 };
-  await dbSet(DB_KEYS.reset_tokens, tokens);
-  const resetLink = baseUrl + '?reset=' + token;
-  if(emailReady()){
-    sendEmail(EMAIL_CONFIG.templateReset,{
-      to_name: user.name, to_email: user.email,
-      reset_link: resetLink, login_url: baseUrl, reset_token: token
-    });
-    if(okEl){okEl.textContent='✓ Reset link sent to your email. Check your inbox.';okEl.style.display='block';}
-  } else {
-    if(okEl){okEl.innerHTML=`✓ Reset link:<br><a href="${esc(resetLink)}" style="color:var(--ac);word-break:break-all;font-size:11px">${esc(resetLink)}</a><br><span style="font-size:11px;color:var(--tx3)">Email not configured — copy this link manually.</span>`;okEl.style.display='block';}
-  }
-  if(errEl) errEl.style.display='none';
-  if(emailReady()) setTimeout(()=>document.getElementById('forgot-overlay')?.remove(), 8000);
-}
+// Self-service password reset was removed: with no out-of-band email
+// delivery, any reset link generated here would be shown directly to
+// whoever typed the email — an account-takeover vector on the public login
+// screen. Resets are now admin-mediated (User Access → Reset Password),
+// which generates a link the admin shares out-of-band.
 
 // ── Password Reset Page (shown when ?reset=TOKEN is in URL) ──
 function showResetPasswordPage(token){
@@ -8377,24 +8366,56 @@ function addTagFromSuggestion(tag){
   }
 }
 
-function saveSkuTags(){
+// Keep the STOCK OUT tag and the archived flag in sync (CLAUDE.md: tag
+// auto-applied on archive, auto-removed on unarchive). Returns a snapshot
+// for rollback.
+function _syncStockOutArchive(s){
+  const prev={tags:[...(s.tags||[])],archived:!!s.archived};
+  const hasSO=(s.tags||[]).includes('STOCK OUT');
+  if(hasSO && !s.archived) s.archived=true;
+  else if(!hasSO && s.archived){
+    // removing STOCK OUT from an archived SKU un-archives it, matching reload
+    s.archived=false;
+  }
+  return prev;
+}
+
+async function saveSkuTags(){
   const s=skuDB.find(x=>x.id===_tagModalSkuId);if(!s)return;
+  const prevNote=s.note, prevTags=[...(s.tags||[])], prevArchived=!!s.archived, prevUpd=s.updatedAt;
   s.note=document.getElementById('sku-note')?.value.trim()||'';
   // Also grab any text left in the input that wasn't submitted
   const pending=document.getElementById('tag-new-input')?.value.replace(/,/g,'').trim();
   if(pending&&!_tagModalTags.includes(pending)) _tagModalTags.push(pending);
   s.tags=[..._tagModalTags];
   s.updatedAt=new Date().toISOString();
-  closeModal();dbSaveSKU(s).catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
-  audit('tags_edit',`${s.sku||s.styleId}: tags=[${s.tags.join(',')}]`);
-  toast('Tags saved','green');
+  _syncStockOutArchive(s);
+  closeModal();invalidateCalcCache();populateTagFilter();renderSKUs();
+  try{
+    await dbSaveSKU(s);
+    audit('tags_edit',`${s.sku||s.styleId}: tags=[${s.tags.join(',')}]`);
+    toast('Tags saved','green');
+  }catch(e){
+    s.note=prevNote;s.tags=prevTags;s.archived=prevArchived;s.updatedAt=prevUpd;
+    invalidateCalcCache();populateTagFilter();renderSKUs();
+    toast('Save failed — tags not saved: '+e.message,'red');
+  }
 }
 
-function removeTagFromSku(skuId,tag){
+async function removeTagFromSku(skuId,tag){
   const s=skuDB.find(x=>x.id===skuId);if(!s||!s.tags)return;
+  const prevTags=[...s.tags], prevArchived=!!s.archived, prevUpd=s.updatedAt;
   s.tags=s.tags.filter(t=>t!==tag);
   s.updatedAt=new Date().toISOString();
-  dbSaveSKU(s).catch(e=>toast('Save failed: '+e.message,'red'));populateTagFilter();renderSKUs();
+  _syncStockOutArchive(s);
+  invalidateCalcCache();populateTagFilter();renderSKUs();
+  try{
+    await dbSaveSKU(s);
+  }catch(e){
+    s.tags=prevTags;s.archived=prevArchived;s.updatedAt=prevUpd;
+    invalidateCalcCache();populateTagFilter();renderSKUs();
+    toast('Save failed — tag not removed: '+e.message,'red');
+  }
 }
 
 // ═══════════════════════════════════════════════════════
