@@ -187,6 +187,35 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .filter-clear:hover{background:rgba(245,166,35,.1)}
 .active-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .af-chip{background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3);border-radius:12px;padding:2px 9px;font-size:11px;color:var(--ac);cursor:pointer;display:flex;align-items:center;gap:4px}
+/* Collapsible filters: on desktop the advanced group flows inline (display:contents)
+   and the toggle button is hidden; the mobile media query overrides both. */
+.filter-advanced{display:contents}
+.filter-toggle{display:none;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.filter-toggle.open{border-color:var(--ac);color:var(--ac)}
+.filter-count-badge{background:var(--ac);color:#0f1117;font-size:10px;font-weight:700;border-radius:9px;min-width:16px;height:16px;padding:0 4px;display:inline-flex;align-items:center;justify-content:center}
+/* Mobile SKU cards — hidden on desktop, shown by the mobile media query */
+#sku-cards{display:none}
+.sku-card{background:var(--s);border:1px solid var(--bd2);border-radius:12px;padding:12px 13px;display:flex;flex-direction:column;gap:11px;position:relative}
+.sku-card.breach{border-color:rgba(245,166,35,.45)}
+.sku-card.breach::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--ac)}
+.skc-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.skc-idwrap{display:flex;gap:8px;align-items:flex-start;min-width:0}
+.skc-status{font-size:15px;line-height:1.2;flex-shrink:0}
+.skc-sku{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--tx);word-break:break-all;display:flex;align-items:center;gap:5px}
+.skc-sub{margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.skc-brand{font-size:11px;color:var(--tx2)}
+.skc-mp{font-size:9px;color:var(--ac);text-transform:uppercase;letter-spacing:.4px}
+.skc-profit{text-align:right;flex-shrink:0}
+.skc-plabel{font-size:8px;letter-spacing:.6px;color:var(--tx3);text-transform:uppercase;font-weight:600}
+.skc-pval{font-family:var(--mono);font-size:20px;font-weight:700;line-height:1.15;margin-top:1px}
+.skc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.skc-cell{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;padding-bottom:4px;border-bottom:1px dashed var(--bd)}
+.skc-cell span{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.3px;flex-shrink:0}
+.skc-cell b{font-family:var(--mono);font-weight:600;color:var(--tx);text-align:right}
+.skc-tags{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.skc-actions{display:flex;gap:6px;align-items:center}
+.skc-actions .btn{flex:1;min-height:38px}
+.skc-actions .skc-more{flex:0 0 44px}
 .gs-item:hover,.gs-active{background:var(--s2)!important}
 .sortable{cursor:pointer;user-select:none;white-space:nowrap}.sortable:hover{color:var(--ac)}
 .sort-arrow{font-size:10px;color:var(--tx3);margin-left:2px}.sort-arrow.asc::after{content:'▲';color:var(--ac)}.sort-arrow.desc::after{content:'▼';color:var(--ac)}
@@ -356,15 +385,27 @@ body:has(#login-screen.active){overflow:hidden}
   .sku-mp-tab{white-space:nowrap;padding:8px 12px;font-size:11px}
   .sku-actions-wrap{justify-content:flex-start!important}
 
-  /* Filter bar: stack vertically on mobile */
-  .filter-bar{gap:6px;padding:10px 10px;flex-direction:column;flex-wrap:wrap}
-  .filter-bar>*{width:100%;min-width:0}
-  .filter-bar .fi{width:100%!important}
-  .filter-select{min-width:0;width:100%;padding:7px 9px;flex:none}
-  .filter-sep{display:none}
-  /* Profit range: inline */
-  .filter-bar .profit-range{display:flex;gap:4px;align-items:center;width:100%}
-  .filter-bar .profit-range input{flex:1;min-width:0}
+  /* Filter bar: search + a Filters toggle on one row; advanced group
+     collapses into a full-width panel that only shows when expanded */
+  .filter-bar{gap:8px;padding:9px 10px;flex-wrap:wrap;align-items:center}
+  .filter-search{flex:1;min-width:0}
+  .filter-search .filter-select{width:100%;min-width:0}
+  .filter-toggle{display:inline-flex;flex-shrink:0}
+  .filter-advanced{display:none;width:100%;flex-wrap:wrap;gap:8px;order:3}
+  .filter-advanced.open{display:flex}
+  .filter-advanced .filter-select{min-width:0;width:100%;padding:9px 10px}
+  .filter-advanced .filter-sep{display:none}
+  .filter-advanced .filter-label{display:none}
+  /* Profit Min + Max share one row (dropdowns wrap to their own line) */
+  #f-profit-min,#f-profit-max{width:calc(50% - 4px)!important}
+  .filter-clear{width:100%;padding:9px;text-align:center}
+  /* Hide the desktop-centric tip banner on phones to reclaim space */
+  .sku-tip{display:none}
+  /* Show SKU cards, hide the wide table — except while inline-editing/adding */
+  .ss-wrap{display:none}
+  #sku-cards{display:flex;flex-direction:column;gap:10px}
+  #page-skus.editing .ss-wrap{display:block}
+  #page-skus.editing #sku-cards{display:none}
 
   /* SKU sheet: horizontal scroll */
   .ss-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:0 12px;scrollbar-width:thin}
@@ -1214,7 +1255,7 @@ body:has(#login-screen.active){overflow:hidden}
 
 <!-- ═══ SKUs ═══ -->
 <div class="page" id="page-skus">
-  <div class="info mb12" style="font-size:11px;line-height:1.6"><strong>Tip:</strong> Click <strong>Calc</strong> on any SKU to see the full profit breakdown. Use <strong>History</strong> to track discount/profit changes over time. Filter by status to find threshold breaches quickly. Gross Settlement is shown for Myntra SKUs only.</div>
+  <div class="info mb12 sku-tip" style="font-size:11px;line-height:1.6"><strong>Tip:</strong> Click <strong>Calc</strong> on any SKU to see the full profit breakdown. Use <strong>History</strong> to track discount/profit changes over time. Filter by status to find threshold breaches quickly. Gross Settlement is shown for Myntra SKUs only.</div>
   <!-- MARKETPLACE TABS -->
   <div class="mp-tabs-wrap" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <div class="mp-tabs" style="display:flex;gap:0;border-bottom:2px solid var(--bd)">
@@ -1241,25 +1282,31 @@ body:has(#login-screen.active){overflow:hidden}
   </div>
   <!-- FILTER BAR -->
   <div class="filter-bar">
-    <div style="position:relative">
+    <div class="filter-search" style="position:relative">
       <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:14px;pointer-events:none">⌕</span>
       <input id="f-search" class="filter-select" style="padding-left:27px;min-width:180px" placeholder="Search SKU or Style ID..." oninput="debouncedRenderSKUs()">
     </div>
-    <select id="f-brand" class="filter-select" onchange="renderSKUs()"><option value="">All Brands</option></select>
-    <select id="f-cat" class="filter-select" onchange="renderSKUs()"><option value="">All Categories</option></select>
-    <select id="f-status" class="filter-select" onchange="renderSKUs()">
-      <option value="">All Statuses</option>
-      <option value="breached">Threshold Breached</option>
-      <option value="ignored">Threshold Ignored</option>
-      <option value="healthy">Healthy</option>
-    </select>
-    <select id="f-tag" class="filter-select" onchange="renderSKUs()"><option value="">All Tags</option></select>
-    <div class="filter-sep"></div>
-    <span class="filter-label">Profit ₹</span>
-    <input id="f-profit-min" class="filter-select" type="number" placeholder="Min" style="width:70px;min-width:0" oninput="debouncedRenderSKUs()">
-    <span style="color:var(--tx3);font-size:11px">to</span>
-    <input id="f-profit-max" class="filter-select" type="number" placeholder="Max" style="width:70px;min-width:0" oninput="debouncedRenderSKUs()">
-    <button class="filter-clear" onclick="clearFilters()" style="display:none" id="f-clear-btn">✕ Clear Filters</button>
+    <button class="filter-toggle" id="filter-toggle" onclick="toggleFilters()" aria-expanded="false">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      <span>Filters</span><span id="filter-count-badge" class="filter-count-badge" style="display:none"></span>
+    </button>
+    <div class="filter-advanced" id="filter-advanced">
+      <select id="f-brand" class="filter-select" onchange="renderSKUs()"><option value="">All Brands</option></select>
+      <select id="f-cat" class="filter-select" onchange="renderSKUs()"><option value="">All Categories</option></select>
+      <select id="f-status" class="filter-select" onchange="renderSKUs()">
+        <option value="">All Statuses</option>
+        <option value="breached">Threshold Breached</option>
+        <option value="ignored">Threshold Ignored</option>
+        <option value="healthy">Healthy</option>
+      </select>
+      <select id="f-tag" class="filter-select" onchange="renderSKUs()"><option value="">All Tags</option></select>
+      <div class="filter-sep"></div>
+      <span class="filter-label">Profit ₹</span>
+      <input id="f-profit-min" class="filter-select" type="number" placeholder="Min" style="width:70px;min-width:0" oninput="debouncedRenderSKUs()">
+      <span class="filter-label">to</span>
+      <input id="f-profit-max" class="filter-select" type="number" placeholder="Max" style="width:70px;min-width:0" oninput="debouncedRenderSKUs()">
+      <button class="filter-clear" onclick="clearFilters()" style="display:none" id="f-clear-btn">✕ Clear Filters</button>
+    </div>
   </div>
   <div id="active-filter-chips" class="active-filters" style="margin-bottom:8px"></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -1304,6 +1351,8 @@ body:has(#login-screen.active){overflow:hidden}
       <tbody id="sku-body"></tbody>
     </table>
   </div>
+  <!-- Mobile card list (shown instead of the table on small screens) -->
+  <div id="sku-cards"></div>
   <div id="sku-pagination" style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:8px;flex-wrap:wrap"></div>
 </div>
 
@@ -4341,9 +4390,15 @@ function renderSKUs(){
   el('sku-count').textContent=`Showing ${Math.min(startIdx+1,totalFiltered)}–${Math.min(startIdx+getPageSize(),totalFiltered)} of ${totalFiltered} SKUs (${activeCount} active${archivedCount?', '+archivedCount+' archived':''})`;
   el('dash-sku').textContent=activeCount;
   renderSKUPagination(totalFiltered);
+  // Inline add/edit renders as a table row — force the table view (over the
+  // mobile card view) while editing so the editor is visible on phones too
+  const pageSkus=el('page-skus');
+  if(pageSkus) pageSkus.classList.toggle('editing', !!editId);
   const t=el('sku-body');if(!t)return;
-  let html=pageList.map(s=>{
-    if(editId===s.id)return renderEditRow(s);
+  const cardsEl=el('sku-cards');
+  let html='', cardsHtml='';
+  pageList.forEach(s=>{
+    if(editId===s.id){ html+=renderEditRow(s); return; }
     const c=calcSKU(s);
     const brand=brands.find(b=>b.id===s.brandId);
     const profColor=c.profitRs<0?'var(--re)':c.isBreach?'var(--ac)':'var(--gr)';
@@ -4353,7 +4408,8 @@ function renderSKUs(){
     if(s.ignoreThreshold) statusIcon=`<span title="Threshold ignored — click to re-enable" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle}">🔕</span>`;
     else if(c.isBreach) statusIcon=`<span title="Below threshold: ₹${c.profitRs.toFixed(0)} < ₹${c.threshold} — click to ignore" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle}">⚠️</span>`;
     else statusIcon=`<span title="Healthy" style="${_icoStyle};cursor:default;opacity:.5">✅</span>`;
-    return`<tr>
+    cardsHtml+=renderSKUCard(s,c,brand,statusIcon,profColor,ifDelColor);
+    html+=`<tr>
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
       <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}${brand&&brand.model==='myntra'&&s.styleId?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:rgba(255,63,108,.12);color:var(--mn);font-size:11px;text-decoration:none;vertical-align:middle;margin-left:4px">↗</a>`:''}</td>
       <td><span class="tag tb" style="font-size:10px;white-space:nowrap">${esc(s.category)}</span></td>
@@ -4383,17 +4439,111 @@ function renderSKUs(){
         </div>
       </td>
     </tr>`;
-  }).join('');
+  });
   if(editId==='new')html+=renderNewRow();
   const hasFilters=!!(el('f-search')?.value||el('f-brand')?.value||el('f-cat')?.value||el('f-status')?.value||el('f-tag')?.value||el('f-profit-min')?.value||el('f-profit-max')?.value||_skuMPTab);
   const emptyMsg=hasFilters
     ?`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs match your filters. <a href="#" onclick="clearFilters();return false" style="color:var(--ac)">Clear all filters</a></td></tr>`
     :`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs yet. Click <a href="#" onclick="addRow();return false" style="color:var(--ac)">+ Add SKU</a> to get started.</td></tr>`;
   t.innerHTML=html||emptyMsg;
+  if(cardsEl){
+    const cardEmpty=hasFilters
+      ?`<div style="text-align:center;padding:28px;color:var(--tx3);font-size:13px">No SKUs match your filters. <a href="#" onclick="clearFilters();return false" style="color:var(--ac)">Clear all filters</a></div>`
+      :`<div style="text-align:center;padding:28px;color:var(--tx3);font-size:13px">No SKUs yet. Tap <a href="#" onclick="addRow();return false" style="color:var(--ac)">+ Add SKU</a> to get started.</div>`;
+    cardsEl.innerHTML=cardsHtml||cardEmpty;
+  }
+  updateFilterCount();
   t.querySelectorAll('[data-lc]').forEach(e=>e.addEventListener('input',()=>liveCalcRow(e.closest('tr'))));
   // Update archive nav badge
   const navCount=el('nav-archive-count');
   if(navCount){const archCount=skuDB.filter(s=>s.archived).length;navCount.textContent=archCount;navCount.style.display=archCount?'':'none';}
+}
+
+const _MP_LABEL={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
+
+// Mobile-optimised SKU card (shown instead of the wide table on phones).
+// Uses the SAME calc result and action handlers as the desktop row.
+function renderSKUCard(s,c,brand,statusIcon,profColor,ifDelColor){
+  const id=escAttr(s.id);
+  const isMyntra=brand&&brand.model==='myntra';
+  const mpLabel=_MP_LABEL[brand?.model]||'';
+  const myntraLink=(isMyntra&&s.styleId)?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:rgba(255,63,108,.12);color:var(--mn);font-size:11px;text-decoration:none">↗</a>`:'';
+  const noStyle=(!s.styleId&&isMyntra)?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':'';
+  const tagChips=(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${id}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('');
+  const noteChip=s.note?`<span title="${esc(s.note)}" style="font-size:11px;cursor:help">📝</span>`:'';
+  const tagsRow=(noStyle||tagChips||noteChip)?`<div class="skc-tags">${noStyle}${tagChips}${noteChip}</div>`:'';
+  const inr=n=>Math.round(n).toLocaleString('en-IN');
+  return`<div class="sku-card${c.isBreach?' breach':''}">
+    <div class="skc-top">
+      <div class="skc-idwrap">
+        <span class="skc-status">${statusIcon}</span>
+        <div style="min-width:0">
+          <div class="skc-sku">${esc(s.sku||'—')}${myntraLink}</div>
+          <div class="skc-sub"><span class="tag tb" style="font-size:10px">${esc(s.category)}</span><span class="skc-brand">${esc(brand?.name||'—')}</span>${mpLabel?`<span class="skc-mp">${mpLabel}</span>`:''}</div>
+        </div>
+      </div>
+      <div class="skc-profit">
+        <div class="skc-plabel">Net Profit</div>
+        <div class="skc-pval" style="color:${profColor}">₹${c.profitRs.toFixed(0)}</div>
+      </div>
+    </div>
+    <div class="skc-grid">
+      <div class="skc-cell"><span>MRP</span><b>₹${inr(c.mrp)}</b></div>
+      <div class="skc-cell"><span>Seller</span><b style="color:var(--bl)">₹${inr(c.sp)}</b></div>
+      <div class="skc-cell"><span>Cust Paid</span><b>₹${inr(c.custPaid)}</b></div>
+      <div class="skc-cell"><span>Cost</span><b>₹${inr(s.cost)}</b></div>
+      <div class="skc-cell"><span>Markup</span><b>${s.markup}%</b></div>
+      <div class="skc-cell"><span>Discount</span><b>${s.discount||0}%</b></div>
+      <div class="skc-cell"><span>If Delivered</span><b style="color:${ifDelColor}">₹${c.ifDelivered.toFixed(0)}</b></div>
+      ${isMyntra?`<div class="skc-cell"><span>Gross Sett.</span><b style="color:${c.grossSettlement>=0?'var(--bl)':'var(--re)'}">₹${c.grossSettlement.toFixed(0)}</b></div>`:''}
+    </div>
+    ${tagsRow}
+    <div class="skc-actions">
+      <button class="btn bg bsm" onclick="showCalcModal('${id}')">📊 Calc</button>
+      <button class="btn bg bsm" onclick="showSkuHistoryModal('${id}')">History</button>
+      <button class="btn bg bsm skc-more" onclick="toggleSkuMenuCard(event,'${id}')" title="More actions" style="font-weight:700">⋮</button>
+      <div class="sku-menu" id="scm-${id}" style="display:none;position:fixed;background:var(--s);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:50;min-width:160px;overflow:hidden">
+        <div class="sku-menu-item" onclick="hideSkuMenus();openTagsModal('${id}')">🏷 Tags &amp; Notes</div>
+        <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${id}')">✎ Edit SKU</div>
+        <div class="sku-menu-item" onclick="hideSkuMenus();archiveSKU('${id}')">▣ Archive</div>
+        <div class="sku-menu-item" style="color:var(--re);border-top:1px solid var(--bd)" onclick="hideSkuMenus();delSKU('${id}')">✕ Delete</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Card overflow menu — mirrors toggleSkuMenu but targets the card's scm-<id>
+function toggleSkuMenuCard(event,id){
+  event.stopPropagation();
+  const menu=document.getElementById('scm-'+id);
+  const wasOpen=menu&&menu.style.display!=='none';
+  hideSkuMenus();
+  if(!wasOpen&&menu){
+    const rect=event.currentTarget.getBoundingClientRect();
+    menu.style.top=Math.min(rect.bottom+2,window.innerHeight-180)+'px';
+    menu.style.left=Math.max(8,rect.right-160)+'px';
+    menu.style.right='auto';
+    menu.style.display='block';
+  }
+}
+
+// Collapsible filter panel (mobile). Toggles the advanced group open/closed.
+function toggleFilters(){
+  const adv=el('filter-advanced'), btn=el('filter-toggle');
+  if(!adv)return;
+  const open=adv.classList.toggle('open');
+  if(btn){ btn.classList.toggle('open',open); btn.setAttribute('aria-expanded',open?'true':'false'); }
+}
+
+// Badge showing how many advanced filters are active (so a collapsed panel
+// still signals that filtering is applied).
+function updateFilterCount(){
+  const badge=el('filter-count-badge'), btn=el('filter-toggle');
+  if(!badge)return;
+  const n=['f-brand','f-cat','f-status','f-tag','f-profit-min','f-profit-max']
+    .reduce((a,id)=>a+((el(id)?.value||'')!==''?1:0),0);
+  badge.textContent=n; badge.style.display=n?'inline-flex':'none';
+  if(btn) btn.classList.toggle('has-filters',n>0);
 }
 
 // ── Category change triggers recalc (level auto-derived from CAT_LEVEL) ──
