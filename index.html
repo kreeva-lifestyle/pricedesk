@@ -467,7 +467,8 @@ body:has(#login-screen.active){overflow:hidden}
   @keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
   .mbody{padding:16px}
   .mhdr{padding:14px 16px}
-  .mfoot{padding:12px 16px}
+  /* Footer buttons clear the home indicator on bottom-sheet + fullscreen modals */
+  .mfoot{padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
 
   /* Inputs: prevent iOS auto-zoom (must be >=16px) */
   .fi,.filter-select,.ci,.si,.sse,.thr-input{font-size:16px!important}
@@ -533,6 +534,13 @@ body:has(#login-screen.active){overflow:hidden}
   /* Modal: true full screen */
   .modal{max-height:100vh;border-radius:0}
   .movl{align-items:stretch}
+  /* PWA safe-area: the fullscreen modal starts at y=0 under the status bar
+     (black-translucent, viewport-fit=cover), so the header + close button
+     would overlap the clock/notch. Pad the sticky header below the inset and
+     keep the last body row clear of the home indicator. */
+  .mhdr{position:sticky;top:0;z-index:3;background:var(--s);padding-top:calc(14px + env(safe-area-inset-top))}
+  .mclose{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;margin:-8px -8px -8px 0;font-size:24px}
+  .mbody{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
 
   /* Login box: fit narrow screens */
   .login-box{padding:28px 20px;border-radius:14px;width:calc(100% - 24px)}
