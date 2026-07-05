@@ -33,6 +33,10 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .nav-item.active{background:var(--s2);color:var(--ac);border-left-color:var(--ac)}
 .ni{width:16px;height:16px;text-align:center;font-size:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 .ni svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* Custom line-icon set (see ICONS/icon() in JS). Inherits currentColor. */
+.ic{display:inline-block;vertical-align:-0.14em;flex-shrink:0}
+.btn .ic,.sku-menu-item .ic{vertical-align:-0.14em}
+.btn>.ic:first-child,button>.ic:first-child{margin-right:5px}
 .sb-btm{padding:14px 16px;border-top:1px solid var(--bd);margin-top:auto}
 .ava{width:28px;height:28px;border-radius:50%;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000;flex-shrink:0}
 .main{margin-left:230px;flex:1;display:flex;flex-direction:column;min-width:0}
@@ -640,7 +644,7 @@ body:has(#login-screen.active){overflow:hidden}
 </head>
 <body>
 <!-- ═══ OFFLINE BANNER ═══ -->
-<div id="offline-bar">⚠ You're offline — changes won't save until connection is restored</div>
+<div id="offline-bar"><span class="ic-h" data-icon="alert" data-size="13"></span> You're offline — changes won't save until connection is restored</div>
 
 <!-- ═══ LOADING OVERLAY (shown while checking session) ═══ -->
 <div id="app-loading" class="active">
@@ -722,7 +726,7 @@ body:has(#login-screen.active){overflow:hidden}
 
       <!-- ═══ SMART SHORTCUTS ═══ -->
       <div style="background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:8px;padding:14px;margin-bottom:16px">
-        <div style="font-size:11px;color:var(--ac);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:10px">⚡ Smart Shortcuts — click to auto-build</div>
+        <div style="font-size:11px;color:var(--ac);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:10px"><span class="ic-h" data-icon="zap" data-size="13"></span> Smart Shortcuts — click to auto-build</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="fb-shortcut" onclick="fbShortcut('pct_of')">% of a value</button>
           <button class="fb-shortcut" onclick="fbShortcut('fixed_add')">Add fixed amount</button>
@@ -742,7 +746,7 @@ body:has(#login-screen.active){overflow:hidden}
       <!-- ═══ FORMULA BLOCK DISPLAY ═══ -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
         <label style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">Formula being built</label>
-        <button onclick="fbClear()" style="font-size:12px;color:var(--re);background:none;border:none;cursor:pointer;opacity:.8;padding:4px 8px">✕ Clear</button>
+        <button onclick="fbClear()" style="font-size:12px;color:var(--re);background:none;border:none;cursor:pointer;opacity:.8;padding:4px 8px"><span class="ic-h" data-icon="x" data-size="12"></span> Clear</button>
       </div>
       <div class="fb-row" id="fb-parts-row">
         <span style="font-size:12px;color:var(--tx3)">Use shortcuts above or add parts manually below ↓</span>
@@ -821,13 +825,13 @@ body:has(#login-screen.active){overflow:hidden}
 
         <!-- TYPE DIRECTLY — for complex formulas like Math.ceil -->
         <div class="fb-add-section" style="margin-top:10px;border-color:rgba(245,166,35,.3)">
-          <label style="color:var(--ac)">⌨ Type formula directly <span style="color:var(--tx3);text-transform:none;letter-spacing:0;font-weight:400">— for advanced formulas like Math.ceil, Math.round, Math.max</span></label>
+          <label style="color:var(--ac)"><span class="ic-h" data-icon="keyboard" data-size="13"></span> Type formula directly <span style="color:var(--tx3);text-transform:none;letter-spacing:0;font-weight:400">— for advanced formulas like Math.ceil, Math.round, Math.max</span></label>
           <div style="display:flex;gap:8px;align-items:center">
             <input class="fi" id="fb-raw-expr" placeholder="e.g. Math.ceil(mrpRaw/50)*50"
               style="flex:1;font-family:var(--mono);font-size:12px"
               onkeydown="if(event.key==='Enter'){fbSetRawExpr();event.preventDefault()}"
               oninput="fbPreviewRaw(this.value)">
-            <button class="btn bp bsm" onclick="fbSetRawExpr()">✓ Use This</button>
+            <button class="btn bp bsm" onclick="fbSetRawExpr()"><span class="ic-h" data-icon="check" data-size="13"></span> Use This</button>
           </div>
           <div style="margin-top:6px;font-size:11px;color:var(--tx3)">
             Common patterns:
@@ -874,8 +878,8 @@ body:has(#login-screen.active){overflow:hidden}
 
     <div class="fb-foot">
       <button class="btn bg" style="flex:1" onclick="closeFB()">Cancel</button>
-      <button class="btn br bsm" onclick="fbClear()">✕ Clear all</button>
-      <button class="btn bp" style="flex:2" onclick="saveFB()">✓ Save Formula</button>
+      <button class="btn br bsm" onclick="fbClear()"><span class="ic-h" data-icon="x" data-size="12"></span> Clear all</button>
+      <button class="btn bp" style="flex:2" onclick="saveFB()"><span class="ic-h" data-icon="check" data-size="13"></span> Save Formula</button>
     </div>
   </div>
 </div>
@@ -884,7 +888,7 @@ body:has(#login-screen.active){overflow:hidden}
 
 <!-- ═══ SESSION EXPIRY WARNING ═══ -->
 <div id="session-warn">
-  ⚠ You'll be logged out in <strong id="session-countdown">5:00</strong> due to inactivity.
+  <span class="ic-h" data-icon="alert" data-size="13"></span> You'll be logged out in <strong id="session-countdown">5:00</strong> due to inactivity.
   <button onclick="resetSession()" class="btn bp bsm" style="margin-left:10px">Stay logged in</button>
 </div>
 
@@ -926,7 +930,7 @@ body:has(#login-screen.active){overflow:hidden}
     </div>
     <div class="flex gap12" style="align-items:center">
       <div style="position:relative" id="global-search-wrap">
-        <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:13px;pointer-events:none">⌕</span>
+        <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:13px;pointer-events:none"><span class="ic-h" data-icon="search" data-size="14"></span> </span>
         <input id="global-search" autocomplete="off" placeholder="Search SKUs, brands, pages…" style="padding:6px 12px 6px 28px;font-size:12px;background:var(--s2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);width:260px;outline:none" oninput="onGlobalSearch(this.value)" onfocus="onGlobalSearch(this.value)" onkeydown="globalSearchKey(event)">
         <div id="global-search-results" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--s);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:200;min-width:320px;max-height:360px;overflow-y:auto"></div>
       </div>
@@ -1088,7 +1092,7 @@ body:has(#login-screen.active){overflow:hidden}
     </div>
     <div>
       <div class="card mb16">
-        <div class="ch"><div style="font-size:13px;font-weight:600">⚠ Active Breaches</div><button class="btn bg bsm" onclick="exportBreaches()">⬇ Export</button></div>
+        <div class="ch"><div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="alert" data-size="14"></span> Active Breaches</div><button class="btn bg bsm" onclick="exportBreaches()"><span class="ic-h" data-icon="download" data-size="13"></span> Export</button></div>
         <div id="thr-breach-list" style="padding:0"></div>
       </div>
       <div class="card">
@@ -1142,7 +1146,7 @@ body:has(#login-screen.active){overflow:hidden}
       <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="commmode" value="level_slab" checked style="accent-color:var(--ac);margin-right:4px" onchange="setCommMode(this.value)"> Level + Slab (per category)</label>
       <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="commmode" value="slab" style="accent-color:var(--ac);margin-right:4px" onchange="setCommMode(this.value)"> Slab only (same for all categories)</label>
     </div></div>
-    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600" id="comm-myntra-title">Commission % — Category × Price Slab × Level</div><div class="flex gap8"><button class="btn bg bsm" onclick="openCommSlabModal()">✎ Edit Slabs</button><button class="btn bg bsm" onclick="openAddCategoryModal()">+ Add Category</button><button class="btn bp bsm" onclick="saveComm()">✓ Save & Apply</button></div></div>
+    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600" id="comm-myntra-title">Commission % — Category × Price Slab × Level</div><div class="flex gap8"><button class="btn bg bsm" onclick="openCommSlabModal()"><span class="ic-h" data-icon="edit" data-size="12"></span> Edit Slabs</button><button class="btn bg bsm" onclick="openAddCategoryModal()">+ Add Category</button><button class="btn bp bsm" onclick="saveComm()"><span class="ic-h" data-icon="check" data-size="13"></span> Save & Apply</button></div></div>
     <div style="padding:0;overflow-x:auto"><table class="comm-table" id="comm-myntra-table"></table></div></div>
   </div>
   <div id="comm-ajio" style="display:none">
@@ -1152,7 +1156,7 @@ body:has(#login-screen.active){overflow:hidden}
     </div>
   </div>
   <div id="comm-amazon" style="display:none">
-    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Amazon Referral Fee % by Category</div><button class="btn bp bsm" onclick="saveComm()">✓ Save & Apply</button></div>
+    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Amazon Referral Fee % by Category</div><button class="btn bp bsm" onclick="saveComm()"><span class="ic-h" data-icon="check" data-size="13"></span> Save & Apply</button></div>
     <div style="padding:0"><table class="comm-table" id="comm-amazon-table"></table></div></div>
   </div>
 </div>
@@ -1165,7 +1169,7 @@ body:has(#login-screen.active){overflow:hidden}
     <div class="tab tamz-t" onclick="switchLogTab('amazon',this)"><span class="tdot" style="background:var(--amz)"></span>Amazon</div>
   </div>
   <div id="log-myntra"><div class="g2 mb16">
-    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">🟢 Forward (GT Charges)</div></div><div class="cb">
+    <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="truck" data-size="15"></span> Forward (GT Charges)</div></div><div class="cb">
       <div class="fg"><label class="fl">Mode</label><div class="flex gap12">
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="level" checked style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Level-based</label>
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mfwd" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mfwd',this.value)"> Fixed</label>
@@ -1176,15 +1180,15 @@ body:has(#login-screen.active){overflow:hidden}
           <thead id="gt-table-head"></thead>
           <tbody id="gt-table-body"></tbody>
         </table></div>
-        <div class="st" style="margin-top:6px">★ Most common column. All values editable — changes auto-save to database.</div>
+        <div class="st" style="margin-top:6px"><span class="ic-h" data-icon="star" data-size="12" style="color:var(--ac)"></span> Most common column. All values editable — changes auto-save to database.</div>
         <div class="flex gap8" style="margin-top:12px">
-          <button class="btn bp bsm" onclick="saveGTCharges()">✓ Save GT Charges</button>
+          <button class="btn bp bsm" onclick="saveGTCharges()"><span class="ic-h" data-icon="check" data-size="13"></span> Save GT Charges</button>
           <button class="btn bg bsm" onclick="openAddLevelModal()">+ Add Level</button>
-          <button class="btn bg bsm" onclick="openGTSlabModal()">✎ Edit Price Slabs</button>
+          <button class="btn bg bsm" onclick="openGTSlabModal()"><span class="ic-h" data-icon="edit" data-size="12"></span> Edit Price Slabs</button>
         </div>
       </div>
       <div id="mfwd-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Rate (₹)</label><input class="fi" type="number" id="mfwd-fix" value="230" oninput="LOGISTICS_SETTINGS.myn_fwd_fixed=+this.value||0;invalidateCalcCache()"></div>
-        <button class="btn bp bsm" onclick="saveGTCharges()">✓ Save GT Charges</button>
+        <button class="btn bp bsm" onclick="saveGTCharges()"><span class="ic-h" data-icon="check" data-size="13"></span> Save GT Charges</button>
       </div>
       <div id="mfwd-cat" style="display:none">
         <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:520px" id="gt-cat-table">
@@ -1193,8 +1197,8 @@ body:has(#login-screen.active){overflow:hidden}
         </table></div>
         <div class="st" style="margin-top:6px">Shipping charged per category (same price bands). New categories start from their level's GT row.</div>
         <div class="flex gap8" style="margin-top:12px">
-          <button class="btn bp bsm" onclick="saveGTCharges()">✓ Save GT Charges</button>
-          <button class="btn bg bsm" onclick="openGTSlabModal()">✎ Edit Price Slabs</button>
+          <button class="btn bp bsm" onclick="saveGTCharges()"><span class="ic-h" data-icon="check" data-size="13"></span> Save GT Charges</button>
+          <button class="btn bg bsm" onclick="openGTSlabModal()"><span class="ic-h" data-icon="edit" data-size="12"></span> Edit Price Slabs</button>
         </div>
       </div>
       <div style="margin-top:14px">
@@ -1203,19 +1207,19 @@ body:has(#login-screen.active){overflow:hidden}
     </div></div>
 
     <!-- Collection Fee / Fixed Fee — separate card -->
-    <div class="card" style="margin-top:16px"><div class="ch"><div style="font-size:13px;font-weight:600">💰 Collection Fee / Fixed Fee</div><div class="st">By Category × Seller Price slab</div></div><div class="cb">
+    <div class="card" style="margin-top:16px"><div class="ch"><div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="wallet" data-size="15"></span> Collection Fee / Fixed Fee</div><div class="st">By Category × Seller Price slab</div></div><div class="cb">
       <div style="overflow-x:auto"><table class="dt" style="font-size:11px;min-width:560px" id="coll-table">
         <thead id="coll-table-head"></thead>
         <tbody id="coll-table-body"></tbody>
       </table></div>
-      <div class="st" style="margin-top:6px">★ Most common slab. Fee × 1.18 (incl. GST) is deducted from payout.</div>
+      <div class="st" style="margin-top:6px"><span class="ic-h" data-icon="star" data-size="12" style="color:var(--ac)"></span> Most common slab. Fee × 1.18 (incl. GST) is deducted from payout.</div>
       <div class="flex gap8" style="margin-top:10px">
-        <button class="btn bp bsm" onclick="saveCollFees()">✓ Save Collection Fees</button>
-        <button class="btn bg bsm" onclick="openCollSlabModal()">✎ Edit Price Slabs</button>
+        <button class="btn bp bsm" onclick="saveCollFees()"><span class="ic-h" data-icon="check" data-size="13"></span> Save Collection Fees</button>
+        <button class="btn bg bsm" onclick="openCollSlabModal()"><span class="ic-h" data-icon="edit" data-size="12"></span> Edit Price Slabs</button>
       </div>
     </div></div>
 
-    <div class="card" style="margin-top:16px"><div class="ch"><div style="font-size:13px;font-weight:600">🔴 Return (Reverse Fees)</div></div><div class="cb">
+    <div class="card" style="margin-top:16px"><div class="ch"><div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="return" data-size="15"></span> Return (Reverse Fees)</div></div><div class="cb">
       <div class="fg"><label class="fl">Mode</label><div class="flex gap12">
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="level" checked style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Level-based</label>
         <label style="cursor:pointer;font-size:13px;color:var(--tx2)"><input type="radio" name="mret" value="fixed" style="accent-color:var(--ac);margin-right:4px" onchange="logMode('mret',this.value)"> Fixed</label>
@@ -1225,15 +1229,15 @@ body:has(#login-screen.active){overflow:hidden}
         <thead id="ret-table-head"></thead>
         <tbody id="ret-table-body"></tbody>
       </table></div>
-      <button class="btn bg bsm" style="margin-top:10px" onclick="openRevSlabModal()">✎ Edit Price Slabs</button></div>
+      <button class="btn bg bsm" style="margin-top:10px" onclick="openRevSlabModal()"><span class="ic-h" data-icon="edit" data-size="12"></span> Edit Price Slabs</button></div>
       <div id="mret-fixed" style="display:none"><div class="fg"><label class="fl">Fixed Return Rate (₹)</label><input class="fi" type="number" id="mret-fix" value="218" oninput="LOGISTICS_SETTINGS.myn_ret_fixed=+this.value||0;invalidateCalcCache()"></div></div>
       <div id="mret-cat" style="display:none"><div style="overflow-x:auto"><table class="dt" style="font-size:12px" id="ret-cat-table">
         <thead id="ret-cat-table-head"></thead>
         <tbody id="ret-cat-table-body"></tbody>
       </table></div>
       <div class="st" style="margin-top:6px">Return fee charged per category. New categories start from their level's reverse fee.</div>
-      <button class="btn bg bsm" style="margin-top:10px" onclick="openRevSlabModal()">✎ Edit Price Slabs</button></div>
-      <button class="btn bp bsm" style="margin-top:12px" onclick="saveLogisticsAll()">✓ Save All Logistics</button>
+      <button class="btn bg bsm" style="margin-top:10px" onclick="openRevSlabModal()"><span class="ic-h" data-icon="edit" data-size="12"></span> Edit Price Slabs</button></div>
+      <button class="btn bp bsm" style="margin-top:12px" onclick="saveLogisticsAll()"><span class="ic-h" data-icon="check" data-size="13"></span> Save All Logistics</button>
     </div></div>
   </div></div>
   <div id="log-ajio" style="display:none">
@@ -1245,7 +1249,7 @@ body:has(#login-screen.active){overflow:hidden}
         <div class="fg"><label class="fl">Return Rate (₹)</label><input class="fi" type="number" id="ajret-fix" value="70"></div>
       </div></div>
     </div>
-    <button class="btn bp bsm" style="margin-top:14px" onclick="saveLogisticsAll()">✓ Save</button>
+    <button class="btn bp bsm" style="margin-top:14px" onclick="saveLogisticsAll()"><span class="ic-h" data-icon="check" data-size="13"></span> Save</button>
   </div>
   <div id="log-amazon" style="display:none">
     <div class="g2">
@@ -1255,7 +1259,7 @@ body:has(#login-screen.active){overflow:hidden}
       </div></div>
       <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Return (₹)</div></div><div class="cb">
         <div class="fg"><label class="fl">Return Fee (₹)</label><input class="fi" type="number" id="amz-ret" value="55"></div>
-        <button class="btn bp bsm" onclick="saveLogisticsAll();toast('Amazon logistics saved','green')">✓ Save</button>
+        <button class="btn bp bsm" onclick="saveLogisticsAll();toast('Amazon logistics saved','green')"><span class="ic-h" data-icon="check" data-size="13"></span> Save</button>
       </div></div>
     </div>
   </div>
@@ -1276,7 +1280,7 @@ body:has(#login-screen.active){overflow:hidden}
     <div class="sku-actions-wrap" style="display:flex;gap:6px;align-items:center">
       <div class="btn bp bsm" onclick="addRow()">+ Add SKU</div>
       <div style="position:relative;display:inline-block" id="import-dropdown">
-        <button class="btn bg bsm" onclick="toggleImportMenu()" style="min-width:80px">Import ▾</button>
+        <button class="btn bg bsm" onclick="toggleImportMenu()" style="min-width:80px">Import <span class="ic-h" data-icon="chevronDown" data-size="12"></span> </button>
         <div id="import-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--s);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:100;min-width:220px;overflow:hidden">
           <div style="padding:8px 14px;cursor:pointer;font-size:12px;color:var(--tx)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''" onclick="openImport();hideImportMenu()">Upload CSV / Excel</div>
           <div style="padding:8px 14px;cursor:pointer;font-size:12px;color:var(--tx)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''" onclick="dlTemplate();hideImportMenu()">Download Template</div>
@@ -1291,7 +1295,7 @@ body:has(#login-screen.active){overflow:hidden}
   <!-- FILTER BAR -->
   <div class="filter-bar">
     <div class="filter-search" style="position:relative">
-      <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:14px;pointer-events:none">⌕</span>
+      <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:14px;pointer-events:none"><span class="ic-h" data-icon="search" data-size="14"></span> </span>
       <input id="f-search" class="filter-select" style="padding-left:27px;min-width:180px" placeholder="Search SKU or Style ID..." oninput="debouncedRenderSKUs()">
     </div>
     <button class="filter-toggle" id="filter-toggle" onclick="toggleFilters()" aria-expanded="false">
@@ -1313,7 +1317,7 @@ body:has(#login-screen.active){overflow:hidden}
       <input id="f-profit-min" class="filter-select" type="number" placeholder="Min" style="width:70px;min-width:0" oninput="debouncedRenderSKUs()">
       <span class="filter-label">to</span>
       <input id="f-profit-max" class="filter-select" type="number" placeholder="Max" style="width:70px;min-width:0" oninput="debouncedRenderSKUs()">
-      <button class="filter-clear" onclick="clearFilters()" style="display:none" id="f-clear-btn">✕ Clear Filters</button>
+      <button class="filter-clear" onclick="clearFilters()" style="display:none" id="f-clear-btn"><span class="ic-h" data-icon="x" data-size="12"></span> Clear Filters</button>
     </div>
   </div>
   <div id="active-filter-chips" class="active-filters" style="margin-bottom:8px"></div>
@@ -1371,7 +1375,7 @@ body:has(#login-screen.active){overflow:hidden}
     <div class="st" id="archive-count"></div>
     <div class="flex gap8">
       <input id="archive-search" class="filter-select" placeholder="Search archived SKUs..." style="min-width:180px" oninput="renderArchivedSKUs()">
-      <button class="btn bg bsm" onclick="exportArchivedSKUs()">⬇ Export</button>
+      <button class="btn bg bsm" onclick="exportArchivedSKUs()"><span class="ic-h" data-icon="download" data-size="13"></span> Export</button>
     </div>
   </div>
   <div class="ss-wrap">
@@ -1408,7 +1412,7 @@ body:has(#login-screen.active){overflow:hidden}
         <button onclick="addWFRow('section')" style="padding:5px 11px;border-radius:5px;border:1px dashed var(--bd2);cursor:pointer;font-size:12px;color:var(--tx3);background:transparent">+ Section</button>
       </div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;align-items:center">
-        <span style="font-size:10px;color:var(--bl);text-transform:uppercase;letter-spacing:1px;margin-right:2px">🔗 Fetch from tables:</span>
+        <span style="font-size:10px;color:var(--bl);text-transform:uppercase;letter-spacing:1px;margin-right:2px"><span class="ic-h" data-icon="link" data-size="13"></span> Fetch from tables:</span>
         <button onclick="addWFPreset('gt_fwd')"   style="padding:4px 10px;border-radius:5px;border:1px dashed rgba(78,142,247,.5);cursor:pointer;font-size:11px;color:var(--bl);background:rgba(78,142,247,.06)">GT Forward Charges</button>
         <button onclick="addWFPreset('rev_fee')"  style="padding:4px 10px;border-radius:5px;border:1px dashed rgba(78,142,247,.5);cursor:pointer;font-size:11px;color:var(--bl);background:rgba(78,142,247,.06)">Reverse Charges</button>
         <button onclick="addWFPreset('comm')"     style="padding:4px 10px;border-radius:5px;border:1px dashed rgba(78,142,247,.5);cursor:pointer;font-size:11px;color:var(--bl);background:rgba(78,142,247,.06)">Commission %</button>
@@ -1433,13 +1437,13 @@ body:has(#login-screen.active){overflow:hidden}
         </span>
       </div>
       <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
-        <button class="btn bp bsm" onclick="save('wireframe');toast('✓ Wireframe saved to database','green')">✓ Save Wireframe</button>
+        <button class="btn bp bsm" onclick="save('wireframe');toast('Wireframe saved to database','green')"><span class="ic-h" data-icon="check" data-size="13"></span> Save Wireframe</button>
         <span id="wf-locked-count" class="st" style="font-size:10px"></span>
       </div>
     </div>
     <div class="card"><div class="ch"><div style="font-size:13px;font-weight:600">Row Types</div></div><div class="cb" style="font-size:12px">
       <div class="wfrow mb8"><span style="color:var(--pu);font-weight:600">INPUT</span><span style="color:var(--tx3);margin-left:8px">→ User enters a number (cost, markup, discount)</span></div>
-      <div class="wfrow wff mb8"><span style="color:var(--bl);font-weight:600">FORMULA</span><span style="color:var(--tx3);margin-left:8px">→ Math expression you define (click ✎ Edit Formula)</span></div>
+      <div class="wfrow wff mb8"><span style="color:var(--bl);font-weight:600">FORMULA</span><span style="color:var(--tx3);margin-left:8px">→ Math expression you define (click <span class="ic-h" data-icon="edit" data-size="12"></span> Edit Formula)</span></div>
       <div class="wfrow wfo mb8"><span style="color:var(--gr);font-weight:600">OUTPUT</span><span style="color:var(--tx3);margin-left:8px">→ Final result shown vs threshold</span></div>
       <div class="wfrow mb8" style="border-left:2px solid rgba(78,142,247,.4)">
         <span style="color:var(--bl);font-weight:600">LOOKUP</span>
@@ -1448,24 +1452,24 @@ body:has(#login-screen.active){overflow:hidden}
       <div style="background:rgba(78,142,247,.06);border:1px solid rgba(78,142,247,.2);border-radius:6px;padding:10px 12px;margin-top:8px;font-size:11px">
         <div style="color:var(--bl);font-weight:600;margin-bottom:6px">How LOOKUP works:</div>
         <div style="color:var(--tx3);line-height:1.8">
-          🔗 <strong style="color:var(--tx2)">GT Forward Charges</strong> — reads from Logistics → GT Charges table using Customer Paid price band<br>
-          🔗 <strong style="color:var(--tx2)">Reverse Charges</strong> — reads from Logistics → Reverse Fees table using SKU level<br>
-          🔗 <strong style="color:var(--tx2)">Commission %</strong> — reads from Commission Settings using category × seller price slab<br>
-          🔗 <strong style="color:var(--tx2)">Collection Fee</strong> — reads from Logistics settings (fixed ₹61 by default)<br>
+          <span class="ic-h" data-icon="link" data-size="13"></span> <strong style="color:var(--tx2)">GT Forward Charges</strong> — reads from Logistics → GT Charges table using Customer Paid price band<br>
+          <span class="ic-h" data-icon="link" data-size="13"></span> <strong style="color:var(--tx2)">Reverse Charges</strong> — reads from Logistics → Reverse Fees table using SKU level<br>
+          <span class="ic-h" data-icon="link" data-size="13"></span> <strong style="color:var(--tx2)">Commission %</strong> — reads from Commission Settings using category × seller price slab<br>
+          <span class="ic-h" data-icon="link" data-size="13"></span> <strong style="color:var(--tx2)">Collection Fee</strong> — reads from Logistics settings (fixed ₹61 by default)<br>
           <span style="color:var(--ac)">If Myntra changes a rate — update it in Logistics or Commission Settings. The wireframe fetches automatically.</span>
         </div>
       </div>
-      <div class="wfrow mt8" style="opacity:.7"><span style="font-size:13px">🔒</span><span style="color:var(--tx3);margin-left:8px">→ Protected row — cannot be deleted</span></div>
+      <div class="wfrow mt8" style="opacity:.7"><span style="font-size:13px;color:var(--tx3)"><span class="ic-h" data-icon="lock" data-size="13"></span> </span><span style="color:var(--tx3);margin-left:8px">→ Protected row — cannot be deleted</span></div>
     </div></div>
 
     <!-- BUG DETECTOR -->
     <div class="card" style="margin-top:16px">
       <div class="ch">
         <div>
-          <div style="font-size:13px;font-weight:600">🔍 Agentic Bug Detector</div>
+          <div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="search" data-size="14"></span> Agentic Bug Detector</div>
           <div class="st" style="margin-top:2px">Runs every formula, checks for errors, validates results</div>
         </div>
-        <button class="btn bp bsm" onclick="runBugDetector()">▶ Run Check</button>
+        <button class="btn bp bsm" onclick="runBugDetector()"><span class="ic-h" data-icon="play" data-size="13"></span> Run Check</button>
       </div>
       <div class="cb">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
@@ -1590,10 +1594,10 @@ body:has(#login-screen.active){overflow:hidden}
       <div class="card mb16">
         <div class="ch">
           <div>
-            <div style="font-size:13px;font-weight:600">📧 Email Settings (EmailJS)</div>
+            <div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="mail" data-size="15"></span> Email Settings</div>
             <div class="st" style="margin-top:2px">Paste your keys from emailjs.com — no code editing needed</div>
           </div>
-          <button class="btn bp bsm" onclick="saveEmailSettings()">✓ Save & Activate</button>
+          <button class="btn bp bsm" onclick="saveEmailSettings()"><span class="ic-h" data-icon="check" data-size="13"></span> Save & Activate</button>
         </div>
         <div class="cb">
           <div class="fg"><label class="fl">Service ID</label><input class="fi" id="cfg-service-id" placeholder="service_xxxxxxx" spellcheck="false"></div>
@@ -1605,7 +1609,7 @@ body:has(#login-screen.active){overflow:hidden}
         </div>
       </div>
       <div class="card">
-        <div class="ch"><div style="font-size:13px;font-weight:600">🧪 Test Emails</div></div>
+        <div class="ch"><div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="flask" data-size="15"></span> Test Emails</div></div>
         <div class="cb">
           <div class="fg"><label class="fl">Send test to this email</label><input class="fi" id="cfg-test-email" type="email" placeholder="test@example.com"></div>
           <div style="display:flex;flex-direction:column;gap:9px">
@@ -1620,13 +1624,13 @@ body:has(#login-screen.active){overflow:hidden}
       <div class="card mb16">
         <div class="ch">
           <div>
-            <div style="font-size:13px;font-weight:600">☁ Database (Supabase)</div>
+            <div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="database" data-size="15"></span> Database (Supabase)</div>
             <div class="st" style="margin-top:2px">Cloud sync across all devices</div>
           </div>
         </div>
         <div class="cb">
           <div class="success" style="margin-bottom:0">
-            ✓ Connected — all data saves automatically.
+            <span class="ic-h" data-icon="check" data-size="14"></span> Connected — all data saves automatically.
           </div>
           <div id="sb-cfg-status" style="margin-top:14px;display:none"></div>
         </div>
@@ -1634,7 +1638,7 @@ body:has(#login-screen.active){overflow:hidden}
       <div class="card mb16">
         <div class="ch">
           <div>
-            <div style="font-size:13px;font-weight:600">🔄 Daily Backups (7-day rolling)</div>
+            <div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="refresh" data-size="15"></span> Daily Backups (7-day rolling)</div>
             <div class="st" style="margin-top:2px">Automated nightly backup at 12:00 AM IST</div>
           </div>
           <button class="btn bp bsm" onclick="createManualBackup()">+ Backup Now</button>
@@ -1653,9 +1657,9 @@ body:has(#login-screen.active){overflow:hidden}
           <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd)"><span class="st">Users</span><span class="mono" id="cfg-user-count">—</span></div>
           <div style="display:flex;justify-content:space-between;padding:7px 0"><span class="st">Data size</span><span class="mono" id="cfg-storage-size">—</span></div>
           <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn bg bsm" onclick="exportData()">⬇ Backup</button>
-            <button class="btn bg bsm" onclick="importDataPrompt()">⬆ Restore</button>
-            <button class="btn br bsm" onclick="confirmClearData()" aria-label="Clear all data">✕ Clear All Data</button>
+            <button class="btn bg bsm" onclick="exportData()"><span class="ic-h" data-icon="download" data-size="13"></span> Backup</button>
+            <button class="btn bg bsm" onclick="importDataPrompt()"><span class="ic-h" data-icon="upload" data-size="13"></span> Restore</button>
+            <button class="btn br bsm" onclick="confirmClearData()" aria-label="Clear all data"><span class="ic-h" data-icon="x" data-size="12"></span> Clear All Data</button>
           </div>
         </div>
       </div>
@@ -1692,6 +1696,78 @@ function escAttr(s){
   if(s==null) return '';
   return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/</g,'\\x3c').replace(/>/g,'\\x3e');
 }
+// ── Custom icon set ───────────────────────────────────────────────
+// Feather-style line icons (viewBox 24, currentColor stroke, 2px) that
+// replace emoji throughout the UI. Use icon('name') in generated markup
+// or <svg class="ic ...">…</svg> in static HTML. FILLED icons render as
+// solid glyphs (star, play, dots, sparkle).
+const _ICON_FILLED=new Set(['star','play','sparkle','dots','dot']);
+const ICONS={
+  calc:'<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="8" y2="10.01"/><line x1="12" y1="10" x2="12" y2="10.01"/><line x1="16" y1="10" x2="16" y2="10.01"/><line x1="8" y1="14" x2="8" y2="14.01"/><line x1="12" y1="14" x2="12" y2="14.01"/><line x1="16" y1="14" x2="16" y2="14.01"/><line x1="8" y1="18" x2="16" y2="18"/>',
+  history:'<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
+  tag:'<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  note:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  bellOff:'<path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.9 17.9 0 0 1 18 8"/><path d="M6.26 6.26A5.9 5.9 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/>',
+  alert:'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  checkCircle:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  check:'<polyline points="20 6 9 17 4 12"/>',
+  edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  archive:'<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>',
+  x:'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  xCircle:'<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+  dots:'<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>',
+  zap:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  undo:'<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
+  slash:'<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>',
+  star:'<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  sparkle:'<path d="M12 2l2.2 7.06L21 11l-6.8 1.94L12 20l-2.2-7.06L3 11l6.8-1.94z"/>',
+  play:'<polygon points="6 4 20 12 6 20 6 4"/>',
+  chevronDown:'<polyline points="6 9 12 15 18 9"/>',
+  chevronUp:'<polyline points="18 15 12 9 6 15"/>',
+  lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/>',
+  flask:'<path d="M9 3h6"/><path d="M10 3v6l-5.6 9.4A1.6 1.6 0 0 0 5.8 21h12.4a1.6 1.6 0 0 0 1.4-2.6L14 9V3"/><line x1="8" y1="15" x2="16" y2="15"/>',
+  database:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
+  cloud:'<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
+  refresh:'<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  package:'<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  keyboard:'<rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="10.01"/><line x1="10" y1="10" x2="10" y2="10.01"/><line x1="14" y1="10" x2="14" y2="10.01"/><line x1="18" y1="10" x2="18" y2="10.01"/><line x1="8" y1="14" x2="16" y2="14"/>',
+  external:'<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+  arrowRight:'<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
+  arrowLeft:'<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>',
+  plus:'<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  wallet:'<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>',
+  truck:'<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
+  return:'<polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>',
+  trash:'<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+};
+function icon(name,opts){
+  opts=opts||{};
+  const size=opts.size||14;
+  const cls=opts.cls?(' '+opts.cls):'';
+  const style=opts.style?(' style="'+opts.style+'"'):'';
+  const p=ICONS[name]||'';
+  const filled=_ICON_FILLED.has(name);
+  const paint=filled?'fill="currentColor" stroke="none"':'fill="none" stroke="currentColor"';
+  return `<svg class="ic${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" ${paint} stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${style}>${p}</svg>`;
+}
+// Fill static-HTML icon placeholders: <span data-icon="name" data-size="16">.
+// Run once at startup; static page markup isn't re-rendered.
+function hydrateIcons(root){
+  (root||document).querySelectorAll('[data-icon]').forEach(elm=>{
+    const name=elm.getAttribute('data-icon');
+    if(!ICONS[name]){ elm.removeAttribute('data-icon'); return; }
+    elm.innerHTML=icon(name,{size:+elm.getAttribute('data-size')||14});
+    elm.removeAttribute('data-icon');
+  });
+}
+document.addEventListener('DOMContentLoaded',()=>hydrateIcons());
 // Sanitize formula expressions — allow only safe math/variable tokens
 function sanitizeExpr(expr){
   if(!expr) return '0';
@@ -1981,11 +2057,11 @@ CREATE TABLE IF NOT EXISTS pd_sku_history (
 ALTER TABLE pd_sku_history ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all_sku_history" ON pd_sku_history FOR ALL USING (true) WITH CHECK (true);
 CREATE INDEX IF NOT EXISTS idx_sku_history_sku ON pd_sku_history (sku_id, ts DESC);`;
-  setModal(`<div class="mhdr"><div class="mtl">🗄 Database Setup — Run this SQL</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">${icon('database',{size:16})} Database Setup — Run this SQL</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div class="info mb12">Run this in your Supabase SQL Editor:</div>
       <div style="background:#0a0c12;border:1px solid var(--bd);border-radius:6px;padding:14px;font-family:monospace;font-size:12px;color:var(--gr);line-height:1.7;white-space:pre;overflow-x:auto">${sql}</div>
-      <button onclick="navigator.clipboard.writeText(\`${sql}\`).then(()=>toast('SQL copied!','green'))" class="btn bg bsm" style="margin-top:12px">📋 Copy SQL</button>
+      <button onclick="navigator.clipboard.writeText(\`${sql}\`).then(()=>toast('SQL copied!','green'))" class="btn bg bsm" style="margin-top:12px">${icon('copy',{size:13})} Copy SQL</button>
     </div>
     <div class="mfoot">
       <button class="btn bg" onclick="closeModal()">Close</button>
@@ -2035,14 +2111,14 @@ function debouncedSaveSKUs(){
       try{
         await _doSaveSKUs();
         resolvers.forEach(r=>r.resolve());
-        toast(`✓ ${count} change${count>1?'s':''} saved to database`,'green');
+        toast(`${count} change${count>1?'s':''} saved to database`,'green');
       }catch(e){
         resolvers.forEach(r=>r.reject(e));
-        toast('⚠ Save failed: '+e.message+' — changes kept locally, will retry','red');
+        toast('Save failed: '+e.message+' — changes kept locally, will retry','red');
         // Auto-retry once after 5s
         setTimeout(()=>{
-          _doSaveSKUs().then(()=>toast('✓ Retry succeeded — saved to database','green'))
-            .catch(()=>toast('⚠ Retry failed — please check your connection','red'));
+          _doSaveSKUs().then(()=>toast('Retry succeeded — saved to database','green'))
+            .catch(()=>toast('Retry failed — please check your connection','red'));
         },5000);
       }
     },2000);
@@ -2166,7 +2242,7 @@ async function dbLoadAllSKUs(){
               if(migrated%1000===0) console.log(`  ...migrated ${migrated}/${missing.length}`);
             }
             console.log(`✓ Re-migrated ${migrated} of ${missing.length} missing SKUs`);
-            toast(`✓ Restored ${migrated} SKUs to database`,'green');
+            toast(`Restored ${migrated} SKUs to database`,'green');
             if(migrated===missing.length) loaded.push(...missing);
             else {
               // Only add SKUs that were successfully migrated (re-fetch from table)
@@ -2196,7 +2272,7 @@ async function dbLoadAllSKUs(){
       }
       _useSkuTable=true;
       console.log(`✓ Migration complete — ${migrated} of ${blob.length} SKUs`);
-      toast(`✓ Migration complete — ${migrated} SKUs`,'green');
+      toast(`Migration complete — ${migrated} SKUs`,'green');
       return blob;
     }
     _useSkuTable=true;
@@ -2756,7 +2832,7 @@ async function save(type, opts){
     }catch(e){
       console.warn('Brand table save failed, falling back to blob:',e.message);
       updateSyncBadge(false, `Brand save failed: ${e.message}`);
-      toast(`⚠ Brand save failed (saved locally): ${e.message}`,'red');
+      toast(`Brand save failed (saved locally): ${e.message}`,'red');
       /* fall through to blob save */
     }
   }
@@ -2772,7 +2848,7 @@ async function save(type, opts){
     }catch(e){
       console.warn('Category table save failed, falling back to blob:',e.message);
       updateSyncBadge(false, `Category save failed: ${e.message}`);
-      toast(`⚠ Category save failed (saved locally): ${e.message}`,'red');
+      toast(`Category save failed (saved locally): ${e.message}`,'red');
       /* fall through to blob save */
     }
   }
@@ -2788,7 +2864,7 @@ async function save(type, opts){
     }catch(e){
       console.warn('Threshold table save failed, falling back to blob:',e.message);
       updateSyncBadge(false, `Threshold save failed: ${e.message}`);
-      toast(`⚠ Threshold save failed (saved locally): ${e.message}`,'red');
+      toast(`Threshold save failed (saved locally): ${e.message}`,'red');
       /* fall through to blob save */
     }
   }
@@ -2804,7 +2880,7 @@ async function save(type, opts){
     }catch(e){
       console.warn('Commission table save failed, falling back to blob:',e.message);
       updateSyncBadge(false, `Commission save failed: ${e.message}`);
-      toast(`⚠ Commission save failed (saved locally): ${e.message}`,'red');
+      toast(`Commission save failed (saved locally): ${e.message}`,'red');
       /* fall through to blob save */
     }
   }
@@ -3473,7 +3549,7 @@ function buildCommMyntra(){
   COMM_SLAB_ONLY=_normSlabArr(COMM_SLAB_ONLY,n,18.88);
   let h=`<thead><tr><th>Category</th><th>Level</th>${SLABS.map(s=>`<th>${s.label}</th>`).join('')}</tr></thead><tbody>`;
   if(slabOnly){
-    h+=`<tr style="background:rgba(240,177,42,.06)"><td><strong style="color:var(--ac)">★ All Categories</strong></td><td class="st" style="font-size:10px">slab-only</td>${
+    h+=`<tr style="background:rgba(240,177,42,.06)"><td><strong style="color:var(--ac)">${icon('star',{size:12})} All Categories</strong></td><td class="st" style="font-size:10px">slab-only</td>${
       COMM_SLAB_ONLY.map((v,i)=>`<td><input class="ci" style="border-color:var(--ac)" value="${v}" onchange="COMM_SLAB_ONLY[${i}]=+this.value||0;triggerRecalc();renderSKUs()"></td>`).join('')
     }</tr>`;
   }
@@ -3484,7 +3560,7 @@ function buildCommMyntra(){
     const lvlOpts=LEVELS.map(l=>`<option${l===curLvl?' selected':''}>${l}</option>`).join('');
     const skuCount=skuDB.filter(s=>s.category===cat).length;
     const skuBadge=skuCount?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(78,142,247,.12);color:var(--bl)">${skuCount}</span>`:'';
-    h+=`<tr${slabOnly?' style="opacity:.45"':''}><td><div class="flex gap8">${esc(cat)} ${skuBadge} <button class="btn br bxs" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}"${slabOnly?' disabled title="Ignored in slab-only mode"':''} onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value||0;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
+    h+=`<tr${slabOnly?' style="opacity:.45"':''}><td><div class="flex gap8">${esc(cat)} ${skuBadge} <button class="btn br bxs" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">${icon('x',{size:11})}</button></div></td><td><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${lvlOpts}</select></td>${sl.map((v,i)=>`<td><input class="ci" value="${v}"${slabOnly?' disabled title="Ignored in slab-only mode"':''} onchange="COMM_MYNTRA['${escAttr(cat)}'][${i}]=+this.value||0;triggerRecalc();renderSKUs()"></td>`).join('')}</tr>`;});
   t.innerHTML=h+'</tbody>';
 }
 
@@ -3497,7 +3573,7 @@ function setCommMode(mode){
   triggerRecalc();renderSKUs();
   audit('commission_mode',`Myntra commission mode set to ${COMM_MODE==='slab'?'Slab only':'Level + Slab'}`);
   save('logistics')
-    .then(()=>toast(`✓ Commission mode saved: ${COMM_MODE==='slab'?'Slab only (all categories)':'Level + Slab (per category)'}`,'blue'))
+    .then(()=>toast(`Commission mode saved: ${COMM_MODE==='slab'?'Slab only (all categories)':'Level + Slab (per category)'}`,'blue'))
     .catch(e=>toast('Mode save failed: '+e.message,'red'));
 }
 function buildCommAjioPPMP(){
@@ -3571,7 +3647,7 @@ async function addCategory(){
   for(const t of['categories','cat_levels','comm_myntra','comm_amazon'])await save(t);
   buildCommMyntra();buildCommAmazon();populateFilters();
   audit('category_add',`Category "${name}" added (${level})`);
-  toast(`✓ "${name}" added`,'green');
+  toast(`"${name}" added`,'green');
   closeModal();
 }
 let _deletedCategories=[];
@@ -3617,7 +3693,7 @@ async function deleteCategory(cat){
   setTimeout(()=>{
     const t=document.querySelector('.toast:last-child');
     if(t&&t.textContent.includes(cat)){
-      t.innerHTML+=` <button onclick="_reinstateCategory('${escAttr(cat)}')" style="background:var(--ac);color:#000;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px">↩ Undo</button>`;
+      t.innerHTML+=` <button onclick="_reinstateCategory('${escAttr(cat)}')" style="background:var(--ac);color:#000;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px">${icon('undo',{size:13})} Undo</button>`;
     }
   },50);
 }
@@ -3634,7 +3710,7 @@ async function _reinstateCategory(name){
   for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
   buildCommMyntra();buildCommAmazon();populateFilters();
   audit('category_reinstate',`Category "${name}" reinstated`);
-  toast(`✓ "${name}" reinstated`,'green');
+  toast(`"${name}" reinstated`,'green');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3676,7 +3752,7 @@ function renderBreachList(){
   h+=pageList.map(s=>{
     const c=calcSKU(s);
     const brand=brands.find(b=>b.id===s.brandId);
-    return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${esc(s.sku||s.styleId||'—')}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:4px 8px;white-space:nowrap">⊘ Ignore</button></td></tr>`;
+    return`<tr><td class="mono" style="font-size:11px;color:var(--re)">${esc(s.sku||s.styleId||'—')}</td><td>${s.category}</td><td class="st">${brand?.name||'—'}</td><td class="mono" style="color:var(--re)">₹${c.profitRs.toFixed(0)}</td><td class="mono">₹${c.threshold}</td><td><button class="btn bg bxs" onclick="toggleIgnore('${escAttr(s.id)}')" title="Ignore threshold for this SKU" style="font-size:10px;padding:4px 8px;white-space:nowrap">${icon('slash',{size:12})} Ignore</button></td></tr>`;
   }).join('');
   h+='</tbody></table>';
   if(totalPages>1){
@@ -3702,7 +3778,7 @@ async function saveThr(){
     const breached = skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
     if(breached.length) sendThresholdAlertEmail(breached, alertEmail);
   }
-  toast('✓ Thresholds saved','green');
+  toast('Thresholds saved','green');
 }
 
 function updateAlerts(){
@@ -3767,11 +3843,11 @@ function renderBrands(){
           </div>
         </div>
         <div class="flex gap8">
-          <button class="btn bg bxs" onclick="openBrandModal('${escAttr(b.id)}')" aria-label="Edit brand">✎</button>
-          <button class="btn br bxs" onclick="deleteBrand('${escAttr(b.id)}')" aria-label="Delete brand">✕</button>
+          <button class="btn bg bxs" onclick="openBrandModal('${escAttr(b.id)}')" aria-label="Edit brand">${icon('edit',{size:13})}</button>
+          <button class="btn br bxs" onclick="deleteBrand('${escAttr(b.id)}')" aria-label="Delete brand">${icon('x',{size:13})}</button>
         </div>
       </div>
-      ${b.commOverride!=null?`<div class="st mb8">🔒 Commission override: <span class="mono" style="color:var(--ac)">${b.commOverride}%</span></div>`:'<div class="st mb8">Auto commission from settings</div>'}
+      ${b.commOverride!=null?`<div class="st mb8">${icon('lock',{size:12})} Commission override: <span class="mono" style="color:var(--ac)">${b.commOverride}%</span></div>`:'<div class="st mb8">Auto commission from settings</div>'}
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
         <div style="background:var(--s2);border-radius:6px;padding:8px;text-align:center"><div class="st mb4">SKUs</div><div class="mono" style="font-size:16px;color:var(--bl)">${skus.length}</div></div>
         <div style="background:var(--s2);border-radius:6px;padding:8px;text-align:center"><div class="st mb4">Avg ₹ Profit</div><div class="mono" style="font-size:16px;color:${parseFloat(avgProfit)>0?'var(--gr)':'var(--re)'}">₹${avgProfit}</div></div>
@@ -4019,7 +4095,7 @@ function renderPricingIntel(){
       html+=`</tbody></table></div>`;
       if(rows.length>20) html+=`<div class="st" style="margin-bottom:8px">${rows.length-20} more SKUs not shown</div>`;
       _gstAboveRows=rows;
-      html+=`<button class="btn bg bxs" onclick="exportGSTAbove()" style="font-size:10px;margin-bottom:12px">📥 Export 18% → 5% Recommendations</button>`;
+      html+=`<button class="btn bg bxs" onclick="exportGSTAbove()" style="font-size:10px;margin-bottom:12px">${icon('download',{size:13})} Export 18% → 5% Recommendations</button>`;
     }
 
     if(belowCandidates.length){
@@ -4057,7 +4133,7 @@ function renderPricingIntel(){
       html+=`</tbody></table></div>`;
       if(bRows.length>20) html+=`<div class="st" style="margin-bottom:8px">${bRows.length-20} more SKUs not shown</div>`;
       _gstBelowRows=bRows;
-      html+=`<button class="btn bg bxs" onclick="exportGSTBelow()" style="font-size:10px;margin-bottom:12px">📥 Export 5% GST Advantage</button>`;
+      html+=`<button class="btn bg bxs" onclick="exportGSTBelow()" style="font-size:10px;margin-bottom:12px">${icon('download',{size:13})} Export 5% GST Advantage</button>`;
     }
   }
   html+=`</div>`;
@@ -4107,7 +4183,7 @@ function openBrandModal(id){
   const b=id?(brands.find(x=>x.id===id)||_default):_default;
   const isEdit=!!(id&&b.id);
   const mpOpts=['Myntra','Ajio','Amazon'].map(m=>`<option ${b.marketplace===m?'selected':''}>${m}</option>`).join('');
-  setModal(`<div class="mhdr"><div class="mtl">${isEdit?'✎ Edit Brand':'+ New Brand'}</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">${isEdit?icon('edit',{size:15})+' Edit Brand':'+ New Brand'}</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div class="fg"><label class="fl">Brand Name</label><input class="fi" id="bn-name" placeholder="e.g. Fusionic — Ajio CC" value="${esc(b.name)}"></div>
       <div class="frow">
@@ -4146,8 +4222,8 @@ function saveBrand(eid){
   const name=el('bn-name')?.value.trim();const mp=el('bn-mp')?.value;const model=el('bn-model')?.value;
   const commVal=el('bn-comm')?.value;const comm=commVal===''?null:parseFloat(commVal);
   if(!name){toast('Brand name required','red');return;}
-  if(eid){const b=brands.find(x=>x.id===eid);if(b)Object.assign(b,{name,marketplace:mp,model,commOverride:comm,updatedAt:new Date().toISOString()});audit('brand_edit',`${name} updated (${model})`);toast(`✓ ${name} updated`,'green');}
-  else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});audit('brand_add',`${name} added (${model})`);toast(`✓ ${name} added`,'green');}
+  if(eid){const b=brands.find(x=>x.id===eid);if(b)Object.assign(b,{name,marketplace:mp,model,commOverride:comm,updatedAt:new Date().toISOString()});audit('brand_edit',`${name} updated (${model})`);toast(`${name} updated`,'green');}
+  else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});audit('brand_add',`${name} added (${model})`);toast(`${name} added`,'green');}
   closeModal();renderBrands();populateFilters();renderSKUs();save('brands').catch(e=>toast('Brand save failed: '+e.message,'red'));
 }
 async function deleteBrand(id){
@@ -4269,27 +4345,27 @@ function renderActiveFilterChips(){
   const labels={'f-brand':'Brand','f-cat':'Category','f-status':'Status'};
   // Search text chip
   const q=el('f-search')?.value||'';
-  if(q) chips.push(`<span class="af-chip" onclick="el('f-search').value='';renderSKUs()">Search: "${esc(q)}" ✕</span>`);
+  if(q) chips.push(`<span class="af-chip" onclick="el('f-search').value='';renderSKUs()">Search: "${esc(q)}" ${icon('x',{size:11})}</span>`);
   // Marketplace tab chip
   if(_skuMPTab){
     const mpLabels={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
-    chips.push(`<span class="af-chip" onclick="document.querySelector('.sku-mp-tab[data-mp=\\'\\']').click()">Marketplace: ${mpLabels[_skuMPTab]||_skuMPTab} ✕</span>`);
+    chips.push(`<span class="af-chip" onclick="document.querySelector('.sku-mp-tab[data-mp=\\'\\']').click()">Marketplace: ${mpLabels[_skuMPTab]||_skuMPTab} ${icon('x',{size:10})}</span>`);
   }
   const fTag=el('f-tag')?.value||'';
-  if(fTag) chips.push(`<span class="af-chip" onclick="el('f-tag').value='';renderSKUs()">Tag: ${esc(fTag)} ✕</span>`);
+  if(fTag) chips.push(`<span class="af-chip" onclick="el('f-tag').value='';renderSKUs()">Tag: ${esc(fTag)} ${icon('x',{size:10})}</span>`);
   ['f-brand','f-cat','f-status'].forEach(fid=>{
     const e=el(fid);
     if(e&&e.value){
       const text=e.options[e.selectedIndex]?.text||e.value;
-      chips.push(`<span class="af-chip" onclick="el('${escAttr(fid)}').value='';renderSKUs()">${esc(labels[fid])}: ${esc(text)} ✕</span>`);
+      chips.push(`<span class="af-chip" onclick="el('${escAttr(fid)}').value='';renderSKUs()">${esc(labels[fid])}: ${esc(text)} ${icon('x',{size:10})}</span>`);
     }
   });
   // Profit range chips
   const pMin=el('f-profit-min')?.value||'';
   const pMax=el('f-profit-max')?.value||'';
-  if(pMin&&pMax) chips.push(`<span class="af-chip" onclick="el('f-profit-min').value='';el('f-profit-max').value='';renderSKUs()">Profit: ₹${pMin} – ₹${pMax} ✕</span>`);
-  else if(pMin) chips.push(`<span class="af-chip" onclick="el('f-profit-min').value='';renderSKUs()">Profit: ≥ ₹${pMin} ✕</span>`);
-  else if(pMax) chips.push(`<span class="af-chip" onclick="el('f-profit-max').value='';renderSKUs()">Profit: ≤ ₹${pMax} ✕</span>`);
+  if(pMin&&pMax) chips.push(`<span class="af-chip" onclick="el('f-profit-min').value='';el('f-profit-max').value='';renderSKUs()">Profit: ₹${pMin} – ₹${pMax} ${icon('x',{size:10})}</span>`);
+  else if(pMin) chips.push(`<span class="af-chip" onclick="el('f-profit-min').value='';renderSKUs()">Profit: ≥ ₹${pMin} ${icon('x',{size:10})}</span>`);
+  else if(pMax) chips.push(`<span class="af-chip" onclick="el('f-profit-max').value='';renderSKUs()">Profit: ≤ ₹${pMax} ${icon('x',{size:10})}</span>`);
   const sc=el('active-filter-chips');
   if(sc) sc.innerHTML=chips.length ? chips.join('') : '';
   // Show/hide clear button
@@ -4413,16 +4489,16 @@ function renderSKUs(){
     const ifDelColor=c.ifDelivered>=0?'var(--gr)':'var(--re)';
     let statusIcon='';
     const _icoStyle='cursor:pointer;font-size:14px;line-height:1;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center';
-    if(s.ignoreThreshold) statusIcon=`<span title="Threshold ignored — click to re-enable" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle}">🔕</span>`;
-    else if(c.isBreach) statusIcon=`<span title="Below threshold: ₹${c.profitRs.toFixed(0)} < ₹${c.threshold} — click to ignore" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle}">⚠️</span>`;
-    else statusIcon=`<span title="Healthy" style="${_icoStyle};cursor:default;opacity:.5">✅</span>`;
+    if(s.ignoreThreshold) statusIcon=`<span title="Threshold ignored — click to re-enable" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle};color:var(--tx3)">${icon('bellOff',{size:16})}</span>`;
+    else if(c.isBreach) statusIcon=`<span title="Below threshold: ₹${c.profitRs.toFixed(0)} < ₹${c.threshold} — click to ignore" onclick="toggleIgnore('${escAttr(s.id)}')" style="${_icoStyle};color:var(--ac)">${icon('alert',{size:16})}</span>`;
+    else statusIcon=`<span title="Healthy" style="${_icoStyle};cursor:default;color:var(--gr)">${icon('checkCircle',{size:16})}</span>`;
     cardsHtml+=renderSKUCard(s,c,brand,statusIcon,profColor,ifDelColor);
     html+=`<tr>
       <td class="mono" style="font-size:11px;font-weight:600" title="${esc(s.sku||'')}">${esc(s.sku||'—')}</td>
-      <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}${brand&&brand.model==='myntra'&&s.styleId?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:rgba(255,63,108,.12);color:var(--mn);font-size:11px;text-decoration:none;vertical-align:middle;margin-left:4px">↗</a>`:''}</td>
+      <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}${brand&&brand.model==='myntra'&&s.styleId?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:rgba(255,63,108,.12);color:var(--mn);text-decoration:none;vertical-align:middle;margin-left:4px">${icon('external',{size:12})}</a>`:''}</td>
       <td><span class="tag tb" style="font-size:10px;white-space:nowrap">${esc(s.category)}</span></td>
       <td><div style="font-size:11px;font-weight:600;color:var(--tx)">${esc(brand?.name||'—')}</div><div style="font-size:9px;color:var(--ac);margin-top:1px">${({'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'})[brand?.model]||''}</div></td>
-      <td style="line-height:1.6">${!s.styleId&&brand&&brand.model==='myntra'?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px">📝</span>':''}</td>
+      <td style="line-height:1.6">${!s.styleId&&brand&&brand.model==='myntra'?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px;color:var(--tx3)">'+icon('note',{size:12})+'</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
       <td class="mono">₹${Math.round(c.mrp).toLocaleString('en-IN')}</td>
@@ -4438,12 +4514,12 @@ function renderSKUs(){
           <button class="btn bg bxs sku-act" onclick="showCalcModal('${escAttr(s.id)}')" title="View calculation"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="16" y2="18"/></svg><span class="act-label"> Calc</span></button>
           <button class="btn bg bxs sku-act" onclick="showSkuHistoryModal('${escAttr(s.id)}')" title="Price history"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span class="act-label"> History</span></button>
           <button class="btn bg bxs sku-act" onclick="openTagsModal('${escAttr(s.id)}')" title="Tags & notes"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg><span class="act-label"> Tags</span></button>
-          <button class="btn bg bxs sku-act" onclick="toggleSkuMenu(event,'${escAttr(s.id)}')" title="More actions" style="font-weight:700">⋮</button>
+          <button class="btn bg bxs sku-act" onclick="toggleSkuMenu(event,'${escAttr(s.id)}')" title="More actions">${icon('dots',{size:16})}</button>
         </div>
         <div class="sku-menu" id="sku-menu-${escAttr(s.id)}" style="display:none;position:absolute;right:10px;margin-top:-2px;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:50;min-width:140px;overflow:hidden">
-          <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${escAttr(s.id)}')">✎ Edit SKU</div>
-          <div class="sku-menu-item" onclick="hideSkuMenus();archiveSKU('${escAttr(s.id)}')">▣ Archive</div>
-          <div class="sku-menu-item" style="color:var(--re);border-top:1px solid var(--bd)" onclick="hideSkuMenus();delSKU('${escAttr(s.id)}')">✕ Delete</div>
+          <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${escAttr(s.id)}')">${icon('edit',{style:'margin-right:8px'})}Edit SKU</div>
+          <div class="sku-menu-item" onclick="hideSkuMenus();archiveSKU('${escAttr(s.id)}')">${icon('archive',{style:'margin-right:8px'})}Archive</div>
+          <div class="sku-menu-item" style="color:var(--re);border-top:1px solid var(--bd)" onclick="hideSkuMenus();delSKU('${escAttr(s.id)}')">${icon('trash',{style:'margin-right:8px'})}Delete</div>
         </div>
       </td>
     </tr>`;
@@ -4475,10 +4551,10 @@ function renderSKUCard(s,c,brand,statusIcon,profColor,ifDelColor){
   const id=escAttr(s.id);
   const isMyntra=brand&&brand.model==='myntra';
   const mpLabel=_MP_LABEL[brand?.model]||'';
-  const myntraLink=(isMyntra&&s.styleId)?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:rgba(255,63,108,.12);color:var(--mn);font-size:11px;text-decoration:none">↗</a>`:'';
+  const myntraLink=(isMyntra&&s.styleId)?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:rgba(255,63,108,.12);color:var(--mn);text-decoration:none">${icon('external',{size:12})}</a>`:'';
   const noStyle=(!s.styleId&&isMyntra)?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':'';
   const tagChips=(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${id}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('');
-  const noteChip=s.note?`<span title="${esc(s.note)}" style="font-size:11px;cursor:help">📝</span>`:'';
+  const noteChip=s.note?`<span title="${esc(s.note)}" style="font-size:11px;cursor:help;color:var(--tx3)">${icon('note',{size:13})}</span>`:'';
   const tagsRow=(noStyle||tagChips||noteChip)?`<div class="skc-tags">${noStyle}${tagChips}${noteChip}</div>`:'';
   const inr=n=>Math.round(n).toLocaleString('en-IN');
   return`<div class="sku-card${c.isBreach?' breach':''}">
@@ -4507,14 +4583,14 @@ function renderSKUCard(s,c,brand,statusIcon,profColor,ifDelColor){
     </div>
     ${tagsRow}
     <div class="skc-actions">
-      <button class="btn bg bsm" onclick="showCalcModal('${id}')">📊 Calc</button>
+      <button class="btn bg bsm" onclick="showCalcModal('${id}')">${icon('calc')}Calc</button>
       <button class="btn bg bsm" onclick="showSkuHistoryModal('${id}')">History</button>
-      <button class="btn bg bsm skc-more" onclick="toggleSkuMenuCard(event,'${id}')" title="More actions" style="font-weight:700">⋮</button>
+      <button class="btn bg bsm skc-more" onclick="toggleSkuMenuCard(event,'${id}')" title="More actions">${icon('dots',{size:16})}</button>
       <div class="sku-menu" id="scm-${id}" style="display:none;position:fixed;background:var(--s);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:50;min-width:160px;overflow:hidden">
-        <div class="sku-menu-item" onclick="hideSkuMenus();openTagsModal('${id}')">🏷 Tags &amp; Notes</div>
-        <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${id}')">✎ Edit SKU</div>
-        <div class="sku-menu-item" onclick="hideSkuMenus();archiveSKU('${id}')">▣ Archive</div>
-        <div class="sku-menu-item" style="color:var(--re);border-top:1px solid var(--bd)" onclick="hideSkuMenus();delSKU('${id}')">✕ Delete</div>
+        <div class="sku-menu-item" onclick="hideSkuMenus();openTagsModal('${id}')">${icon('tag',{style:'margin-right:8px'})}Tags &amp; Notes</div>
+        <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${id}')">${icon('edit',{style:'margin-right:8px'})}Edit SKU</div>
+        <div class="sku-menu-item" onclick="hideSkuMenus();archiveSKU('${id}')">${icon('archive',{style:'margin-right:8px'})}Archive</div>
+        <div class="sku-menu-item" style="color:var(--re);border-top:1px solid var(--bd)" onclick="hideSkuMenus();delSKU('${id}')">${icon('trash',{style:'margin-right:8px'})}Delete</div>
       </div>
     </div>
   </div>`;
@@ -4580,7 +4656,7 @@ function renderEditRow(s){
     <td><div class="av" id="e-pp" style="color:${c.profitRs>0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</div></td>
     <td><div class="av" id="e-ifd" style="color:${c.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${c.ifDelivered.toFixed(0)}</div></td>
     <td><div class="av" id="e-gs" style="color:${c.grossSettlement>=0?'var(--bl)':'var(--re)'}">₹${c.grossSettlement.toFixed(0)}</div></td>
-    <td><div style="display:flex;gap:5px"><button class="btn bp bxs" onclick="saveEdit('${s.id}')" title="Save changes">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()" title="Cancel editing">✕</button></div></td>
+    <td><div style="display:flex;gap:5px"><button class="btn bp bxs" onclick="saveEdit('${s.id}')" title="Save changes">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()" title="Cancel editing">${icon('x',{size:13})}</button></div></td>
   </tr>`;
 }
 
@@ -4623,7 +4699,7 @@ function renderNewRow(){
     <td><div class="av na" id="n-pp">—</div></td>
     <td><div class="av na" id="n-ifd">—</div></td>
     <td><div class="av na" id="n-gs">—</div></td>
-    <td><div style="display:flex;gap:5px"><button class="btn bp bxs" onclick="saveNew()" title="Save new SKU">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()" title="Cancel">✕</button></div></td>
+    <td><div style="display:flex;gap:5px"><button class="btn bp bxs" onclick="saveNew()" title="Save new SKU">✓ Save</button><button class="btn bg bxs" onclick="cancelEdit()" title="Cancel">${icon('x',{size:13})}</button></div></td>
   </tr>`;
 }
 function toggleBrandPicker(){
@@ -4741,13 +4817,13 @@ function saveNew(){
   });
   invalidateCalcCache();
   editId=null;renderSKUs();renderBrands();updateAlerts();
-  toast(`✓ ${skuCode||sid||'SKU'} added — saving...`, 'green');
+  toast(`${skuCode||sid||'SKU'} added — saving...`, 'green');
   // Await the save and roll back the in-memory rows on failure, so a failed
   // write never leaves phantom SKUs that vanish on the next reload
   dbSaveSKU(...newSKUs)
     .then(()=>{
       audit('sku_add',`${skuCode||sid||'SKU'} added to ${count} brand${count>1?'s':''}`);
-      toast(`✓ ${skuCode||sid||'SKU'} saved to database`,'green');
+      toast(`${skuCode||sid||'SKU'} saved to database`,'green');
     })
     .catch(e=>{
       const ids=new Set(newSKUs.map(s=>s.id));
@@ -4794,7 +4870,7 @@ async function saveEdit(id){
   // Save the edited SKU — await to confirm persistence
   try{
     await dbSaveSKU(s);
-    toast(`✓ ${skuCode||sid||'SKU'} saved to database`,'green');
+    toast(`${skuCode||sid||'SKU'} saved to database`,'green');
   }catch(e){
     toast(`Save failed: ${e.message} — please retry`,'red');
   }
@@ -4811,7 +4887,7 @@ async function delSKU(id){
   try{
     await dbDeleteSKU(id); // atomic: DELETE FROM pd_skus_v2 WHERE id=X
     audit('sku_delete',`${label} deleted`);
-    toast(`✓ ${esc(label)} deleted from database`,'green');
+    toast(`${esc(label)} deleted from database`,'green');
   }catch(e){
     skuDB.push(s);invalidateCalcCache();renderSKUs();renderBrands();updateAlerts();
     toast(`Delete failed: ${e.message}`,'red');
@@ -4837,7 +4913,7 @@ async function archiveSKU(id){
   renderSKUs();renderBrands();updateAlerts();populateTagFilter();
   if(el('page-archive')?.classList.contains('active')) renderArchivedSKUs();
   audit('sku_archive',`${label} archived (out of stock)`);
-  toast(`📦 ${esc(label)} archived`,'green');
+  toast(`${esc(label)} archived`,'green');
 }
 async function unarchiveSKU(id){
   const s=skuDB.find(x=>x.id===id);if(!s)return;
@@ -4858,7 +4934,7 @@ async function unarchiveSKU(id){
   renderSKUs();renderBrands();updateAlerts();populateTagFilter();
   renderArchivedSKUs();
   audit('sku_unarchive',`${label} restored from archive`);
-  toast(`✓ ${esc(label)} restored to active SKUs`,'green');
+  toast(`${esc(label)} restored to active SKUs`,'green');
 }
 
 let _archivePage=1;
@@ -4879,7 +4955,7 @@ function renderArchivedSKUs(){
   const body=el('archive-body');
   if(!body) return;
   if(!archived.length){
-    body.innerHTML=`<tr><td colspan="10" style="text-align:center;padding:28px;color:var(--tx3)">No archived SKUs. Archive a SKU from the SKU table using the 📦 button.</td></tr>`;
+    body.innerHTML=`<tr><td colspan="10" style="text-align:center;padding:28px;color:var(--tx3)">No archived SKUs. Archive a SKU from the SKU table using the ⋮ menu.</td></tr>`;
   } else {
     body.innerHTML=pageList.map(s=>{
       const brand=brands.find(b=>b.id===s.brandId);
@@ -4894,8 +4970,8 @@ function renderArchivedSKUs(){
         <td class="mono">${s.discount||0}%</td>
         <td class="mono" style="color:${c.profitRs>=0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</td>
         <td><div class="flex gap8">
-          <button class="btn bp bxs sku-act" onclick="unarchiveSKU('${escAttr(s.id)}')" title="Restore to active">↩<span class="act-label"> Restore</span></button>
-          <button class="btn br bxs sku-act" onclick="delSKU('${escAttr(s.id)}')" title="Delete permanently">✕</button>
+          <button class="btn bp bxs sku-act" onclick="unarchiveSKU('${escAttr(s.id)}')" title="Restore to active">${icon('undo',{size:14})}<span class="act-label"> Restore</span></button>
+          <button class="btn br bxs sku-act" onclick="delSKU('${escAttr(s.id)}')" title="Delete permanently">${icon('x',{size:14})}</button>
         </div></td>
       </tr>`;
     }).join('');
@@ -4929,7 +5005,7 @@ function exportArchivedSKUs(){
     ws['!cols']=[{wch:18},{wch:16},{wch:16},{wch:20},{wch:10},{wch:10},{wch:10},{wch:12}];
     XLSX.utils.book_append_sheet(wb,ws,'Archived');
     XLSX.writeFile(wb,'PriceDesk_Archived_'+new Date().toISOString().slice(0,10)+'.xlsx');
-    toast(`✓ Exported ${archived.length} archived SKUs`,'green');
+    toast(`Exported ${archived.length} archived SKUs`,'green');
   }catch(e){toast('Export failed: '+e.message,'red');}
 }
 
@@ -5012,11 +5088,11 @@ function renderUsers(){
     <td><span class="bdg ${ROLE_COLORS[u.role]}">${esc(ROLE_LABELS[u.role])}</span></td>
     <td class="st">${esc(u.added)}</td>
     <td><div class="flex gap8">
-      <button class="btn bg bxs" onclick="openUserModal('${escAttr(u.id)}')" aria-label="Edit user">✎ Edit</button>
+      <button class="btn bg bxs" onclick="openUserModal('${escAttr(u.id)}')" aria-label="Edit user">${icon('edit',{size:13})} Edit</button>
       <button class="btn bg bxs" onclick="resetUserPassword('${escAttr(u.id)}')" title="Reset password" style="font-size:11px">Reset PW</button>
       ${u.id!=='u0'?(isRevoked
-        ?`<button class="btn bg bxs" style="color:var(--gr);border-color:var(--gr)" onclick="reinstateUser('${escAttr(u.id)}')">↩ Restore</button>`
-        :`<button class="btn br bxs" onclick="revokeUser('${escAttr(u.id)}')" title="Revoke access">⊘ Revoke</button>`):''}
+        ?`<button class="btn bg bxs" style="color:var(--gr);border-color:var(--gr)" onclick="reinstateUser('${escAttr(u.id)}')">${icon('undo',{size:13})} Restore</button>`
+        :`<button class="btn br bxs" onclick="revokeUser('${escAttr(u.id)}')" title="Revoke access">${icon('slash',{size:12})} Revoke</button>`):''}
     </div></td>
   </tr>`;}).join('');
 }
@@ -5026,7 +5102,7 @@ function openUserModal(id){
   const u=id?(users.find(x=>x.id===id)||_udefault):_udefault;
   const isEdit=!!(id&&u.id);
   const roleOpts=ROLES.map(r=>`<option value="${esc(r)}" ${u.role===r?'selected':''}>${esc(ROLE_LABELS[r])} — ${esc(ROLE_ACCESS[r])}</option>`).join('');
-  setModal(`<div class="mhdr"><div class="mtl">${isEdit?'✎ Edit User':'+ Add User'}</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">${isEdit?icon('edit',{size:15})+' Edit User':'+ Add User'}</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div class="fg"><label class="fl">Full Name *</label><input class="fi" id="u-name" placeholder="e.g. Priya Sharma" value="${esc(u.name)}"></div>
       <div class="fg"><label class="fl">Email Address *</label><input class="fi" id="u-email" type="email" placeholder="name@company.com" value="${esc(u.email)}"></div>
@@ -5050,7 +5126,7 @@ async function saveUser(eid){
   if(!name){toast('Name required','red');return;}
   if(!email||!email.includes('@')){toast('Valid email required','red');return;}
   if(eid){
-    const u=users.find(x=>x.id===eid);if(u)Object.assign(u,{name,email,role,updatedAt:new Date().toISOString()});toast(`✓ ${name} updated`,'green');
+    const u=users.find(x=>x.id===eid);if(u)Object.assign(u,{name,email,role,updatedAt:new Date().toISOString()});toast(`${name} updated`,'green');
     closeModal();renderUsers();await save('users');
     audit('user_edit',`${name} (${email}) updated`);
     return;
@@ -5069,7 +5145,7 @@ async function saveUser(eid){
     updatedAt:new Date().toISOString(),
   };
   users.push(newUser);
-  toast(`✓ ${name} added`,'green');
+  toast(`${name} added`,'green');
   closeModal();renderUsers();await save('users');
   audit('user_add',`${name} (${email}) added as ${role}`);
   // Email the temp password if email is configured.
@@ -5085,7 +5161,7 @@ async function saveUser(eid){
 }
 
 function showTempPasswordModal(user, tempPass){
-  setModal(`<div class="mhdr"><div class="mtl">🔐 Temp password for ${esc(user.name)}</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">${icon('lock',{size:16})} Temp password for ${esc(user.name)}</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div class="info mb12" style="background:rgba(245,166,35,.08);border-color:rgba(245,166,35,.4);color:var(--ac)">
         <strong>Important:</strong> This password is shown only once. ${emailReady()?'It was emailed to '+esc(user.email)+', but copy it here as a backup.':'Email is not configured — copy this and share it with the user manually.'}
@@ -5255,27 +5331,27 @@ function renderWFBuilder(){
         }</span>` : '';
     // Only commission, GT charges, and reverse logistics lookups are protected from deletion
     const delBtn = isLocked
-      ? `<span title="${esc(r.desc||'Protected — Commission / GT / Logistics')}" style="font-size:13px;opacity:.5;flex-shrink:0;cursor:default">🔒</span>`
+      ? `<span title="${esc(r.desc||'Protected — Commission / GT / Logistics')}" style="font-size:13px;opacity:.5;flex-shrink:0;cursor:default">${icon('lock',{size:13})}</span>`
       : `<span style="color:var(--tx3);cursor:pointer;font-size:14px;margin-left:4px;opacity:.4;flex-shrink:0"
            onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4"
-           onclick="WF['${escAttr(m)}'].splice(${idx},1);renderWFBuilder();save('wireframe')">✕</span>`;
+           onclick="WF['${escAttr(m)}'].splice(${idx},1);renderWFBuilder();save('wireframe')">${icon('x',{size:12})}</span>`;
     // Formula/expression row
     let actionRow = '';
     if(isLookup){
       actionRow = `<div style="margin-top:4px;margin-left:22px;display:flex;align-items:center;gap:8px">
-        <span style="font-size:10px;background:rgba(78,142,247,.12);border:1px solid rgba(78,142,247,.3);border-radius:4px;padding:2px 8px;color:var(--bl)">🔗 Auto-lookup</span>
+        <span style="font-size:10px;background:rgba(78,142,247,.12);border:1px solid rgba(78,142,247,.3);border-radius:4px;padding:2px 8px;color:var(--bl)">${icon('link',{size:12})} Auto-lookup</span>
       </div>`;
     } else if(r.t==='formula'||r.t==='output'){
       actionRow = `<div style="margin-top:5px;margin-left:22px;display:flex;align-items:center;gap:10px">
         <button style="padding:3px 12px;border-radius:5px;border:1px solid var(--ac);background:rgba(245,166,35,.1);color:var(--ac);font-size:11px;cursor:pointer;font-weight:600"
-             onclick="event.stopPropagation();openFB('${escAttr(m)}',${idx})">✎ Edit Formula</button>
+             onclick="event.stopPropagation();openFB('${escAttr(m)}',${idx})">${icon('edit',{size:12})} Edit Formula</button>
         <span style="font-size:10px;font-family:var(--mono);color:var(--tx3);opacity:.7">${(r.expr||'').substring(0,60)}${(r.expr||'').length>60?'…':''}</span>
       </div>`;
     } else if(r.t==='input'&&r.expr){
       // Input with formula (was converted from formula to input but kept expr)
       actionRow = `<div style="margin-top:5px;margin-left:22px;display:flex;align-items:center;gap:10px">
         <button style="padding:3px 12px;border-radius:5px;border:1px solid var(--ac);background:rgba(245,166,35,.1);color:var(--ac);font-size:11px;cursor:pointer;font-weight:600"
-             onclick="event.stopPropagation();openFB('${escAttr(m)}',${idx})">✎ Edit Formula</button>
+             onclick="event.stopPropagation();openFB('${escAttr(m)}',${idx})">${icon('edit',{size:12})} Edit Formula</button>
         <span style="font-size:10px;color:var(--tx3);opacity:.6">(formula inactive — type is Input)</span>
       </div>`;
     }
@@ -5394,7 +5470,7 @@ function wfDrop(e,mp,targetIdx){
   _wfDragSrc=null;
   renderWFBuilder();
   save('wireframe');
-  toast('✓ Row reordered','green');
+  toast('Row reordered','green');
 }
 function wfDragEnd(e){
   e.currentTarget.style.opacity='';
@@ -5439,7 +5515,7 @@ function addWFPreset(preset){
   WF[m].push({id:++wfN, ...row});
   renderWFBuilder();
   save('wireframe');
-  toast('✓ '+row.l+' added','green');
+  toast(''+row.l+' added','green');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -5583,7 +5659,7 @@ function logMode(name,mode){
   const label=mode==='cat'?'Category-wise':mode==='fixed'?'Fixed':'Level-based';
   audit('logistics_mode',`${name==='mfwd'?'Forward GT':'Return fee'} mode set to ${label}`);
   save('logistics')
-    .then(()=>toast(`✓ ${name==='mfwd'?'Forward GT':'Return fee'} mode saved: ${label}`,'blue'))
+    .then(()=>toast(`${name==='mfwd'?'Forward GT':'Return fee'} mode saved: ${label}`,'blue'))
     .catch(e=>toast('Mode save failed: '+e.message,'red'));
 }
 
@@ -5611,8 +5687,8 @@ function toast(msg,type){
   const cls=type==='green'?'tg2':type==='blue'?'tg2':'tr2';
   d.className=`toast ${cls}`;
   if(type==='blue') d.style.cssText='background:rgba(78,142,247,.12);border-color:rgba(78,142,247,.3);color:var(--bl)';
-  const icon=type==='green'?'✓':type==='blue'?'⚡':'⚠';
-  d.innerHTML=`<span>${icon}</span> ${msg}`;
+  const tIcon=type==='green'?icon('check',{size:15}):type==='blue'?icon('zap',{size:15}):icon('alert',{size:15});
+  d.innerHTML=`<span style="display:inline-flex;flex-shrink:0">${tIcon}</span> <span>${msg}</span>`;
   document.body.appendChild(d);setTimeout(()=>d.remove(),3500);
 }
 
@@ -5656,11 +5732,11 @@ function dlTemplate(){
   wsRef['!cols']=[{wch:35},{wch:20}];
   XLSX.utils.book_append_sheet(wb,ws,'SKUs');
   XLSX.utils.book_append_sheet(wb,wsRef,'_Lookups');
-  XLSX.writeFile(wb,'PriceDesk_SKU_Template.xlsx');toast('✓ Template downloaded','green');
+  XLSX.writeFile(wb,'PriceDesk_SKU_Template.xlsx');toast('Template downloaded','green');
 }
 
 function openImport(){
-  setModal(`<div class="mhdr"><div class="mtl">⬆ Bulk Import SKUs</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">${icon('upload',{size:16})} Bulk Import SKUs</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div style="background:var(--s2);border:2px dashed var(--bd2);border-radius:8px;padding:28px;text-align:center;cursor:pointer" onclick="document.getElementById('xi').click()">
         <div style="font-size:32px;margin-bottom:10px">📊</div>
@@ -5673,7 +5749,7 @@ function openImport(){
     </div>
     <div class="mfoot">
       <button class="btn bg" onclick="closeModal()">Cancel</button>
-      <button class="btn bg bsm" onclick="dlTemplate()">⬇ Template</button>
+      <button class="btn bg bsm" onclick="dlTemplate()">${icon('download',{size:13})} Template</button>
       <button class="btn bp" id="xi-confirm" style="display:none" onclick="confirmImport()">✓ Import SKUs</button>
     </div>`);
 }
@@ -5813,7 +5889,7 @@ function previewImport(input){
         html+='</tbody></table></div>';
       }
       if(previewUpdates.length){
-        html+=`<div style="margin-top:10px;padding:8px 12px;background:rgba(255,180,0,.08);border:1px solid rgba(255,180,0,.2);border-radius:6px;font-size:12px"><strong style="color:var(--ac)">✎ ${previewUpdates.length} existing SKU${previewUpdates.length>1?'s':''} to update</strong> (blank cells preserved)</div>`;
+        html+=`<div style="margin-top:10px;padding:8px 12px;background:rgba(255,180,0,.08);border:1px solid rgba(255,180,0,.2);border-radius:6px;font-size:12px"><strong style="color:var(--ac)">${icon('edit',{size:12})} ${previewUpdates.length} existing SKU${previewUpdates.length>1?'s':''} to update</strong> (blank cells preserved)</div>`;
         html+=`<div style="overflow-x:auto;max-height:120px;overflow-y:auto;margin-top:6px"><table class="dt" style="font-size:11px"><thead><tr><th>Style ID</th><th>SKU Count</th><th>Fields Changed</th></tr></thead><tbody>`;
         html+=previewUpdates.slice(0,15).map(p=>`<tr><td class="mono">${p.sid}</td><td>${p.count}</td><td style="color:var(--ac)">${esc(p.fields)}</td></tr>`).join('');
         if(previewUpdates.length>15)html+=`<tr><td colspan="3" class="st" style="text-align:center">…and ${previewUpdates.length-15} more</td></tr>`;
@@ -5875,7 +5951,7 @@ async function confirmImport(){
         const result=await resp.json().catch(()=>null);
         if(result&&result.ok){
           savedViaEdge=true;
-          toast(`✓ ${total} SKU${total>1?'s':''} saved (atomic batch)`,'green');
+          toast(`${total} SKU${total>1?'s':''} saved (atomic batch)`,'green');
         }
       } else {
         console.warn('batch-import HTTP',resp.status);
@@ -5890,12 +5966,12 @@ async function confirmImport(){
       // Legacy path: full skuDB upsert in chunks
       _lastWriteTs=Date.now();
       await _doSaveSKUs();
-      toast(`✓ ${total} SKU${total>1?'s':''} saved to database`,'green');
+      toast(`${total} SKU${total>1?'s':''} saved to database`,'green');
     }catch(e){
-      toast(`⚠ Save failed: ${e.message} — retrying in 5s...`,'red');
+      toast(`Save failed: ${e.message} — retrying in 5s...`,'red');
       setTimeout(async()=>{
-        try{await _doSaveSKUs();toast(`✓ Retry succeeded — ${total} SKUs saved`,'green');}
-        catch(e2){toast('⚠ Retry failed — please save manually from SKU page','red');}
+        try{await _doSaveSKUs();toast(`Retry succeeded — ${total} SKUs saved`,'green');}
+        catch(e2){toast('Retry failed — please save manually from SKU page','red');}
       },5000);
     }
   }
@@ -5905,7 +5981,7 @@ async function confirmImport(){
   const parts=[];
   if(newCount) parts.push(`${newCount} added`);
   if(updCount) parts.push(`${updCount} updated`);
-  toast(`✓ ${parts.join(', ')}`, 'green');
+  toast(`${parts.join(', ')}`, 'green');
 }
 
 
@@ -5952,7 +6028,7 @@ async function loadBackupList(){
         </div>
         <div style="display:flex;gap:6px">
           <button class="btn bg bxs" style="font-size:10px;padding:3px 10px" onclick="restoreBackup('${date}')">Restore</button>
-          <button class="btn br bxs" style="font-size:10px;padding:3px 8px" onclick="deleteBackup('${date}')">✕</button>
+          <button class="btn br bxs" style="font-size:10px;padding:3px 8px" onclick="deleteBackup('${date}')">${icon('x',{size:12})}</button>
         </div>
       </div>`;
     }
@@ -6000,7 +6076,7 @@ async function createManualBackup(){
     cutoff.setDate(cutoff.getDate()-7);
     const cutoffDate = cutoff.toISOString().slice(0,10);
     await db.from('pd_backups').delete().lt('backup_date', cutoffDate);
-    toast('✓ Backup created for '+backupDate,'green');
+    toast('Backup created for '+backupDate,'green');
     if(statusEl) statusEl.style.display='none';
     loadBackupList();
   }catch(e){
@@ -6036,7 +6112,7 @@ async function restoreBackup(date){
       }
     }
     const skuMsg=skuRows?` + ${skuRows.length} SKUs`:'';
-    toast(`✓ Restored ${rows.length} items${skuMsg} from ${date} — reloading...`,'green');
+    toast(`Restored ${rows.length} items${skuMsg} from ${date} — reloading...`,'green');
     setTimeout(()=>location.reload(), 1500);
   }catch(e){
     toast('Restore failed: '+e.message,'red');
@@ -6157,11 +6233,11 @@ CREATE TABLE IF NOT EXISTS pd_backups (
 );
 ALTER TABLE pd_backups ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK (true);`;
-  setModal(`<div class="mhdr"><div class="mtl">🔄 Backup Table Setup</div><span class="mclose" onclick="closeModal()">×</span></div>
+  setModal(`<div class="mhdr"><div class="mtl">${icon('refresh',{size:16})} Backup Table Setup</div><span class="mclose" onclick="closeModal()">×</span></div>
     <div class="mbody">
       <div class="info mb12">Run this SQL in your Supabase SQL Editor to create the backup table:</div>
       <div style="background:#0a0c12;border:1px solid var(--bd);border-radius:6px;padding:14px;font-family:monospace;font-size:12px;color:var(--gr);line-height:1.7;white-space:pre;overflow-x:auto">${sql}</div>
-      <button onclick="navigator.clipboard.writeText(\`${sql}\`).then(()=>toast('SQL copied!','green'))" class="btn bg bsm" style="margin-top:12px">📋 Copy SQL</button>
+      <button onclick="navigator.clipboard.writeText(\`${sql}\`).then(()=>toast('SQL copied!','green'))" class="btn bg bsm" style="margin-top:12px">${icon('copy',{size:13})} Copy SQL</button>
     </div>
     <div class="mfoot"><button class="btn bg" onclick="closeModal()">Close</button>
       <button class="btn bp" onclick="closeModal();window.open('https://supabase.com/dashboard/project/fcmesdnagvrdmjzzuwue/sql/new','_blank')">Open Supabase SQL Editor →</button>
@@ -6174,7 +6250,7 @@ function exportData(){
   a.href='data:application/json,'+encodeURIComponent(data);
   a.download='pricedesk_backup_'+new Date().toISOString().slice(0,10)+'.json';
   a.click();
-  toast('✓ Backup downloaded','green');
+  toast('Backup downloaded','green');
 }
 
 function importDataPrompt(){
@@ -6211,7 +6287,7 @@ function importDataPrompt(){
         if(d.COMM_AJIO_CC)   COMM_AJIO_CC=d.COMM_AJIO_CC;
         if(d.COMM_AMAZON)    COMM_AMAZON=d.COMM_AMAZON;
         save();populateFilters();renderBrands();renderSKUs();updateAlerts();renderUsers();
-        toast('✓ Backup restored successfully','green');
+        toast('Backup restored successfully','green');
       }catch(err){toast('Error reading backup file','red');}
     };
     reader.readAsText(file);
@@ -6279,7 +6355,7 @@ function saveAlertSettings(){
     }
   }
   audit('alert_settings',`Alert settings updated: ${email||'no email'}, ${freq}`);
-  toast('✓ Alert settings saved','green');
+  toast('Alert settings saved','green');
 }
 
 function loadAlertSettingsUI(){
@@ -6399,7 +6475,7 @@ function saveEmailSettings(){
     statusBox.style.display='';
     statusBox.innerHTML = '<div class="success" style="margin:0">✓ Email settings saved and activated! Use the test buttons below to verify.</div>';
   }
-  toast('✓ Email settings saved — no code editing needed!','green');
+  toast('Email settings saved — no code editing needed!','green');
 }
 
 function saveSupabaseSettings(){
@@ -6420,7 +6496,7 @@ function saveSupabaseSettings(){
         statusBox.style.display='';
         statusBox.innerHTML = '<div class="success" style="margin:0">✓ Supabase connected and working! Data syncs automatically.</div>';
       }
-      toast('✓ Supabase connection verified','green');
+      toast('Supabase connection verified','green');
     }
   });
 }
@@ -6453,7 +6529,7 @@ async function testEmail(type){
     });
   }
   if(result !== false){
-    toast('✓ Sent to ' + dest + ' — check inbox & spam','green');
+    toast('Sent to ' + dest + ' — check inbox & spam','green');
   }
 }
 
@@ -6630,7 +6706,7 @@ function showResetPasswordPage(token){
   overlay.innerHTML = `
     <div style="background:var(--s);border:1px solid var(--bd2);border-radius:12px;width:380px;padding:32px;box-shadow:0 8px 40px rgba(0,0,0,.5)">
       <div style="text-align:center;margin-bottom:20px">
-        <div style="font-size:36px;margin-bottom:8px">🔐</div>
+        <div style="font-size:36px;margin-bottom:8px">${icon('lock',{size:26})}</div>
         <div style="font-size:18px;font-weight:700;color:var(--tx)">Set New Password</div>
         <div style="font-size:13px;color:var(--tx3);margin-top:4px">Enter your new password below</div>
       </div>
@@ -6709,7 +6785,7 @@ async function doResetPassword(token){
 // button is omitted on purpose, and Escape is handled in our keydown listener
 // only for non-forced modals).
 function showForcePasswordChange(){
-  setModal(`<div class="mhdr"><div class="mtl">🔐 Set a new password</div></div>
+  setModal(`<div class="mhdr"><div class="mtl">${icon('lock',{size:16})} Set a new password</div></div>
     <div class="mbody">
       <div class="info mb12" style="background:rgba(245,87,92,.08);border-color:rgba(245,87,92,.4);color:var(--re)">
         You're using a temporary password. Choose a new one before continuing.
@@ -6988,10 +7064,10 @@ async function resetUserPassword(userId){
   if(!user) return;
   const resetLink = await sendPasswordResetEmail(user);
   if(emailReady()){
-    toast(`✓ Reset link sent to ${esc(user.email)}`, 'green');
+    toast(`Reset link sent to ${esc(user.email)}`, 'green');
   } else {
     // Show link in a copyable modal if email isn't configured
-    setModal(`<div class="mhdr"><div class="mtl">🔐 Password Reset Link</div><span class="mclose" onclick="closeModal()">×</span></div>
+    setModal(`<div class="mhdr"><div class="mtl">${icon('lock',{size:16})} Password Reset Link</div><span class="mclose" onclick="closeModal()">×</span></div>
       <div class="mbody">
         <div style="font-size:13px;color:var(--tx2);margin-bottom:12px">Email not configured. Share this link with <strong>${esc(user.name)}</strong>:</div>
         <div style="background:var(--s2);border:1px solid var(--bd2);border-radius:8px;padding:12px;word-break:break-all;font-family:var(--mono);font-size:12px;color:var(--ac);cursor:pointer" onclick="navigator.clipboard.writeText('${escAttr(resetLink)}');this.style.borderColor='var(--gr)';this.insertAdjacentHTML('afterend','<div style=\\'color:var(--gr);font-size:11px;margin-top:6px\\'>✓ Copied!</div>')">${esc(resetLink)}</div>
@@ -7088,7 +7164,7 @@ function _doExportSKUsToExcel(mp){
     XLSX.utils.book_append_sheet(wb, ws, label.replace(/ /g,'_'));
     const safeName = label.replace(/ /g,'_');
     XLSX.writeFile(wb, `PriceDesk_${safeName}_${new Date().toISOString().slice(0,10)}.xlsx`);
-    toast(`✓ Exported ${exportCount} ${label} SKUs`,'green');
+    toast(`Exported ${exportCount} ${label} SKUs`,'green');
   }catch(e){
     console.error('Export failed:', e);
     toast('Export failed: '+e.message,'red');
@@ -7117,7 +7193,7 @@ function exportBreaches(){
     ws['!cols']=[{wch:18},{wch:16},{wch:16},{wch:20},{wch:14},{wch:14}];
     XLSX.utils.book_append_sheet(wb,ws,'Breaches');
     XLSX.writeFile(wb,'PriceDesk_Breaches_'+new Date().toISOString().slice(0,10)+'.xlsx');
-    toast(`✓ Exported ${breached.length} breaches to Excel`,'green');
+    toast(`Exported ${breached.length} breaches to Excel`,'green');
   }catch(e){console.error('Export failed:',e);toast('Export failed: '+e.message,'red');}
 }
 
@@ -7135,7 +7211,7 @@ function exportGSTAbove(){
     ws['!cols']=[{wch:18},{wch:14},{wch:16},{wch:14},{wch:6},{wch:12},{wch:10},{wch:14},{wch:18}];
     XLSX.utils.book_append_sheet(wb,ws,'18% to 5% Recommendations');
     XLSX.writeFile(wb,'PriceDesk_GST_18_to_5_'+new Date().toISOString().slice(0,10)+'.xlsx');
-    toast(`✓ Exported ${_gstAboveRows.length} recommendations`,'green');
+    toast(`Exported ${_gstAboveRows.length} recommendations`,'green');
   }catch(e){toast('Export failed: '+e.message,'red');}
 }
 
@@ -7153,7 +7229,7 @@ function exportGSTBelow(){
     ws['!cols']=[{wch:18},{wch:14},{wch:16},{wch:14},{wch:6},{wch:14},{wch:18}];
     XLSX.utils.book_append_sheet(wb,ws,'5% GST Advantage');
     XLSX.writeFile(wb,'PriceDesk_GST_5pct_Advantage_'+new Date().toISOString().slice(0,10)+'.xlsx');
-    toast(`✓ Exported ${_gstBelowRows.length} SKUs`,'green');
+    toast(`Exported ${_gstBelowRows.length} SKUs`,'green');
   }catch(e){toast('Export failed: '+e.message,'red');}
 }
 
@@ -7177,7 +7253,7 @@ function revSlabLabels(){
 }
 function _slabHeadHTML(firstCol, labels, starLast){
   const n=labels.length;
-  return `<tr><th>${firstCol}</th>${labels.map((l,i)=>`<th${starLast&&i===n-1?' style="color:var(--ac)"':''}>${esc(l)}${starLast&&i===n-1?' ★':''}</th>`).join('')}</tr>`;
+  return `<tr><th>${firstCol}</th>${labels.map((l,i)=>`<th${starLast&&i===n-1?' style="color:var(--ac)"':''}>${esc(l)}${starLast&&i===n-1?' '+icon('star',{size:11}):''}</th>`).join('')}</tr>`;
 }
 
 function renderGTTable(){
@@ -7188,7 +7264,7 @@ function renderGTTable(){
   if(thead) thead.innerHTML=_slabHeadHTML('Level',labels,true);
   tbody.innerHTML = LEVELS.map(lvl => {
     const vals = GT_DATA[lvl] = _normSlabArr(GT_DATA[lvl]||[0,1,0,0,0,0,0], n, 0);
-    return `<tr>${['<td><div class="flex gap8"><strong>'+esc(lvl)+`</strong><button class="btn br bxs" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">✕</button></div></td>`,
+    return `<tr>${['<td><div class="flex gap8"><strong>'+esc(lvl)+`</strong><button class="btn br bxs" onclick="deleteLevel('${escAttr(lvl)}')" title="Delete level" style="padding:2px 6px;font-size:10px;min-height:0;margin-left:auto">${icon('x',{size:11})}</button></div></td>`,
       ...vals.map((v,i) => `<td><input class="ci" style="width:58px;${i===n-1?'border-color:var(--ac)':''}"
         value="${v}" oninput="GT_DATA['${escAttr(lvl)}'][${i}]=+this.value||0;invalidateCalcCache()">`+'</td>')
     ].join('')}</tr>`;
@@ -7269,7 +7345,7 @@ function renderCollTable(){
   const labels=collSlabLabels();
   const n=labels.length;
   const thead=el('coll-table-head');
-  if(thead) thead.innerHTML=`<tr><th>Category</th>${labels.map((l,i)=>`<th${i===n-1?' style="color:var(--ac)"':''}>${esc(l)}${i===n-1?' ★':''}</th>`).join('')}</tr>`;
+  if(thead) thead.innerHTML=`<tr><th>Category</th>${labels.map((l,i)=>`<th${i===n-1?' style="color:var(--ac)"':''}>${esc(l)}${i===n-1?' '+icon('star',{size:11}):''}</th>`).join('')}</tr>`;
   tbody.innerHTML=CATS.map(cat=>{
     let vals=COLL_FEE_DATA[cat]||[15,17,27,27,27,45,61];
     // Normalize to current slab count (pad with last value / truncate)
@@ -7286,7 +7362,7 @@ function saveCollFees(){
   LOGISTICS_SETTINGS.coll_fee_data=COLL_FEE_DATA;
   LOGISTICS_SETTINGS.coll_slabs=COLL_SLABS;
   invalidateCalcCache();
-  save('logistics').then(()=>toast('✓ Collection fees saved','green')).catch(e=>toast('Save failed: '+e.message,'red'));
+  save('logistics').then(()=>toast('Collection fees saved','green')).catch(e=>toast('Save failed: '+e.message,'red'));
   renderSKUs();
 }
 
@@ -7295,7 +7371,7 @@ function _collSlabRowHTML(v){
   return`<div class="flex gap8" style="margin-bottom:8px;align-items:center">
     <span class="st" style="width:52px">Upto ₹</span>
     <input class="fi coll-slab-inp" type="number" style="width:130px" value="${v}" min="1" placeholder="e.g. 1500">
-    <button class="btn br bxs" onclick="this.parentElement.remove()" title="Remove slab">✕</button></div>`;
+    <button class="btn br bxs" onclick="this.parentElement.remove()" title="Remove slab">${icon('x',{size:12})}</button></div>`;
 }
 let _slabEditorApply=null;
 let _slabEditorAllowEmpty=false;
@@ -7343,7 +7419,7 @@ const _SLAB_HINT='Each value is a slab\'s <strong>upper bound</strong> in ₹. S
 
 // Collection fee slabs
 function openCollSlabModal(){
-  openSlabEditor({title:'✎ Collection Fee Price Slabs',hint:_SLAB_HINT,bounds:COLL_SLABS,onApply:applyCollSlabs});
+  openSlabEditor({title:icon('edit',{size:15})+' Collection Fee Price Slabs',hint:_SLAB_HINT,bounds:COLL_SLABS,onApply:applyCollSlabs});
 }
 // Rebuild each category's fee array for new bounds — each new slab takes the
 // fee of the old slab that contained its upper bound
@@ -7369,7 +7445,7 @@ function applyCollSlabs(bounds){
     triggerRecalc();renderSKUs();
     audit('coll_slabs',`Collection fee slabs updated: ${bounds.join(', ')} (+ >${bounds[bounds.length-1]})`);
     save('logistics')
-      .then(()=>toast('✓ Collection fee slabs saved','green'))
+      .then(()=>toast('Collection fee slabs saved','green'))
       .catch(e=>toast('Slab save failed: '+e.message,'red'));
   } else {
     toast('Slabs unchanged','blue');
@@ -7378,7 +7454,7 @@ function applyCollSlabs(bounds){
 
 // Forward GT slabs — shared by the level table and the category-wise table
 function openGTSlabModal(){
-  openSlabEditor({title:'✎ Forward GT Price Slabs',hint:_SLAB_HINT,bounds:GT_SLABS,onApply:applyGTSlabs});
+  openSlabEditor({title:icon('edit',{size:15})+' Forward GT Price Slabs',hint:_SLAB_HINT,bounds:GT_SLABS,onApply:applyGTSlabs});
 }
 function applyGTSlabs(bounds){
   if(JSON.stringify(GT_SLABS)===JSON.stringify(bounds)){toast('Slabs unchanged','blue');return;}
@@ -7394,13 +7470,13 @@ function applyGTSlabs(bounds){
   triggerRecalc();renderSKUs();
   audit('gt_slabs',`Forward GT price slabs updated: ${bounds.join(', ')}`);
   save('logistics')
-    .then(()=>toast('✓ GT price slabs saved','green'))
+    .then(()=>toast('GT price slabs saved','green'))
     .catch(e=>toast('Slab save failed: '+e.message,'red'));
 }
 
 // Reverse-fee slabs — empty bounds = one flat fee (historical behaviour)
 function openRevSlabModal(){
-  openSlabEditor({title:'✎ Return Fee Price Slabs',
+  openSlabEditor({title:icon('edit',{size:15})+' Return Fee Price Slabs',
     hint:_SLAB_HINT+' Remove all slabs to go back to a single flat fee per level/category.',
     bounds:REV_SLABS,onApply:applyRevSlabs,allowEmpty:true});
 }
@@ -7421,13 +7497,13 @@ function applyRevSlabs(bounds){
   triggerRecalc();renderSKUs();
   audit('rev_slabs',`Return fee slabs updated: ${bounds.length?bounds.join(', '):'flat fee'}`);
   save('logistics')
-    .then(()=>toast('✓ Return fee slabs saved','green'))
+    .then(()=>toast('Return fee slabs saved','green'))
     .catch(e=>toast('Slab save failed: '+e.message,'red'));
 }
 
 // Commission slabs (Myntra) — remaps per-category rates and slab-only rates
 function openCommSlabModal(){
-  openSlabEditor({title:'✎ Commission Price Slabs',hint:_SLAB_HINT+' Slabs apply to Seller Price.',bounds:COMM_SLABS,onApply:applyCommSlabs});
+  openSlabEditor({title:icon('edit',{size:15})+' Commission Price Slabs',hint:_SLAB_HINT+' Slabs apply to Seller Price.',bounds:COMM_SLABS,onApply:applyCommSlabs});
 }
 function applyCommSlabs(bounds){
   if(JSON.stringify(COMM_SLABS)===JSON.stringify(bounds)){toast('Slabs unchanged','blue');return;}
@@ -7484,7 +7560,7 @@ async function addLevel(){
   await save('levels');await save('logistics');
   renderGTTable();renderRetTable();buildCommMyntra();
   audit('level_add',`Level "${name}" added (GT:₹${gtVal}, Rev:₹${revVal})`);
-  toast(`✓ "${name}" added`,'green');
+  toast(`"${name}" added`,'green');
   closeModal();
 }
 async function deleteLevel(lvl){
@@ -7503,7 +7579,7 @@ async function deleteLevel(lvl){
   setTimeout(()=>{
     const t=document.querySelector('.toast:last-child');
     if(t&&t.textContent.includes(lvl)){
-      t.innerHTML+=` <button onclick="_reinstateLevel('${escAttr(lvl)}')" style="background:var(--ac);color:#000;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px">↩ Undo</button>`;
+      t.innerHTML+=` <button onclick="_reinstateLevel('${escAttr(lvl)}')" style="background:var(--ac);color:#000;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px">${icon('undo',{size:13})} Undo</button>`;
     }
   },50);
 }
@@ -7518,7 +7594,7 @@ async function _reinstateLevel(name){
   await save('levels');await save('logistics');
   renderGTTable();renderRetTable();buildCommMyntra();triggerRecalc();renderSKUs();
   audit('level_reinstate',`Level "${name}" reinstated`);
-  toast(`✓ "${name}" reinstated`,'green');
+  toast(`"${name}" reinstated`,'green');
 }
 
 // Sync Myntra logistics fields (modes, fixed rates, category-wise data) into settings
@@ -7542,7 +7618,7 @@ function saveGTCharges(){
   triggerRecalc();
   renderSKUs();
   save('logistics')
-    .then(()=>toast('✓ GT Charges & Fees saved to database','green'))
+    .then(()=>toast('GT Charges & Fees saved to database','green'))
     .catch(e=>toast('Save failed: '+e.message,'red'));
 }
 
@@ -7559,7 +7635,7 @@ function saveLogisticsAll(){
   triggerRecalc();
   renderSKUs();
   save('logistics')
-    .then(()=>toast('✓ All logistics saved to database','green'))
+    .then(()=>toast('All logistics saved to database','green'))
     .catch(e=>toast('Save failed: '+e.message,'red'));
 }
 
@@ -8003,7 +8079,7 @@ function fbSetRawExpr(){
   // Parse into parts for display (best effort) then set as raw token
   _fb.parts = [{type:'raw', val:val}];
   renderFBParts();
-  toast('✓ Formula set — check live preview','green');
+  toast('Formula set — check live preview','green');
 }
 
 // Smart shortcut templates
@@ -8156,7 +8232,7 @@ function fbShortcut(type){
     _fb.parts = sc.build({});
     renderFBParts();
     el('fb-shortcut-area').style.display='none';
-    toast('✓ Formula auto-built — check preview below','green');
+    toast('Formula auto-built — check preview below','green');
     return;
   }
 
@@ -8164,7 +8240,7 @@ function fbShortcut(type){
   const varOpts = VAR_OPTIONS.map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
   el('fb-shortcut-area').style.display='';
   el('fb-shortcut-area').innerHTML = `
-    <div style="font-size:12px;font-weight:600;color:var(--ac);margin-bottom:10px">⚡ ${sc.label}${sc.desc?'<span style="color:var(--tx3);font-weight:400"> — '+sc.desc+'</span>':''}</div>
+    <div style="font-size:12px;font-weight:600;color:var(--ac);margin-bottom:10px">${icon('zap',{size:12})} ${sc.label}${sc.desc?'<span style="color:var(--tx3);font-weight:400"> — '+sc.desc+'</span>':''}</div>
     ${sc.fields.map(f=>`
       <div class="fb-shortcut-field">
         <label>${f.label}</label>
@@ -8193,7 +8269,7 @@ function fbApplyShortcut(type){
   _fb.parts = sc.build(vals);
   renderFBParts();
   el('fb-shortcut-area').style.display='none';
-  toast('✓ Formula built — check the live preview','green');
+  toast('Formula built — check the live preview','green');
 }
 
 function saveFB(){
@@ -8216,7 +8292,7 @@ function saveFB(){
   save('wireframe');
   renderWFBuilder();
   closeFB();
-  toast('✓ Formula saved','green');
+  toast('Formula saved','green');
 }
 
 // Escape key already handled in image zoom section — updated to include FB
@@ -8365,7 +8441,7 @@ function runBugDetector(){
     }
 
     if(issues.length>0){
-      html += `<div style="font-size:11px;color:var(--re);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:600">❌ Errors — must fix</div>`;
+      html += `<div style="font-size:11px;color:var(--re);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:600">${icon('xCircle',{size:13,style:'color:var(--re)'})} Errors — must fix</div>`;
       issues.forEach(i=>{
         html += `<div style="background:rgba(245,87,92,.08);border:1px solid rgba(245,87,92,.25);border-radius:6px;padding:10px 12px;margin-bottom:8px">
           <div style="font-size:12px;font-weight:600;color:var(--re)">${i.row||''}${i.var?` <span style="font-family:monospace;opacity:.7">[${i.var}]</span>`:''}</div>
@@ -8617,7 +8693,7 @@ function renderDashTasks(){
         <td style="font-size:13px;text-decoration:line-through">${esc(tk.text)}</td>
         <td class="st">${esc(tk.completedBy||tk.addedBy||'—')}</td>
         <td class="st mono">${esc(tk.completedOn||tk.date||'')}</td>
-        <td><button class="btn bg bxs" onclick="undoCompleteTask(${i})" title="Undo — move back to active" style="font-size:10px;padding:2px 8px">↩ Undo</button></td>
+        <td><button class="btn bg bxs" onclick="undoCompleteTask(${i})" title="Undo — move back to active" style="font-size:10px;padding:2px 8px">${icon('undo',{size:13})} Undo</button></td>
       </tr>`).join('')+'</tbody></table>';
   }
   t.innerHTML=h;
@@ -9133,7 +9209,7 @@ function setupRealtime(){
         if(Date.now() - _lastWriteTs < 10000) return;
         const r=payload.new;if(!r)return;
         const s=_rowToSku(r);
-        if(!skuDB.find(x=>x.id===s.id)){skuDB.push(s);invalidateCalcCache();renderSKUs();toast(`⚡ New SKU from another device`,'blue');}
+        if(!skuDB.find(x=>x.id===s.id)){skuDB.push(s);invalidateCalcCache();renderSKUs();toast(`New SKU from another device`,'blue');}
       }
     )
     .on('postgres_changes',
@@ -9161,7 +9237,7 @@ function setupRealtime(){
         if(Date.now() - _lastWriteTs < 10000) return;
         const r=payload.new;if(!r)return;
         const b=_rowToBrand(r);
-        if(!brands.find(x=>x.id===b.id)){brands.push(b);invalidateCalcCache();populateFilters();toast('⚡ New brand from another device','blue');}
+        if(!brands.find(x=>x.id===b.id)){brands.push(b);invalidateCalcCache();populateFilters();toast('New brand from another device','blue');}
       }
     )
     .on('postgres_changes',
@@ -9256,7 +9332,7 @@ async function handleRealtimeUpdate(key, newValue){
   }
 
   // Show subtle notification
-  toast(`⚡ ${type} updated from another device`,'blue');
+  toast(`${type} updated from another device`,'blue');
 }
 
 function applyRealtimeData(type, value){
@@ -9293,7 +9369,7 @@ function updateRealtimeBadge(connected){
   const badge=el('sync-badge');
   if(!badge) return;
   if(connected){
-    badge.innerHTML='<span style="color:var(--gr)">⚡ Live</span>';
+    badge.innerHTML='<span style="color:var(--gr)">'+icon('zap',{size:11})+' Live</span>';
     badge.style.display='';
     badge.title='Realtime sync active';
   }
@@ -9545,7 +9621,7 @@ async function sendAIChat(){
   msgs.innerHTML+=`<div class="ai-msg user">${msg.replace(/</g,'&lt;')}</div>`;
   input.value='';
   sendBtn.disabled=true;
-  msgs.innerHTML+=`<div class="ai-typing" id="ai-typing">✦ Thinking...</div>`;
+  msgs.innerHTML+=`<div class="ai-typing" id="ai-typing">${icon('sparkle',{size:13})} Thinking...</div>`;
   msgs.scrollTop=msgs.scrollHeight;
 
   try{
