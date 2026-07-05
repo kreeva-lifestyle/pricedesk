@@ -31,6 +31,15 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .nav-item{display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;color:var(--tx2);font-size:13px;font-weight:500;transition:all .12s;border-left:3px solid transparent}
 .nav-item:hover{background:var(--s2);color:var(--tx)}
 .nav-item.active{background:var(--s2);color:var(--ac);border-left-color:var(--ac)}
+/* Settings hub */
+.settings-hub{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:22px}
+.shub-card{display:flex;align-items:center;gap:13px;background:var(--s);border:1px solid var(--bd2);border-radius:12px;padding:15px 16px;cursor:pointer;transition:border-color .15s,background .15s}
+.shub-card:hover{border-color:var(--ac);background:var(--s2)}
+.shub-card>.ic-h:first-child{color:var(--ac);flex-shrink:0}
+.shub-t{font-size:14px;font-weight:600;color:var(--tx)}
+.shub-d{font-size:11.5px;color:var(--tx3);margin-top:2px;line-height:1.4}
+.shub-card>div{flex:1;min-width:0}
+.shub-arrow{color:var(--tx3);transform:rotate(-90deg);flex-shrink:0}
 .ni{width:16px;height:16px;text-align:center;font-size:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 .ni svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 /* Custom line-icon set (see ICONS/icon() in JS). Inherits currentColor. */
@@ -897,22 +906,11 @@ body:has(#login-screen.active){overflow:hidden}
 <div class="sidebar" id="sidebar" style="display:none">
   <div class="logo"><div class="logo-text">PriceDesk</div><div class="logo-sub">Marketplace Pricing</div></div>
   <nav class="nav">
-    <div class="nav-sec">Main</div>
     <div class="nav-item active" data-page="dashboard" onclick="nav('dashboard')"><span class="ni"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span> Dashboard</div>
-    <div class="nav-item" data-page="pricing" onclick="nav('pricing')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span> Pricing Tables</div>
-    <div class="nav-item" data-page="thresholds" onclick="nav('thresholds')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Thresholds</div>
-    <div class="nav-sec">Configuration</div>
-    <div class="nav-item" data-page="brands" onclick="nav('brands')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span> Brands</div>
-    <div class="nav-item" data-page="commission" onclick="nav('commission')"><span class="ni"><svg viewBox="0 0 24 24"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span> Commission Settings</div>
-    <div class="nav-item" data-page="logistics" onclick="nav('logistics')"><span class="ni"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span> Logistics</div>
-    <div class="nav-sec">Products</div>
     <div class="nav-item" data-page="skus" onclick="nav('skus')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span> SKUs</div>
+    <div class="nav-item" data-page="pricing" onclick="nav('pricing')"><span class="ni"><svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="8" y2="10.01"/><line x1="12" y1="10" x2="12" y2="10.01"/><line x1="16" y1="10" x2="16" y2="10.01"/><line x1="8" y1="14" x2="8" y2="14.01"/><line x1="12" y1="14" x2="12" y2="14.01"/><line x1="16" y1="14" x2="16" y2="14.01"/><line x1="8" y1="18" x2="16" y2="18"/></svg></span> Price Calculator</div>
     <div class="nav-item" data-page="archive" onclick="nav('archive')"><span class="ni"><svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg></span> Archive <span id="nav-archive-count" style="margin-left:auto;font-size:10px;font-weight:600;background:rgba(245,87,92,.15);color:var(--re);border-radius:10px;padding:1px 7px;min-width:20px;text-align:center;display:none"></span></div>
-    <div class="nav-sec">Admin</div>
-    <div class="nav-item" data-page="wireframe" onclick="nav('wireframe')"><span class="ni"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span> Wireframe Builder</div>
-    <div class="nav-item" data-page="activity" onclick="nav('activity')"><span class="ni"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Activity Log</div>
-    <div class="nav-item" data-page="users" onclick="nav('users')"><span class="ni"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></span> User Access</div>
-    <div class="nav-item" data-page="settings" onclick="nav('settings')"><span class="ni"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span> App Settings</div>
+    <div class="nav-item" data-page="settings" onclick="nav('settings')"><span class="ni"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span> Settings</div>
   </nav>
   <div class="sb-btm">
     <div class="flex gap8" style="margin-bottom:10px"><div class="ava" id="sb-ava">A</div><div><div style="font-size:12px;color:var(--tx2)" id="sb-uname">Admin User</div><div style="font-size:10px;color:var(--tx3)" id="sb-role">Administrator</div></div></div>
@@ -926,6 +924,7 @@ body:has(#login-screen.active){overflow:hidden}
       <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">
         <span></span><span></span><span></span>
       </button>
+      <button id="page-back" onclick="nav('settings')" aria-label="Back to Settings" style="display:none;align-items:center;gap:4px;background:none;border:none;color:var(--ac);cursor:pointer;font-size:13px;font-weight:600;padding:4px 6px"><span class="ic-h" data-icon="arrowLeft" data-size="16"></span> Settings</button>
       <div class="pt" id="pageTitle">Dashboard</div>
     </div>
     <div class="flex gap12" style="align-items:center">
@@ -1589,6 +1588,17 @@ body:has(#login-screen.active){overflow:hidden}
 
 <!-- ═══ APP SETTINGS ═══ -->
 <div class="page" id="page-settings">
+  <!-- Settings hub: navigable sections consolidated from the old sidebar -->
+  <div class="settings-hub" id="settings-hub">
+    <div class="shub-card" onclick="nav('brands')"><span class="ic-h" data-icon="tag" data-size="20"></span><div><div class="shub-t">Brands</div><div class="shub-d">Marketplace brands & commission overrides</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('commission')"><span class="ic-h" data-icon="wallet" data-size="20"></span><div><div class="shub-t">Commissions</div><div class="shub-d">Rates by category × price slab</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('logistics')"><span class="ic-h" data-icon="truck" data-size="20"></span><div><div class="shub-t">Shipping & Fees</div><div class="shub-d">GT charges, returns & collection fees</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('thresholds')"><span class="ic-h" data-icon="alert" data-size="20"></span><div><div class="shub-t">Profit Alerts</div><div class="shub-d">Minimum-profit thresholds & email alerts</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('wireframe')"><span class="ic-h" data-icon="link" data-size="20"></span><div><div class="shub-t">Formula Builder</div><div class="shub-d">Edit the pricing calculation wireframe</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('activity')"><span class="ic-h" data-icon="history" data-size="20"></span><div><div class="shub-t">Activity</div><div class="shub-d">Audit log, SKU history & import log</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card" onclick="nav('users')"><span class="ic-h" data-icon="lock" data-size="20"></span><div><div class="shub-t">Users</div><div class="shub-d">Team members & access roles</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+  </div>
+  <div class="nav-sec" style="padding-left:2px;margin-bottom:8px">App configuration</div>
   <div class="g2">
     <div>
       <div class="card mb16">
@@ -5521,14 +5531,20 @@ function addWFPreset(preset){
 // ═══════════════════════════════════════════════════════
 // NAV & TABS
 // ═══════════════════════════════════════════════════════
-const TITLES={dashboard:'Dashboard',pricing:'Pricing Tables',thresholds:'Thresholds',brands:'Brands',commission:'Commission Settings',logistics:'Logistics Settings',skus:'SKUs',archive:'Archive',categories:'Categories',wireframe:'Wireframe Builder',activity:'Activity Log',users:'User Access',settings:'App Settings'};
+const TITLES={dashboard:'Dashboard',pricing:'Price Calculator',thresholds:'Profit Alerts',brands:'Brands',commission:'Commissions',logistics:'Shipping & Fees',skus:'SKUs',archive:'Archive',categories:'Categories',wireframe:'Formula Builder',activity:'Activity',users:'Users',settings:'Settings'};
+// Pages that now live under the Settings hub (no dedicated sidebar item).
+// When one is open, the Settings sidebar entry is highlighted.
+const SETTINGS_GROUP=new Set(['brands','commission','logistics','thresholds','wireframe','activity','users']);
 function nav(p){
   document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
-  const navEl=document.querySelector(`.nav-item[data-page="${p}"]`);
+  const navKey=SETTINGS_GROUP.has(p)?'settings':p;
+  const navEl=document.querySelector(`.nav-item[data-page="${navKey}"]`);
   if(navEl) navEl.classList.add('active');
   const pg=el('page-'+p);if(pg)pg.classList.add('active');
   el('pageTitle').textContent=TITLES[p]||p;
+  // Show "← Settings" back affordance on hub sub-pages
+  const backBtn=el('page-back'); if(backBtn) backBtn.style.display=SETTINGS_GROUP.has(p)?'inline-flex':'none';
   // Update URL hash for shareable links
   if(location.hash!=='#/'+p) history.pushState(null,TITLES[p]||p,'#/'+p);
   try{sessionStorage.setItem('pd_current_page',p);}catch(e){}
