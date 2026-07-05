@@ -39,6 +39,10 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # Reconcile/enable the Pages site object so deploy-pages doesn't
+          # fail with "Get Pages site failed". Idempotent when already enabled.
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
