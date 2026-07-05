@@ -4498,7 +4498,7 @@ function renderSKUs(){
       <td class="mono" style="font-size:11px" title="${esc(s.styleId)}">${esc(s.styleId)}${brand&&brand.model==='myntra'&&s.styleId?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;background:rgba(255,63,108,.12);color:var(--mn);text-decoration:none;vertical-align:middle;margin-left:4px">${icon('external',{size:12})}</a>`:''}</td>
       <td><span class="tag tb" style="font-size:10px;white-space:nowrap">${esc(s.category)}</span></td>
       <td><div style="font-size:11px;font-weight:600;color:var(--tx)">${esc(brand?.name||'—')}</div><div style="font-size:9px;color:var(--ac);margin-top:1px">${({'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'})[brand?.model]||''}</div></td>
-      <td style="line-height:1.6">${!s.styleId&&brand&&brand.model==='myntra'?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px;color:var(--tx3)">'+icon('note',{size:12})+'</span>':''}</td>
+      <td style="line-height:1.6">${!s.styleId&&brand&&brand.model==='myntra'?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':''}${(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${escAttr(s.id)}','${escAttr(t)}')" title="Remove tag">${icon('x',{size:11})}</span></span>`).join('')}${s.note?'<span title="'+esc(s.note)+'" style="font-size:10px;cursor:help;margin-left:2px;color:var(--tx3)">'+icon('note',{size:12})+'</span>':''}</td>
       <td class="mono">₹${s.cost.toLocaleString('en-IN')}</td>
       <td class="mono">${s.markup}%</td>
       <td class="mono">₹${Math.round(c.mrp).toLocaleString('en-IN')}</td>
@@ -4553,7 +4553,7 @@ function renderSKUCard(s,c,brand,statusIcon,profColor,ifDelColor){
   const mpLabel=_MP_LABEL[brand?.model]||'';
   const myntraLink=(isMyntra&&s.styleId)?` <a href="https://www.myntra.com/${encodeURIComponent(s.styleId)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Myntra" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:rgba(255,63,108,.12);color:var(--mn);text-decoration:none">${icon('external',{size:12})}</a>`:'';
   const noStyle=(!s.styleId&&isMyntra)?'<span class="sku-tag" style="background:rgba(255,180,0,.12);color:var(--ac);border-color:rgba(255,180,0,.25)">No Style ID</span>':'';
-  const tagChips=(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${id}','${escAttr(t)}')" title="Remove tag">×</span></span>`).join('');
+  const tagChips=(s.tags||[]).map(t=>`<span class="sku-tag">${esc(t)}<span class="tag-x" onclick="event.stopPropagation();removeTagFromSku('${id}','${escAttr(t)}')" title="Remove tag">${icon('x',{size:11})}</span></span>`).join('');
   const noteChip=s.note?`<span title="${esc(s.note)}" style="font-size:11px;cursor:help;color:var(--tx3)">${icon('note',{size:13})}</span>`:'';
   const tagsRow=(noStyle||tagChips||noteChip)?`<div class="skc-tags">${noStyle}${tagChips}${noteChip}</div>`:'';
   const inr=n=>Math.round(n).toLocaleString('en-IN');
@@ -5674,7 +5674,12 @@ function setModal(html, opts){
   const forced = !!(opts && opts.forced);
   _forcedModal = forced;
   const overlayOnclick = forced ? '' : 'onclick="if(event.target===this)closeModal()"';
-  el('modal-root').innerHTML=`<div class="movl"${overlayOnclick?' '+overlayOnclick:''}><div class="modal">${html}</div></div>`;
+  const root=el('modal-root');
+  root.innerHTML=`<div class="movl"${overlayOnclick?' '+overlayOnclick:''}><div class="modal">${html}</div></div>`;
+  // Swap every modal's bare "×" close glyph for the custom icon (one place →
+  // covers all modals) and hydrate any static icon placeholders inside.
+  root.querySelectorAll('.mclose').forEach(x=>{ if(x.textContent.trim()==='×') x.innerHTML=icon('x',{size:18}); });
+  hydrateIcons(root);
 }
 function closeModal(force){
   if(_forcedModal && !force) return;
