@@ -18,7 +18,29 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-:root{--bg:#0f1117;--s:#181c26;--s2:#1f2435;--s3:#262d42;--bd:#2a3148;--bd2:#3a4560;--tx:#e8ecf4;--tx2:#8b9abf;--tx3:#5a6a90;--ac:#f5a623;--gr:#2dd4a0;--re:#f5575c;--bl:#4e8ef7;--pu:#9b6dff;--mn:#ff3f6c;--aj:#e94560;--amz:#ff9900;--r:4px;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif}
+:root{--bg:#0f1117;--s:#181c26;--s2:#1f2435;--s3:#262d42;--bd:#2a3148;--bd2:#3a4560;--tx:#e8ecf4;--tx2:#8b9abf;--tx3:#5a6a90;--ac:#f5a623;--gr:#2dd4a0;--re:#f5575c;--bl:#4e8ef7;--pu:#9b6dff;--mn:#ff3f6c;--aj:#e94560;--amz:#ff9900;--r:4px;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;--ease-spring:cubic-bezier(.22,1,.36,1);--ease-out:cubic-bezier(.16,1,.3,1)}
+/* Motion — tasteful micro-interactions. Honour reduced-motion first. */
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
+@keyframes riseIn{from{opacity:0;transform:translateY(10px)}to{opacity:1}}
+@keyframes overlayIn{from{opacity:0}to{opacity:1}}
+@keyframes modalPop{from{opacity:0;transform:scale(.97)}to{opacity:1}}
+@keyframes pageIn{from{opacity:0;transform:translateY(12px)}to{opacity:1}}
+/* Tap/press feedback — the core "native app" cue */
+.btn,.nav-item,.shub-card,.tab,.sku-mp-tab,.af-chip,.sku-menu-item,.filter-toggle,.skc-actions .btn,#ai-chat-btn{transition:transform .12s var(--ease-out),background .12s,color .12s,border-color .12s}
+.btn:active,.tab:active,.sku-mp-tab:active,.af-chip:active,.filter-toggle:active,.skc-actions .btn:active,#ai-chat-btn:active{transform:scale(.95)}
+.nav-item:active,.shub-card:active,.sku-menu-item:active{transform:scale(.985)}
+/* Staggered entrance for list/section cards. fill:backwards holds the
+   start state during the stagger delay but leaves NO transform afterwards,
+   so cards don't become a containing block for their fixed overflow menu. */
+.sku-card,.shub-card,.sc,.brand-card{animation:riseIn .28s var(--ease-spring) backwards}
+.sku-card:nth-child(1),.shub-card:nth-child(1),.sc:nth-child(1),.brand-card:nth-child(1){animation-delay:.02s}
+.sku-card:nth-child(2),.shub-card:nth-child(2),.sc:nth-child(2),.brand-card:nth-child(2){animation-delay:.05s}
+.sku-card:nth-child(3),.shub-card:nth-child(3),.sc:nth-child(3),.brand-card:nth-child(3){animation-delay:.08s}
+.sku-card:nth-child(4),.shub-card:nth-child(4),.sc:nth-child(4),.brand-card:nth-child(4){animation-delay:.11s}
+.sku-card:nth-child(5),.shub-card:nth-child(5),.sc:nth-child(5),.brand-card:nth-child(5){animation-delay:.14s}
+.sku-card:nth-child(6),.shub-card:nth-child(6),.sc:nth-child(6),.brand-card:nth-child(6){animation-delay:.17s}
+.sku-card:nth-child(7),.shub-card:nth-child(7),.sc:nth-child(7),.brand-card:nth-child(7){animation-delay:.2s}
+.sku-card:nth-child(n+8),.shub-card:nth-child(n+8),.sc:nth-child(n+8),.brand-card:nth-child(n+8){animation-delay:.22s}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh;display:flex;-webkit-text-size-adjust:100%;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear */
@@ -147,8 +169,8 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .cauto{background:rgba(78,142,247,.05)!important}.cauto td:first-child{color:var(--bl)!important}
 .cform{background:rgba(78,142,247,.04)}.cform td:first-child{color:var(--bl)}
 /* MODAL */
-.movl{position:fixed;inset:0;background:rgba(0,0,0,.74);z-index:200;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
-.modal{background:var(--s);border:1px solid var(--bd2);border-radius:12px;width:540px;max-height:88vh;overflow-y:auto}
+.movl{position:fixed;inset:0;background:rgba(0,0,0,.74);z-index:200;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);animation:overlayIn .18s ease}
+.modal{background:var(--s);border:1px solid var(--bd2);border-radius:12px;width:540px;max-height:88vh;overflow-y:auto;animation:modalPop .22s var(--ease-spring) both}
 .mhdr{padding:17px 21px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
 .mtl{font-size:15px;font-weight:600}
 .mclose{cursor:pointer;color:var(--tx3);font-size:20px;line-height:1}.mclose:hover{color:var(--tx)}
@@ -363,7 +385,7 @@ body:has(#login-screen.active){overflow:hidden}
 .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
 
 /* ── SIDEBAR OVERLAY (mobile) ───────────────────────── */
-#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;backdrop-filter:blur(2px)}
+#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;backdrop-filter:blur(2px);transition:opacity .2s ease}
 #sidebar-overlay.active{display:block}
 
 /* ── MOBILE BREAKPOINTS ─────────────────────────────── */
@@ -486,7 +508,12 @@ body:has(#login-screen.active){overflow:hidden}
 
   /* Modals: full-width sheet from bottom */
   .movl{align-items:flex-end}
-  .modal{width:100%;max-width:100%;max-height:92vh;border-radius:16px 16px 0 0;border-left:none;border-right:none;border-bottom:none;animation:slideUp .22s ease}
+  .modal{width:100%;max-width:100%;max-height:92vh;border-radius:16px 16px 0 0;border-left:none;border-right:none;border-bottom:none;animation:slideUp .28s var(--ease-spring)}
+  /* Native-sheet grabber handle at the top of mobile bottom-sheets */
+  .modal .mhdr{position:relative}
+  .modal .mhdr::after{content:"";position:absolute;top:6px;left:50%;transform:translateX(-50%);width:36px;height:4px;border-radius:3px;background:var(--bd2)}
+  /* App-like screen enter on page switch */
+  .page.active{animation:pageIn .26s var(--ease-spring)}
   @keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
   .mbody{padding:16px}
   .mhdr{padding:14px 16px}
@@ -593,6 +620,7 @@ body:has(#login-screen.active){overflow:hidden}
 
   /* Modal: true full screen */
   .modal{max-height:100vh;border-radius:0}
+  .modal .mhdr::after{display:none}/* no grabber on true-fullscreen modals */
   .movl{align-items:stretch}
   /* PWA safe-area: the fullscreen modal starts at y=0 under the status bar
      (black-translucent, viewport-fit=cover), so the header + close button
