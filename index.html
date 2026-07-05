@@ -375,6 +375,8 @@ body:has(#login-screen.active){overflow:hidden}
 .login-btn.loading{pointer-events:none;opacity:.8}
 .login-btn.loading::before{content:'';width:16px;height:16px;border:2px solid rgba(0,0,0,.2);border-top-color:#000;border-radius:50%;animation:btnSpin .6s linear infinite}
 @keyframes btnSpin{to{transform:rotate(360deg)}}
+.login-btn-alt{background:transparent;border:1px solid var(--bd2);color:var(--tx2);box-shadow:none}
+.login-btn-alt:hover{border-color:var(--ac);color:var(--tx)}
 .login-footer{font-size:12px;color:var(--tx3);margin-top:20px;opacity:0;animation:loginFadeUp .5s .6s ease both}
 .login-footer a{color:var(--ac);text-decoration:none;transition:color .15s;font-weight:500}
 .login-footer a:hover{color:#ffcc70}
@@ -819,16 +821,24 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
     <div class="login-sub">Marketplace Pricing</div>
     <div class="login-divider"></div>
     <div class="login-err" id="login-err"></div>
-    <div class="login-fg">
-      <label class="fl">Email</label>
-      <input class="login-fi" id="login-email" type="email" placeholder="you@company.com" autocomplete="email" inputmode="email" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
+    <!-- Method chooser: shown first when a platform authenticator exists;
+         devices without biometrics skip straight to the email form -->
+    <div id="login-methods" style="display:flex;flex-direction:column;gap:10px">
+      <button class="login-btn" id="email-login-btn" onclick="showEmailLogin()"><span class="ic-h" data-icon="mail" data-size="16"></span> Login via Email</button>
+      <button class="login-btn login-btn-alt" id="passkey-login-btn" onclick="passkeyLogin()" style="display:none"><span class="ic-h" data-icon="fingerprint" data-size="16"></span> Login via Face ID / Fingerprint</button>
     </div>
-    <div class="login-fg" style="margin-bottom:24px">
-      <label class="fl">Password</label>
-      <input class="login-fi" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <div id="login-email-form" style="display:none">
+      <div class="login-fg">
+        <label class="fl">Email</label>
+        <input class="login-fi" id="login-email" type="email" placeholder="you@company.com" autocomplete="email" inputmode="email" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
+      </div>
+      <div class="login-fg" style="margin-bottom:24px">
+        <label class="fl">Password</label>
+        <input class="login-fi" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In</button>
+      <div class="login-footer" id="login-back-methods" style="margin-top:12px"><a href="#" onclick="showLoginMethods();return false">← Other sign-in options</a></div>
     </div>
-    <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In</button>
-    <button class="login-btn" id="passkey-login-btn" onclick="passkeyLogin()" style="display:none;align-items:center;justify-content:center;gap:8px;margin-top:10px;background:transparent;border:1px solid var(--bd2);color:var(--tx2);box-shadow:none"><span class="ic-h" data-icon="fingerprint" data-size="16"></span> Sign in with Face ID / Fingerprint</button>
     <div class="login-footer"><a href="#" onclick="openForgotPassword();return false">Forgot password?</a></div>
   </div>
 </div>
@@ -7135,14 +7145,32 @@ function _renderPasskeyList(list){
   </div>`).join('');
 }
 
-// Reveal passkey UI only where a platform authenticator exists
+// Login method chooser — the user taps the option they want; nothing
+// auto-triggers. "Login via Email" opens the form; the back link returns.
+function showEmailLogin(){
+  const m=el('login-methods'), f=el('login-email-form');
+  if(m) m.style.display='none';
+  if(f) f.style.display='';
+  el('login-email')?.focus();
+}
+function showLoginMethods(){
+  const m=el('login-methods'), f=el('login-email-form');
+  if(f) f.style.display='none';
+  if(m) m.style.display='flex';
+}
+
+// Reveal passkey UI only where a platform authenticator exists.
+// Without one, the chooser is pointless — skip straight to the email form.
 (async()=>{
-  try{
-    if(await passkeySupported()){
-      const b=el('passkey-login-btn'); if(b) b.style.display='flex';
-      const c=el('passkey-settings-card'); if(c) c.style.display='';
-    }
-  }catch(e){}
+  let ok=false;
+  try{ ok=await passkeySupported(); }catch(e){}
+  if(ok){
+    const b=el('passkey-login-btn'); if(b) b.style.display='flex';
+    const c=el('passkey-settings-card'); if(c) c.style.display='';
+  } else {
+    const back=el('login-back-methods'); if(back) back.style.display='none';
+    showEmailLogin();
+  }
 })();
 
 function _resetLoginBtn(){const b=document.getElementById('login-btn');if(b){b.classList.remove('loading');b.textContent='Sign In';}}
