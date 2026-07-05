@@ -34,14 +34,21 @@ jobs:
           # SKU/audit JSON via --argjson or curl -d "$VAR" dies with
           # E2BIG once the data grows. Files have no such limit.
 
-          # req <outfile> <path-and-query> [extra curl args...] -> prints HTTP code
+          # req <outfile> <path-and-query> [extra curl args...] -> prints HTTP code.
+          # Transport failures (DNS/TLS/timeout) print 000 instead of killing
+          # the script inside a $() under set -e — that way they reach the
+          # same die() diagnostic as HTTP errors. --retry absorbs blips.
           req() {
             local out="$1" path="$2"; shift 2
-            curl -sS -o "$out" -w "%{http_code}" \
+            local code
+            code=$(curl -sS --retry 2 --retry-delay 3 --max-time 120 \
+              -o "$out" -w "%{http_code}" \
               "${SUPABASE_URL}/rest/v1/${path}" \
               -H "apikey: ${SUPABASE_KEY}" \
               -H "Authorization: Bearer ${SUPABASE_KEY}" \
-              "$@"
+              "$@") \
+            || { echo "curl transport failure (exit $?)" > "$out"; code="000"; }
+            echo "$code"
           }
 
           die() { # die <step-name> <http-code> <body-file>
@@ -127,11 +134,15 @@ jobs:
 
           echo "Fetching pd_audit_log (newest $AUDIT_MAX_ROWS)..."
           fetch_table pd_audit_log id.desc "$WORK/audit.json" "$AUDIT_MAX_ROWS"
+          # Rows inserted mid-fetch shift desc offsets, which can repeat a row
+          # at page boundaries — dedupe by id
+          jq 'unique_by(.id) | sort_by(-.id)' "$WORK/audit.json" > "$WORK/audit.tmp" && mv "$WORK/audit.tmp" "$WORK/audit.json"
           AUDIT_TOTAL=$(jq 'length' "$WORK/audit.json")
           echo "  $AUDIT_TOTAL audit entries"
 
           echo "Fetching pd_sku_history (newest $HISTORY_MAX_ROWS)..."
           fetch_table pd_sku_history id.desc "$WORK/history.json" "$HISTORY_MAX_ROWS"
+          jq 'unique_by(.id) | sort_by(-.id)' "$WORK/history.json" > "$WORK/history.tmp" && mv "$WORK/history.tmp" "$WORK/history.json"
           HIST_TOTAL=$(jq 'length' "$WORK/history.json")
           echo "  $HIST_TOTAL history entries"
 

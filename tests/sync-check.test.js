@@ -38,6 +38,36 @@ describe('source drift detection — production strings must match test copies',
       );
     });
 
+    it('gtSlabValue is unchanged (tests/calc/myntra-fees.test.js)', () => {
+      expect(HTML).toContain(
+        'function gtSlabValue(slabs, sp){ return slabPick(GT_SLABS, slabs, sp); }'
+      );
+    });
+
+    it('getMynFwd is unchanged (tests/calc/myntra-fees.test.js)', () => {
+      expect(HTML).toContain(
+        `function getMynFwd(level, sp, cat){
+  const mode = LOGISTICS_SETTINGS.myn_fwd_mode || 'level';
+  if(mode==='fixed') return +LOGISTICS_SETTINGS.myn_fwd_fixed || 0;
+  if(mode==='cat' && cat && GT_CAT_DATA[cat]) return gtSlabValue(GT_CAT_DATA[cat], sp);
+  return gtSlabValue(GT_DATA[level] || GT_DATA['Level 2'] || [0,1,83,83,118,195,230], sp);
+}`
+      );
+    });
+
+    it('getMynColl is unchanged (tests/calc/myntra-fees.test.js)', () => {
+      expect(HTML).toContain(
+        `function getMynColl(cat, sellerPrice){
+  const slabs=COLL_FEE_DATA[cat]||[15,17,27,27,27,45,61];
+  const p=sellerPrice||0;
+  for(let i=0;i<COLL_SLABS.length;i++){
+    if(p<=COLL_SLABS[i]) return +slabs[Math.min(i,slabs.length-1)]||0;
+  }
+  return +slabs[Math.min(COLL_SLABS.length,slabs.length-1)]||0;
+}`
+      );
+    });
+
     it('slabPick is unchanged (tests/calc/myntra-fees.test.js)', () => {
       expect(HTML).toContain(
         `function slabPick(bounds, values, price){
