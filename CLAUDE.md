@@ -21,6 +21,7 @@
 - All monetary values in INR (₹), use `toLocaleString('en-IN')`
 - GST: 5% if Customer Paid < ₹2,500, 18% if ≥ ₹2,500
 - Collection fee lookup: by category × seller price band (not flat)
+- Myntra commission: `getMyntraComm(cat,sp)` picks a % by seller-price band. Bands are the global `COMM_SLABS` by default; a category may opt into its OWN band cut-points via `COMM_CAT_SLABS[cat]` (absent ⇒ global — so untouched categories calc identically). Managed on the Commission page: standard categories in the grid, custom-band categories in their own cards. Persisted inside the `logistics` blob (`comm_cat_slabs`).
 - "Seller Price" (not "Selling Price") — renamed throughout codebase
 - "Customer Paid" = MRP - Discount (what buyer pays)
 - Seller Price = Customer Paid - GT Charges

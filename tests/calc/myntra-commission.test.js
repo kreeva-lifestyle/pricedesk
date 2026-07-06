@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // SYNC NOTE: The fixtures and function below mirror index.html.
 //   - COMM_SLABS:       index.html:2976 (editable slab bounds)
@@ -26,10 +26,18 @@ let SLABS = _slabsFromBounds(COMM_SLABS);
 let COMM_MYNTRA;
 let COMM_MODE = 'level_slab';
 let COMM_SLAB_ONLY = [0, 0, 21.24, 17.70, 18.88];
+// Optional per-category band cut-points (index.html:~3294). Absent category
+// ⇒ global SLABS. Reset before each per-category-slab test to avoid leakage.
+let COMM_CAT_SLABS = {};
 
 function getMyntraComm(cat,sp){
   const slabs=COMM_MODE==='slab'?COMM_SLAB_ONLY:COMM_MYNTRA[cat];
   if(!slabs||!slabs.length)return 18.88;
+  const cb=COMM_MODE!=='slab'&&COMM_CAT_SLABS?COMM_CAT_SLABS[cat]:null;
+  if(cb&&cb.length){
+    for(let i=0;i<cb.length;i++){if(sp<cb[i])return +slabs[Math.min(i,slabs.length-1)]||0;}
+    return +slabs[Math.min(cb.length,slabs.length-1)]||0;
+  }
   for(let i=0;i<SLABS.length;i++){
     if(sp>=SLABS[i].min&&sp<SLABS[i].max)return +slabs[Math.min(i,slabs.length-1)];
   }
@@ -163,6 +171,48 @@ describe('getMyntraComm — commission rate by category and seller price', () =>
       expect(getMyntraComm('Tops', 900)).toBe(20);
       expect(getMyntraComm('Tops', 5000)).toBe(30);
       COMM_SLABS = saved.COMM_SLABS; SLABS = saved.SLABS;
+    });
+  });
+
+  describe('per-category slab bounds (COMM_CAT_SLABS)', () => {
+    beforeEach(() => { COMM_CAT_SLABS = {}; COMM_MODE = 'level_slab'; });
+    afterEach(() => { COMM_CAT_SLABS = {}; });
+
+    it('uses a category\'s OWN cut-points when defined', () => {
+      // Global SLABS = 0–300/300–500/500–1000/1000–2000/2000+, but Sarees
+      // splits at 0–1000 / 1000–3000 / 3000+ with its own 3-value array.
+      COMM_MYNTRA = { Sarees: [12, 20, 25] };
+      COMM_CAT_SLABS = { Sarees: [1000, 3000] };
+      expect(getMyntraComm('Sarees', 500)).toBe(12);   // < 1000
+      expect(getMyntraComm('Sarees', 1000)).toBe(20);  // 1000–3000 (>= lower bound)
+      expect(getMyntraComm('Sarees', 2999)).toBe(20);
+      expect(getMyntraComm('Sarees', 3000)).toBe(25);  // 3000+
+      expect(getMyntraComm('Sarees', 9999)).toBe(25);
+    });
+
+    it('leaves NON-custom categories on the global bands (unchanged)', () => {
+      COMM_MYNTRA = { Sarees: [12, 20, 25], Kurtas: [0, 0, 21.24, 17.70, 18.88] };
+      COMM_CAT_SLABS = { Sarees: [1000, 3000] };            // only Sarees custom
+      // Kurtas still uses the global 5-band SLABS exactly as before.
+      expect(getMyntraComm('Kurtas', 250)).toBe(0);
+      expect(getMyntraComm('Kurtas', 800)).toBe(21.24);
+      expect(getMyntraComm('Kurtas', 1500)).toBe(17.70);
+      expect(getMyntraComm('Kurtas', 5000)).toBe(18.88);
+    });
+
+    it('an empty override array falls back to global bands', () => {
+      COMM_MYNTRA = { Tops: [0, 0, 22.42, 21.24, 18.88] };
+      COMM_CAT_SLABS = { Tops: [] };
+      expect(getMyntraComm('Tops', 800)).toBe(22.42);      // global 500–1000
+      expect(getMyntraComm('Tops', 5000)).toBe(18.88);
+    });
+
+    it('slab-only mode ignores per-category overrides', () => {
+      COMM_MODE = 'slab';
+      COMM_SLAB_ONLY = [0, 0, 21.24, 17.70, 18.88];
+      COMM_CAT_SLABS = { Sarees: [1000, 3000] };
+      // In slab-only mode the per-category bounds are ignored → global band.
+      expect(getMyntraComm('Sarees', 800)).toBe(21.24);    // global 500–1000
     });
   });
 });

@@ -87,6 +87,11 @@ describe('source drift detection — production strings must match test copies',
         `function getMyntraComm(cat,sp){
   const slabs=COMM_MODE==='slab'?COMM_SLAB_ONLY:COMM_MYNTRA[cat];
   if(!slabs||!slabs.length)return 18.88;
+  const cb=COMM_MODE!=='slab'&&COMM_CAT_SLABS?COMM_CAT_SLABS[cat]:null;
+  if(cb&&cb.length){
+    for(let i=0;i<cb.length;i++){if(sp<cb[i])return +slabs[Math.min(i,slabs.length-1)]||0;}
+    return +slabs[Math.min(cb.length,slabs.length-1)]||0;
+  }
   for(let i=0;i<SLABS.length;i++){
     if(sp>=SLABS[i].min&&sp<SLABS[i].max)return +slabs[Math.min(i,slabs.length-1)];
   }
