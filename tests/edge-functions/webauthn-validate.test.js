@@ -6,6 +6,7 @@ import {
   takeChallenge,
   sanitizePasskey,
   passkeysForRp,
+  passkeysForUser,
   isWebAuthnResponse,
   cleanDeviceName,
 } from '../../supabase/functions/webauthn/validate.ts';
@@ -120,6 +121,36 @@ describe('passkeysForRp — credentials are scoped per rpId', () => {
   it('handles empty/null lists', () => {
     expect(passkeysForRp([], 'x')).toEqual([]);
     expect(passkeysForRp(null, 'x')).toEqual([]);
+  });
+});
+
+describe('passkeysForUser — per-user scoping (list/remove/status)', () => {
+  const list = [
+    { id: 'a', rpId: 'pricing.aryadesigns.co.in', userId: 'u1' },
+    { id: 'b', rpId: 'pricing.aryadesigns.co.in', userId: 'u2' },
+    { id: 'c', rpId: 'pricing.aryadesigns.co.in', userId: 'u1' },
+    { id: 'd', rpId: 'kreeva-lifestyle.github.io', userId: 'u1' },
+  ];
+
+  it('returns only the given user\'s credentials on the given rpId', () => {
+    expect(passkeysForUser(list, 'pricing.aryadesigns.co.in', 'u1').map(p => p.id)).toEqual(['a', 'c']);
+    expect(passkeysForUser(list, 'pricing.aryadesigns.co.in', 'u2').map(p => p.id)).toEqual(['b']);
+  });
+
+  it('does NOT leak another user\'s credentials (privacy)', () => {
+    const u1 = passkeysForUser(list, 'pricing.aryadesigns.co.in', 'u1');
+    expect(u1.some(p => p.userId !== 'u1')).toBe(false);
+  });
+
+  it('scopes by rpId too (same user, different domain excluded)', () => {
+    expect(passkeysForUser(list, 'pricing.aryadesigns.co.in', 'u1').map(p => p.id)).not.toContain('d');
+    expect(passkeysForUser(list, 'kreeva-lifestyle.github.io', 'u1').map(p => p.id)).toEqual(['d']);
+  });
+
+  it('unknown user gets an empty list; handles empty/null', () => {
+    expect(passkeysForUser(list, 'pricing.aryadesigns.co.in', 'nobody')).toEqual([]);
+    expect(passkeysForUser([], 'x', 'u1')).toEqual([]);
+    expect(passkeysForUser(null, 'x', 'u1')).toEqual([]);
   });
 });
 
