@@ -66,6 +66,17 @@ export function passkeysForRp(list: StoredPasskey[], rpId: string): StoredPasske
   return (list || []).filter((p) => p && p.rpId === rpId);
 }
 
+// Passkeys are per-user: management (list/remove/status) must only ever see
+// or touch the authenticated user's own credentials on this rpId. Login
+// discovery still uses passkeysForRp (any credential on the domain).
+export function passkeysForUser(
+  list: StoredPasskey[],
+  rpId: string,
+  userId: string,
+): StoredPasskey[] {
+  return (list || []).filter((p) => p && p.rpId === rpId && p.userId === userId);
+}
+
 // Basic shape check for a client WebAuthn response (attestation or assertion).
 export function isWebAuthnResponse(x: unknown): boolean {
   if (!x || typeof x !== "object") return false;

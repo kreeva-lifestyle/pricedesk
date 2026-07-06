@@ -264,6 +264,27 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .empty-state .es-ic{opacity:.4;margin-bottom:8px}
 .empty-state .es-t{font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:2px}
 .empty-state .es-h{font-size:11px}
+/* ── Sidebar user chip (opens My Profile) ── */
+.sb-user{display:flex;align-items:center;gap:9px;width:100%;margin-bottom:10px;padding:7px 8px;background:transparent;border:1px solid transparent;border-radius:8px;cursor:pointer;transition:background .15s,border-color .15s}
+.sb-user:hover{background:var(--s2);border-color:var(--bd)}
+/* ── My Profile modal ── */
+.profile-modal{display:flex;flex-direction:column;gap:16px}
+.profile-id{display:flex;align-items:center;gap:14px}
+.profile-ava{width:52px;height:52px;font-size:22px;flex-shrink:0}
+.profile-sec{border-top:1px solid var(--bd);padding-top:14px}
+.profile-sec-h{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3);margin-bottom:10px}
+.pk-add{margin-top:6px}
+.pk-row{display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;margin-bottom:6px}
+.pk-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:8px}
+.pk-badge.on{background:rgba(45,212,160,.12);color:var(--gr);border:1px solid rgba(45,212,160,.25)}
+.pk-badge.off{background:rgba(240,177,42,.1);color:var(--ac);border:1px solid rgba(240,177,42,.25)}
+/* ── Log / data tables: sticky header, roomier rows (Activity, Users) ── */
+.log-scroll{position:relative}
+.dt-stack thead th{position:sticky;top:0;z-index:1;background:var(--s2)}
+.dt-stack td{padding:10px 13px}
+/* ── Settings hub: even card heights + hover lift ── */
+.shub-card{min-height:66px;transition:border-color .15s,background .15s,transform .12s,box-shadow .15s}
+.shub-card:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.25)}
 /* FILTER BAR */
 .sku-mp-tab{padding:8px 18px;font-size:12px;font-weight:600;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
 .sku-mp-tab:hover{color:var(--tx)}
@@ -741,6 +762,18 @@ body:has(#login-screen.active){overflow:hidden}
   .thr-cat{grid-column:1/-1}
   .thr-amt{justify-self:start}
 
+  /* Data tables → stacked cards on mobile (Activity logs, Users).
+     Each row becomes a card; each cell shows its column via data-label. */
+  .dt-stack{min-width:0}
+  .dt-stack thead{display:none}
+  .dt-stack tbody tr{display:block;padding:10px 13px;border-bottom:1px solid var(--bd)}
+  .dt-stack tbody tr:last-child{border-bottom:none}
+  .dt-stack td{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:3px 0!important;border:none!important;text-align:right;font-size:12px;white-space:normal!important;max-width:none!important;overflow:visible!important}
+  .dt-stack td::before{content:attr(data-label);color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;text-align:left;flex-shrink:0}
+  .dt-stack td.det{flex-direction:column;align-items:stretch;text-align:left}
+  .dt-stack td[colspan]{display:block;text-align:center}
+  .dt-stack td[colspan]::before{display:none}
+
   /* SKU table: hide more columns for very small screens */
   #page-skus .ss th:nth-child(8),#page-skus .ss td:nth-child(8){display:none}
   .ss{min-width:1000px}
@@ -797,7 +830,6 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
      worker and never depends on a third-party CDN being reachable); the CDN
      stays as an automatic fallback if the local file somehow fails. -->
 <script src="./vendor/supabase.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';document.head.appendChild(s);})()"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
 <!-- ═══ OFFLINE BANNER ═══ -->
@@ -1070,7 +1102,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
     <div class="nav-item" data-page="settings" onclick="nav('settings')"><span class="ni"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span> Settings</div>
   </nav>
   <div class="sb-btm">
-    <div class="flex gap8" style="margin-bottom:10px"><div class="ava" id="sb-ava">A</div><div><div style="font-size:12px;color:var(--tx2)" id="sb-uname">Admin User</div><div style="font-size:10px;color:var(--tx3)" id="sb-role">Administrator</div></div></div>
+    <button class="sb-user" onclick="openProfileModal()" title="My Profile" aria-label="Open my profile"><div class="ava" id="sb-ava">A</div><div style="flex:1;min-width:0;text-align:left"><div style="font-size:12px;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="sb-uname">Admin User</div><div style="font-size:10px;color:var(--tx3)" id="sb-role">Administrator</div></div><span class="ic-h" data-icon="chevronDown" data-size="14" style="opacity:.5;flex-shrink:0"></span></button>
     <button onclick="doLogout()" style="width:100%;background:rgba(245,87,92,.12);border:1px solid rgba(245,87,92,.3);border-radius:5px;color:var(--re);font-size:12px;padding:7px 0;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sign Out</button>
   </div>
 </div>
@@ -1250,30 +1282,6 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
       <div class="card mb16">
         <div class="ch"><div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="alert" data-size="14"></span> Active Breaches</div><button class="btn bg bsm" onclick="exportBreaches()"><span class="ic-h" data-icon="download" data-size="13"></span> Export</button></div>
         <div id="thr-breach-list" style="padding:0"></div>
-      </div>
-      <div class="card">
-        <div class="ch"><div style="font-size:13px;font-weight:600">Alert Settings</div></div>
-        <div class="cb">
-          <div class="fg"><label class="fl">Alert Email Addresses</label>
-            <div class="tag-input-wrap" id="alert-email-wrap">
-              <input id="alert-email-input" type="email" placeholder="Type email and press Enter" onkeydown="if(event.key==='Enter'||event.key===','){event.preventDefault();addAlertEmail(this.value);this.value='';}" onpaste="setTimeout(()=>{addAlertEmail(this.value);this.value=''},0)">
-            </div>
-            <div class="st" style="margin-top:4px">Press Enter or comma to add multiple emails</div>
-          </div>
-          <div class="fg"><label class="fl">Alert Frequency</label>
-            <select class="fi" id="alert-freq-select" style="appearance:none">
-              <option>Immediately on breach</option>
-              <option>Daily (every day at 9 AM)</option>
-              <option>Weekly Summary</option>
-            </select>
-          </div>
-          <div class="fg"><label class="fl">EmailJS Status</label>
-            <div id="email-status-box" style="padding:8px 12px;border-radius:6px;font-size:12px;background:var(--s2);border:1px solid var(--bd2);color:var(--tx3)">
-              Not configured — alerts will log to console only
-            </div>
-          </div>
-          <button class="btn bp bsm" onclick="saveAlertSettings()">Save Alert Settings</button>
-        </div>
       </div>
     </div>
   </div>
@@ -1666,7 +1674,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
     <button class="btn bp bsm" onclick="openUserModal()">+ Add User</button>
   </div>
   <div class="card">
-    <table class="dt"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Added</th><th>Action</th></tr></thead>
+    <table class="dt dt-stack"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Added</th><th>Action</th></tr></thead>
     <tbody id="users-table-body"></tbody></table>
   </div>
 </div>
@@ -1699,8 +1707,8 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
             </select>
           </div>
         </div>
-        <div class="cb" style="padding:0;max-height:500px;overflow-y:auto">
-          <table class="dt" style="font-size:12px">
+        <div class="cb log-scroll" style="padding:0;max-height:520px;overflow-y:auto">
+          <table class="dt dt-stack" style="font-size:12px">
             <thead><tr><th style="width:140px">When</th><th style="width:100px">Who</th><th>Action</th><th>Details</th></tr></thead>
             <tbody id="audit-log-body"></tbody>
           </table>
@@ -1711,32 +1719,11 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
     <div>
       <div class="card mb16">
         <div class="ch"><div style="font-size:13px;font-weight:600">Bulk Import History</div></div>
-        <div class="cb" style="padding:0;max-height:300px;overflow-y:auto">
-          <table class="dt" style="font-size:12px">
+        <div class="cb log-scroll" style="padding:0;max-height:520px;overflow-y:auto">
+          <table class="dt dt-stack" style="font-size:12px">
             <thead><tr><th>Date</th><th>By</th><th>File</th><th class="num">Added</th><th class="num">Updated</th><th class="num">Errors</th></tr></thead>
             <tbody id="import-log-body"></tbody>
           </table>
-        </div>
-      </div>
-      <div class="card">
-        <div class="ch"><div style="font-size:13px;font-weight:600">Your Preferences</div></div>
-        <div class="cb">
-          <div class="fg"><label class="fl">Default Page on Login</label>
-            <select class="fi" id="pref-default-page" onchange="saveUserPref('defaultPage',this.value)" style="font-size:12px">
-              <option value="dashboard">Dashboard</option>
-              <option value="skus">SKUs</option>
-              <option value="pricing">Pricing Tables</option>
-              <option value="brands">Brands</option>
-              <option value="thresholds">Thresholds</option>
-            </select>
-          </div>
-          <div class="fg"><label class="fl">Items per Page (SKU list)</label>
-            <select class="fi" id="pref-page-size" onchange="saveUserPref('pageSize',this.value);SKU_PAGE_SIZE_USER=parseInt(this.value);renderSKUs()" style="font-size:12px">
-              <option value="25">25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
-          </div>
         </div>
       </div>
     </div>
@@ -1753,40 +1740,10 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
     <div class="shub-card" onclick="nav('thresholds')"><span class="ic-h" data-icon="alert" data-size="20"></span><div><div class="shub-t">Profit Alerts</div><div class="shub-d">Minimum-profit thresholds & email alerts</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
     <div class="shub-card" onclick="nav('wireframe')"><span class="ic-h" data-icon="link" data-size="20"></span><div><div class="shub-t">Formula Builder</div><div class="shub-d">Edit the pricing calculation wireframe</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
     <div class="shub-card" onclick="nav('activity')"><span class="ic-h" data-icon="history" data-size="20"></span><div><div class="shub-t">Activity</div><div class="shub-d">Audit log, SKU history & import log</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
-    <div class="shub-card" onclick="nav('users')"><span class="ic-h" data-icon="lock" data-size="20"></span><div><div class="shub-t">Users</div><div class="shub-d">Team members & access roles</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
+    <div class="shub-card admin-only" onclick="nav('users')"><span class="ic-h" data-icon="lock" data-size="20"></span><div><div class="shub-t">Users</div><div class="shub-d">Team members & access roles</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
   </div>
-  <div class="nav-sec" style="padding-left:2px;margin-bottom:8px">App configuration</div>
-  <div class="g2">
-    <div>
-      <div class="card mb16">
-        <div class="ch">
-          <div>
-            <div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="mail" data-size="15"></span> Email Settings <span id="email-status-pill" class="bdg bi" style="display:none;margin-left:6px;vertical-align:middle"></span></div>
-            <div class="st" style="margin-top:2px">Paste your keys from emailjs.com — no code editing needed</div>
-          </div>
-          <button class="btn bp bsm" onclick="saveEmailSettings()"><span class="ic-h" data-icon="check" data-size="13"></span> Save & Activate</button>
-        </div>
-        <div class="cb">
-          <div class="fg"><label class="fl">Service ID</label><input class="fi" id="cfg-service-id" placeholder="service_xxxxxxx" spellcheck="false"></div>
-          <div class="fg"><label class="fl">Welcome Template ID</label><input class="fi" id="cfg-tpl-welcome" placeholder="template_xxxxxxx" spellcheck="false"></div>
-          <div class="fg"><label class="fl">Password Reset Template ID</label><input class="fi" id="cfg-tpl-reset" placeholder="template_xxxxxxx" spellcheck="false"></div>
-          <div class="fg"><label class="fl">Alert Template ID</label><input class="fi" id="cfg-tpl-alert" placeholder="template_xxxxxxx" spellcheck="false"></div>
-          <div class="fg" style="margin-bottom:0"><label class="fl">Public Key</label><input class="fi" id="cfg-public-key" placeholder="xxxxxxxxxxxxxx" spellcheck="false"></div>
-          <div id="email-cfg-status" style="margin-top:14px;display:none"></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="ch"><div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="flask" data-size="15"></span> Test Emails</div></div>
-        <div class="cb">
-          <div class="fg"><label class="fl">Send test to this email</label><input class="fi" id="cfg-test-email" type="email" placeholder="test@example.com"></div>
-          <div style="display:flex;flex-direction:column;gap:9px">
-            <div class="flex gap12"><button class="btn bg bsm" style="min-width:170px" onclick="testEmail('welcome')">→ Test Welcome Email</button><span class="st">Sent when a new user is added</span></div>
-            <div class="flex gap12"><button class="btn bg bsm" style="min-width:170px" onclick="testEmail('reset')">→ Test Reset Email</button><span class="st">Sent on password reset</span></div>
-            <div class="flex gap12"><button class="btn bg bsm" style="min-width:170px" onclick="testEmail('alert')">→ Test Alert Email</button><span class="st">Sent on threshold breach</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
+  <div class="nav-sec admin-only" style="padding-left:2px;margin-bottom:8px"><span class="ic-h" data-icon="lock" data-size="12" style="opacity:.6"></span> App configuration <span class="st" style="font-weight:400;text-transform:none;letter-spacing:0">— admins only</span></div>
+  <div class="g2 admin-only" id="app-config-section">
     <div>
       <div class="card mb16">
         <div class="ch">
@@ -1815,8 +1772,10 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
           <div id="backup-status" style="margin-top:8px;display:none"></div>
         </div>
       </div>
+    </div>
+    <div>
       <div class="card">
-        <div class="ch"><div style="font-size:13px;font-weight:600">ℹ App Info & Data</div></div>
+        <div class="ch"><div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="database" data-size="15"></span> App Info & Data</div></div>
         <div class="cb" style="font-size:12px">
           <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd)"><span class="st">Version</span><span class="mono">v6.0</span></div>
           <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd)"><span class="st">SKUs</span><span class="mono" id="cfg-sku-count">—</span></div>
@@ -1832,23 +1791,6 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
             <div class="st" style="margin-bottom:9px">Irreversible — wipes SKUs, brands & settings.</div>
             <button class="btn br bsm" onclick="confirmClearData()" aria-label="Clear all data"><span class="ic-h" data-icon="x" data-size="12"></span> Clear All Data</button>
           </div>
-        </div>
-      </div>
-      <div class="card" id="passkey-settings-card" style="display:none;margin-top:16px">
-        <div class="ch">
-          <div>
-            <div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="fingerprint" data-size="15"></span> Security — Passkeys</div>
-            <div class="st" style="margin-top:2px">Sign in with Face ID / fingerprint instead of a password</div>
-          </div>
-        </div>
-        <div class="cb">
-          <div class="fg"><label class="fl">Current password (to confirm)</label><input class="fi" id="pk-confirm-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
-          <div class="fg"><label class="fl">Device name</label><input class="fi" id="pk-device-name" placeholder="e.g. My iPhone"></div>
-          <div class="flex gap8" style="flex-wrap:wrap">
-            <button class="btn bp bsm" id="pk-add-btn" onclick="passkeyRegister()"><span class="ic-h" data-icon="fingerprint" data-size="13"></span> Add this device</button>
-            <button class="btn bg bsm" onclick="passkeyList()">Show registered passkeys</button>
-          </div>
-          <div id="pk-list" style="margin-top:12px"></div>
         </div>
       </div>
     </div>
@@ -2016,7 +1958,6 @@ const DB_KEYS = {
   cat_levels:     'pd_cat_levels',
   logistics:      'pd_logistics',
   wireframe:      'pd_wireframe',
-  email_cfg:      'pd_email_config',
   alert:          'pd_alert_settings',
   sessions:       'pd_sessions',
   reset_tokens:   'pd_reset_tokens',
@@ -2991,7 +2932,7 @@ async function save(type, opts){
     // Save ALL data types sequentially
     const types=['skus','brands','users','thresholds','cat_levels',
       'comm_myntra','comm_ppmp','comm_cc','comm_amazon',
-      'logistics','wireframe','email_cfg'];
+      'logistics','wireframe'];
     for(const t of types) await save(t);
     return;
   }
@@ -3087,7 +3028,6 @@ async function save(type, opts){
     comm_amazon: COMM_AMAZON,
     logistics:   { gt: GT_DATA, rev: REVERSE_FEES, settings: LOGISTICS_SETTINGS, collFees: COLL_FEE_DATA },
     wireframe:   WF,
-    email_cfg:   EMAIL_CONFIG,
     alert:       ALERT_SETTINGS,
   };
   const val = dataMap[type];
@@ -3114,7 +3054,7 @@ async function loadFromStorage(){
     const loaded = {};
     const [skusResult, brandsResult, catResult, threshResult, usersResult,
            levelsResult, alertResult, commResult, logisticsResult,
-           wireframeResult, emailResult] = await Promise.all([
+           wireframeResult] = await Promise.all([
       dbLoadAllSKUs(),
       dbLoadAllBrands(),
       dbLoadAllCategories(),
@@ -3124,8 +3064,7 @@ async function loadFromStorage(){
       dbGet(DB_KEYS.alert).catch(()=>null),
       dbLoadAllCommissions(),
       dbGet(DB_KEYS.logistics).catch(()=>null),
-      dbGet(DB_KEYS.wireframe).catch(()=>null),
-      dbGet(DB_KEYS.email_cfg).catch(()=>null)
+      dbGet(DB_KEYS.wireframe).catch(()=>null)
     ]);
     loaded.skus = skusResult;
     loaded.brands = brandsResult;
@@ -3134,7 +3073,6 @@ async function loadFromStorage(){
     loaded.alert = alertResult;
     loaded.logistics = logisticsResult;
     loaded.wireframe = wireframeResult;
-    loaded.email_cfg = emailResult;
     if(catResult){ loaded.categories=catResult.cats; loaded.cat_levels=catResult.catLevel; }
     else {
       const [bc, bl] = await Promise.all([
@@ -3215,11 +3153,6 @@ async function loadFromStorage(){
         WF._v = WF_VERSION;
         save('wireframe');
       }
-    }
-    if(loaded.email_cfg && loaded.email_cfg.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY'){
-      Object.assign(EMAIL_CONFIG, loaded.email_cfg);
-      if(typeof emailjs !== 'undefined' && EMAIL_CONFIG.publicKey)
-        emailjs.init(EMAIL_CONFIG.publicKey);
     }
     // Users: always merge with DEFAULT_USERS
     if(loaded.users){ users = loaded.users; }
@@ -3960,13 +3893,6 @@ function renderBreachList(){
 
 async function saveThr(){
   triggerRecalc();renderSKUs();updateAlerts();await save('thresholds');renderBreachList();audit('threshold','Thresholds updated');
-  // Send alert email if configured (read from persisted settings)
-  const alertEmail = ALERT_SETTINGS.email||document.querySelector('#page-thresholds input[type=email]')?.value||'';
-  const freq = ALERT_SETTINGS.frequency||'';
-  if(alertEmail && freq.includes('Immediately')){
-    const breached = skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
-    if(breached.length) sendThresholdAlertEmail(breached, alertEmail);
-  }
   toast('Thresholds saved','green');
 }
 
@@ -5387,11 +5313,11 @@ function renderUsers(){
     const isRevoked=u.revoked;
     const revokedBadge=isRevoked?'<span style="font-size:10px;background:rgba(245,87,92,.15);color:var(--re);padding:1px 6px;border-radius:3px;margin-left:6px">REVOKED</span>':'';
     return`<tr${isRevoked?' style="opacity:.5"':''}>
-    <td><div class="flex gap8"><span class="u-av">${esc((u.name||'?').trim().charAt(0).toUpperCase())}</span><strong>${esc(u.name)}</strong>${revokedBadge}</div></td>
-    <td class="mono st">${esc(u.email)}</td>
-    <td><span class="bdg ${ROLE_COLORS[u.role]||'bi'}">${esc(ROLE_LABELS[u.role]||u.role||'—')}</span></td>
-    <td class="st">${esc(u.added)}</td>
-    <td><div class="flex gap8">
+    <td data-label="Name"><div class="flex gap8"><span class="u-av">${esc((u.name||'?').trim().charAt(0).toUpperCase())}</span><strong>${esc(u.name)}</strong>${revokedBadge}</div></td>
+    <td class="mono st" data-label="Email">${esc(u.email)}</td>
+    <td data-label="Role"><span class="bdg ${ROLE_COLORS[u.role]||'bi'}">${esc(ROLE_LABELS[u.role]||u.role||'—')}</span></td>
+    <td class="st" data-label="Added">${esc(u.added)}</td>
+    <td data-label="Actions"><div class="flex gap8" style="flex-wrap:wrap">
       <button class="btn bg bxs" onclick="openUserModal('${escAttr(u.id)}')" aria-label="Edit user">${icon('edit',{size:13})} Edit</button>
       <button class="btn bg bxs" onclick="resetUserPassword('${escAttr(u.id)}')" title="Reset password" style="font-size:11px">Reset PW</button>
       ${u.id!=='u0'?(isRevoked
@@ -5452,15 +5378,8 @@ async function saveUser(eid){
   toast(`${name} added`,'green');
   closeModal();renderUsers();await save('users');
   audit('user_add',`${name} (${email}) added as ${role}`);
-  // Email the temp password if email is configured.
-  if(emailReady()){
-    sendEmail(EMAIL_CONFIG.templateWelcome,{
-      to_name:newUser.name, to_email:newUser.email, role:newUser.role,
-      temp_password:tempPass, login_url:window.location.href,
-    });
-  }
-  // Always show the admin a copyable modal — email may not be configured
-  // and the plain password is never recoverable once the admin closes this.
+  // Show the admin a copyable modal — the plain password is never
+  // recoverable once this modal is closed, so they must share it now.
   showTempPasswordModal(newUser, tempPass);
 }
 
@@ -5468,7 +5387,7 @@ function showTempPasswordModal(user, tempPass){
   setModal(`<div class="mhdr"><div class="mtl">${icon('lock',{size:16})} Temp password for ${esc(user.name)}</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div class="info mb12" style="background:rgba(245,166,35,.08);border-color:rgba(245,166,35,.4);color:var(--ac)">
-        <strong>Important:</strong> This password is shown only once. ${emailReady()?'It was emailed to '+esc(user.email)+', but copy it here as a backup.':'Email is not configured — copy this and share it with the user manually.'}
+        <strong>Important:</strong> This password is shown only once — copy it now and share it with ${esc(user.name)} directly.
       </div>
       <div style="background:var(--s2);border:1px solid var(--bd2);border-radius:8px;padding:14px;text-align:center;cursor:pointer"
         onclick="navigator.clipboard.writeText('${escAttr(tempPass)}').then(()=>this.querySelector('.copy-hint').textContent='✓ Copied to clipboard')">
@@ -5858,10 +5777,10 @@ function nav(p){
   if(p==='brands')renderBrands();
   if(p==='skus'){populateFilters();populateTagFilter();renderSKUs();}
   if(p==='archive') renderArchivedSKUs();
-  if(p==='thresholds'){renderThresholds();loadAlertSettingsUI();}
+  if(p==='thresholds'){renderThresholds();}
   if(p==='users')renderUsers();
-  if(p==='activity'){ renderAuditLog(); renderImportLog(); populateAuditFilters(); populateSkuHistorySelect(); loadUserPrefsUI(); }
-  if(p==='settings'){ loadConfig(); populateSettingsPage(); loadBackupList(); }
+  if(p==='activity'){ renderAuditLog(); renderImportLog(); populateAuditFilters(); populateSkuHistorySelect(); }
+  if(p==='settings'){ loadConfig(); populateSettingsPage(); loadBackupList(); applyRoleVisibility(); }
   if(p==='logistics'){ renderGTTable(); renderRetTable(); renderCollTable(); populateLogisticsInputs(); }
 }
 // Browser back/forward button support
@@ -6478,67 +6397,6 @@ async function deleteBackup(date){
   setTimeout(runAutoBackup,ms);
 })();
 
-// Daily/Weekly alert cron: fires at 9:00 AM IST
-// lastRun is stored in ALERT_SETTINGS (database) — not localStorage
-(function scheduleDailyAlert(){
-  function msUntil9amIST(){
-    const now=new Date();
-    const istOffset=5.5*60*60*1000;
-    const nowIST=new Date(now.getTime()+istOffset);
-    const target=new Date(nowIST);
-    target.setHours(9,0,0,0);
-    if(nowIST>=target) target.setDate(target.getDate()+1);
-    return target.getTime()-nowIST.getTime();
-  }
-  function isAfter9amIST(){
-    const now=new Date();
-    const istOffset=5.5*60*60*1000;
-    const nowIST=new Date(now.getTime()+istOffset);
-    return nowIST.getHours()>=9;
-  }
-  async function runDailyAlert(){
-    const freq=ALERT_SETTINGS.frequency||'';
-    const alertEmail=ALERT_SETTINGS.email||'';
-    if(!alertEmail||!emailReady()){scheduleNext();return;}
-    const lastRun=ALERT_SETTINGS._lastAlertDate||'';
-    const today=new Date().toISOString().slice(0,10);
-    if(lastRun===today){scheduleNext();return;}
-    if(freq.includes('Daily')){
-      const breached=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
-      if(breached.length){
-        sendThresholdAlertEmail(breached,alertEmail);
-        console.log('✓ Daily alert sent for',breached.length,'breaches to',alertEmail);
-      }
-      ALERT_SETTINGS._lastAlertDate=today;
-      save('alert').catch(e=>console.warn('Alert date save failed:',e));
-    } else if(freq.includes('Weekly')){
-      const dayOfWeek=new Date().getDay();
-      if(dayOfWeek===1){
-        const breached=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold&&calcSKU(s).isBreach);
-        if(breached.length) sendThresholdAlertEmail(breached,alertEmail);
-        ALERT_SETTINGS._lastAlertDate=today;
-        save('alert').catch(e=>console.warn('Alert date save failed:',e));
-        console.log('✓ Weekly alert sent');
-      }
-    }
-    scheduleNext();
-  }
-  function scheduleNext(){setTimeout(runDailyAlert,24*60*60*1000);}
-  // If it's already past 9 AM IST and today's alert wasn't sent yet, run now
-  const lastRun=ALERT_SETTINGS._lastAlertDate||'';
-  const today=new Date().toISOString().slice(0,10);
-  if(isAfter9amIST()&&lastRun!==today){
-    console.log('Alert: Past 9 AM IST, today\'s alert pending — sending in 5s');
-    setTimeout(runDailyAlert,5000);
-  } else if(lastRun===today){
-    console.log('Alert: Today\'s alert already sent. Next check at 9 AM IST tomorrow.');
-  }
-  // Also schedule for next 9 AM IST
-  const ms=msUntil9amIST();
-  console.log(`Alert cron: next 9 AM IST in ${Math.round(ms/60000)} min`);
-  setTimeout(runDailyAlert,ms);
-})();
-
 function showBackupSetupSQL(){
   const sql = `-- Run this in Supabase SQL Editor to enable backups
 CREATE TABLE IF NOT EXISTS pd_backups (
@@ -6612,106 +6470,14 @@ function importDataPrompt(){
 
 
 
-// Multi-email helpers for alert settings
-function getAlertEmails(){
-  const chips=[...document.querySelectorAll('#alert-email-wrap .tag-chip')];
-  return chips.map(c=>c.dataset.email).filter(Boolean);
-}
-function addAlertEmail(raw){
-  // Support comma-separated input
-  const emails=raw.split(',').map(e=>e.trim()).filter(Boolean);
-  emails.forEach(email=>{
-    if(!email.includes('@')){toast(`"${email}" is not a valid email`,'red');return;}
-    const existing=getAlertEmails();
-    if(existing.includes(email)){toast(`${email} already added`,'red');return;}
-    const chip=document.createElement('span');
-    chip.className='tag-chip';
-    chip.dataset.email=email;
-    chip.innerHTML=`${esc(email)}<span class="tc-x" onclick="this.parentElement.remove()">×</span>`;
-    const input=document.getElementById('alert-email-input');
-    input.parentElement.insertBefore(chip,input);
-  });
-}
-function renderAlertEmailChips(emailStr){
-  const wrap=document.getElementById('alert-email-wrap');if(!wrap)return;
-  wrap.querySelectorAll('.tag-chip').forEach(c=>c.remove());
-  const input=document.getElementById('alert-email-input');
-  (emailStr||'').split(',').map(e=>e.trim()).filter(Boolean).forEach(email=>{
-    const chip=document.createElement('span');
-    chip.className='tag-chip';
-    chip.dataset.email=email;
-    chip.innerHTML=`${esc(email)}<span class="tc-x" onclick="this.parentElement.remove()">×</span>`;
-    wrap.insertBefore(chip,input);
-  });
-}
-
-function saveAlertSettings(){
-  const emails=getAlertEmails();
-  // Also grab anything left in the input field
-  const pending=document.getElementById('alert-email-input')?.value.trim()||'';
-  if(pending){pending.split(',').map(e=>e.trim()).filter(e=>e.includes('@')).forEach(e=>{if(!emails.includes(e))emails.push(e);});document.getElementById('alert-email-input').value='';}
-  const email=emails.join(',');
-  const freq = document.getElementById('alert-freq-select')?.value||'Immediately on breach';
-  if(!emails.length){ toast('Add at least one email address','red'); return; }
-  // Persist to DB
-  ALERT_SETTINGS.email=email;
-  ALERT_SETTINGS.frequency=freq;
-  save('alert');
-  // Update email status display
-  const statusBox = document.getElementById('email-status-box');
-  if(statusBox){
-    if(emailReady()){
-      statusBox.textContent='✓ EmailJS connected — alerts will be sent';
-      statusBox.style.color='var(--gr)';
-      statusBox.style.borderColor='rgba(45,212,160,.3)';
-    } else {
-      statusBox.textContent='⚠ EmailJS not configured — see deployment guide';
-      statusBox.style.color='var(--ac)';
-    }
-  }
-  audit('alert_settings',`Alert settings updated: ${email||'no email'}, ${freq}`);
-  toast('Alert settings saved','green');
-}
-
-function loadAlertSettingsUI(){
-  renderAlertEmailChips(ALERT_SETTINGS.email||'');
-  const freqSelect=document.getElementById('alert-freq-select');
-  if(freqSelect){
-    const opts=[...freqSelect.options];
-    const match=opts.find(o=>o.value===ALERT_SETTINGS.frequency);
-    if(match) freqSelect.value=match.value;
-  }
-  // Update EmailJS status box
-  const statusBox=document.getElementById('email-status-box');
-  if(statusBox){
-    const emailCount=(ALERT_SETTINGS.email||'').split(',').filter(e=>e.trim()).length;
-    if(emailReady()){
-      statusBox.textContent=`✓ EmailJS connected — alerts will be sent to ${emailCount} recipient${emailCount!==1?'s':''}`;
-      statusBox.style.color='var(--gr)';
-      statusBox.style.borderColor='rgba(45,212,160,.3)';
-    } else if(ALERT_SETTINGS.email){
-      statusBox.textContent=`⚠ EmailJS not configured — ${emailCount} email${emailCount!==1?'s':''} saved but alerts will log to console. Set up EmailJS in Settings.`;
-      statusBox.style.color='var(--ac)';
-      statusBox.style.borderColor='rgba(245,166,35,.3)';
-    }
-  }
-}
-
-
 // ═══════════════════════════════════════════════════════
-// SETTINGS PAGE — save keys to localStorage, no file edit needed
+// SETTINGS PAGE
 // ═══════════════════════════════════════════════════════
 const CFG_KEY = 'pricedesk_config';
 
 function loadConfig(){
   try{
     const cfg = JSON.parse(localStorage.getItem(CFG_KEY)||'{}');
-    // Apply to EMAIL_CONFIG
-    if(cfg.serviceId)      EMAIL_CONFIG.serviceId       = cfg.serviceId;
-    if(cfg.tplWelcome)     EMAIL_CONFIG.templateWelcome = cfg.tplWelcome;
-    if(cfg.tplReset)       EMAIL_CONFIG.templateReset   = cfg.tplReset;
-    if(cfg.tplAlert)       EMAIL_CONFIG.templateAlert   = cfg.tplAlert;
-    if(cfg.publicKey)      EMAIL_CONFIG.publicKey       = cfg.publicKey;
     // Apply Supabase (re-init if keys present)
     if(cfg.sbUrl && cfg.sbKey){
       try{
@@ -6723,15 +6489,6 @@ function loadConfig(){
 }
 
 function populateSettingsPage(){
-  // Read from EMAIL_CONFIG (already loaded from DB).
-  // Skip the YOUR_* sentinels — filling them in made unconfigured fields look
-  // configured and hid the real placeholder hints.
-  const set = (id, val) => { const e=el(id); if(e&&val&&!/^YOUR_/.test(val)) e.value=val; };
-  set('cfg-service-id',  EMAIL_CONFIG.serviceId);
-  set('cfg-tpl-welcome', EMAIL_CONFIG.templateWelcome);
-  set('cfg-tpl-reset',   EMAIL_CONFIG.templateReset);
-  set('cfg-tpl-alert',   EMAIL_CONFIG.templateAlert);
-  set('cfg-public-key',  EMAIL_CONFIG.publicKey);
   // Update counts
   if(el('cfg-sku-count'))     el('cfg-sku-count').textContent     = skuDB.length;
   if(el('cfg-brand-count'))   el('cfg-brand-count').textContent   = brands.length;
@@ -6741,25 +6498,6 @@ function populateSettingsPage(){
       const size = new Blob([localStorage.getItem(STORAGE_KEY)||'']).size;
       el('cfg-storage-size').textContent = size > 1024 ? (size/1024).toFixed(1)+' KB' : size+' B';
     } catch(e){}
-  }
-  // Show email status
-  const emailActive = EMAIL_CONFIG.publicKey && EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY';
-  const statusBox = el('email-cfg-status');
-  if(statusBox){
-    statusBox.style.display = '';
-    if(emailActive){
-      statusBox.innerHTML = '<div class="success" style="margin:0">✓ EmailJS keys loaded — emails are active. Fields are pre-filled above.</div>';
-    } else {
-      statusBox.innerHTML = '<div class="warn" style="margin:0">⚠ Not configured yet — paste your EmailJS keys above and click Save & Activate</div>';
-    }
-  }
-  // Glanceable pill in the card header (same condition as the box above)
-  const pill = el('email-status-pill');
-  if(pill){
-    pill.style.display='';
-    pill.textContent = emailActive ? 'Active' : 'Not set up';
-    pill.style.background = emailActive ? 'rgba(45,212,160,.12)' : 'rgba(240,177,42,.12)';
-    pill.style.color = emailActive ? 'var(--gr)' : 'var(--ac)';
   }
   // Show Supabase status
   const sbBox = el('sb-cfg-status');
@@ -6771,37 +6509,6 @@ function populateSettingsPage(){
       sbBox.innerHTML = '<div class="info" style="margin:0">Not connected yet — paste your Supabase URL and Anon Key above</div>';
     }
   }
-}
-
-function saveEmailSettings(){
-  const get = id => el(id)?.value.trim()||'';
-  const serviceId  = get('cfg-service-id');
-  const tplWelcome = get('cfg-tpl-welcome');
-  const tplReset   = get('cfg-tpl-reset');
-  const tplAlert   = get('cfg-tpl-alert');
-  const publicKey  = get('cfg-public-key');
-
-  if(!serviceId||!publicKey){ toast('Service ID and Public Key are required','red'); return; }
-
-  // Save to localStorage config
-  // Save directly to DB — no localStorage
-
-  // Apply immediately without page reload
-  EMAIL_CONFIG.serviceId       = serviceId;
-  EMAIL_CONFIG.templateWelcome = tplWelcome;
-  EMAIL_CONFIG.templateReset   = tplReset;
-  EMAIL_CONFIG.templateAlert   = tplAlert;
-  EMAIL_CONFIG.publicKey       = publicKey;
-
-  if(typeof emailjs !== 'undefined') emailjs.init(publicKey);
-  save('email_cfg'); // push email config to database
-
-  const statusBox = el('email-cfg-status');
-  if(statusBox){
-    statusBox.style.display='';
-    statusBox.innerHTML = '<div class="success" style="margin:0">✓ Email settings saved and activated! Use the test buttons below to verify.</div>';
-  }
-  toast('Email settings saved — no code editing needed!','green');
 }
 
 function saveSupabaseSettings(){
@@ -6825,38 +6532,6 @@ function saveSupabaseSettings(){
       toast('Supabase connection verified','green');
     }
   });
-}
-
-async function testEmail(type){
-  const dest = el('cfg-test-email')?.value.trim();
-  if(!dest||!dest.includes('@')){ toast('Enter your email address in the test field first','red'); return; }
-  if(!emailReady()){ toast('Save your EmailJS keys first, then test','red'); return; }
-
-  // NOTE: EmailJS sends to whatever address is in the template's "To Email" field.
-  // To send to a DIFFERENT address, the template "To Email" field MUST be set to {{to_email}}
-  // We pass to_email in every call — make sure your template uses {{to_email}} not a fixed address.
-  toast('Sending to ' + dest + '…','green');
-  let result = false;
-  const base = { to_email: dest, to_name:'Test User', login_url: window.location.href };
-  if(type==='welcome'){
-    result = await sendEmail(EMAIL_CONFIG.templateWelcome,{
-      ...base, role:'manager', temp_password:DEFAULT_USER_PASSWORD
-    });
-  } else if(type==='reset'){
-    result = await sendEmail(EMAIL_CONFIG.templateReset,{
-      ...base, reset_link: window.location.origin+window.location.pathname+'?reset=TEST_TOKEN_DEMO'
-    });
-  } else if(type==='alert'){
-    result = await sendEmail(EMAIL_CONFIG.templateAlert,{
-      ...base,
-      breach_count:'2',
-      breach_list:'SP39-ORANGE-M (Fusionic Myntra, Kurta Sets): ₹210 < ₹300\nTF-202 (LNB Amazon, Lehenga Choli): ₹380 < ₹500',
-      date: new Date().toLocaleDateString('en-IN'),
-    });
-  }
-  if(result !== false){
-    toast('Sent to ' + dest + ' — check inbox & spam','green');
-  }
 }
 
 async function confirmClearData(){
@@ -6981,7 +6656,6 @@ function _completeLogin(user, isFirstLogin, methodLabel){
   updateSidebarUser(user);
   startSessionTimer();
   startSessionCheck();
-  if(isFirstLogin) sendWelcomeEmail(user);
   audit('login',`${user.name} logged in${methodLabel||''}`);
   setupRealtime();
   invalidateCalcCache();
@@ -7099,10 +6773,10 @@ async function passkeyRegister(){
     const cred=await navigator.credentials.create({publicKey:_wnCreationOpts(options)});
     if(!cred) throw new Error('Biometric prompt was cancelled.');
     const res=await _wnCall('register-verify',{attResp:_wnPackCred(cred),deviceName:name});
-    el('pk-confirm-pass').value='';
+    el('pk-confirm-pass').value=''; el('pk-device-name').value='';
     audit('passkey_add',`${currentUser.name} added passkey "${name}"`);
     toast('Passkey added — you can now sign in with Face/Fingerprint','green');
-    _renderPasskeyList(res.passkeys);
+    _renderPasskeyStatus(res.passkeys);
   }catch(e){
     if(e.name==='InvalidStateError') toast('This device already has a passkey registered','red');
     else if(e.name==='NotAllowedError') toast('Biometric prompt cancelled','red');
@@ -7110,42 +6784,111 @@ async function passkeyRegister(){
   }finally{ if(btn) btn.disabled=false; }
 }
 
-async function passkeyList(){
-  if(!currentUser?.email){ toast('Sign in first','red'); return; }
-  const pass=el('pk-confirm-pass')?.value;
-  if(!pass){ toast('Enter your current password to view passkeys','red'); return; }
-  try{
-    const res=await _wnCall('list',{email:currentUser.email,password:pass});
-    _renderPasskeyList(res.passkeys);
-  }catch(e){ toast(e.message,'red'); }
-}
-
 async function passkeyRemove(id,name){
   const pass=el('pk-confirm-pass')?.value;
-  if(!pass){ toast('Enter your current password to remove','red'); return; }
+  if(!pass){ toast('Enter your current password to remove a device','red'); el('pk-confirm-pass')?.focus(); return; }
   if(!confirm(`Remove passkey "${name}"? That device will need the password again.`)) return;
   try{
     const res=await _wnCall('remove',{email:currentUser?.email,password:pass,credentialId:id});
     audit('passkey_remove',`${currentUser.name} removed passkey "${name}"`);
     toast('Passkey removed','green');
-    _renderPasskeyList(res.passkeys);
+    _renderPasskeyStatus(res.passkeys);
   }catch(e){ toast(e.message,'red'); }
 }
 
-function _renderPasskeyList(list){
-  const box=el('pk-list'); if(!box) return;
-  if(!list||!list.length){
-    box.innerHTML='<div class="st" style="padding:6px 0">No passkeys on this account yet.</div>';
-    return;
+// Fetch the signed-in user's own passkeys (no password) so the profile can
+// show an at-a-glance enabled state on open. Degrades quietly if the server
+// predates the `status` action.
+async function _refreshPasskeyStatus(){
+  const box=el('pk-status'); if(box) box.innerHTML='<div class="st">Checking…</div>';
+  if(!currentUser?.email){ _renderPasskeyStatus([]); return; }
+  try{
+    const res=await _wnCall('status',{email:currentUser.email});
+    _renderPasskeyStatus(res.devices||[]);
+  }catch(e){ _renderPasskeyStatus(null); }
+}
+
+// Renders both the status pill and the device list from a device array.
+// null = couldn't determine (server error) → neutral prompt.
+function _renderPasskeyStatus(list){
+  const status=el('pk-status'), box=el('pk-list');
+  const supported = _pkSupported;
+  if(status){
+    if(list && list.length){
+      status.innerHTML=`<span class="pk-badge on">${icon('check',{size:13})} Enabled — ${list.length} device${list.length!==1?'s':''}</span>`;
+    } else if(list){
+      status.innerHTML=`<span class="pk-badge off">${icon('fingerprint',{size:13})} Not enabled yet${supported?' — add this device below':''}</span>`;
+    } else {
+      status.innerHTML=`<span class="st">Couldn't check passkey status. ${supported?'You can still add this device below.':''}</span>`;
+    }
   }
-  box.innerHTML=list.map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)">
-    <span style="color:var(--ac)">${icon('fingerprint',{size:16})}</span>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:12px;font-weight:600">${esc(p.deviceName)}</div>
-      <div class="st" style="font-size:10px">Added ${esc((p.createdAt||'').slice(0,10))}</div>
-    </div>
-    <button class="row-del" onclick="passkeyRemove('${escAttr(p.id)}','${escAttr(p.deviceName)}')" title="Remove passkey">${icon('x',{size:12})}</button>
-  </div>`).join('');
+  if(box){
+    if(list && list.length){
+      box.innerHTML=list.map(p=>`<div class="pk-row">
+        <span style="color:var(--ac)">${icon('fingerprint',{size:16})}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600">${esc(p.deviceName)}</div>
+          <div class="st" style="font-size:10px">Added ${esc((p.createdAt||'').slice(0,10))}</div>
+        </div>
+        <button class="row-del" onclick="passkeyRemove('${escAttr(p.id)}','${escAttr(p.deviceName)}')" title="Remove passkey">${icon('x',{size:12})}</button>
+      </div>`).join('');
+    } else box.innerHTML='';
+  }
+}
+
+// ── My Profile modal (all users): identity · passkeys · preferences ──
+let _pkSupported=false;
+async function openProfileModal(){
+  if(!currentUser) return;
+  try{ _pkSupported=await passkeySupported(); }catch(e){ _pkSupported=false; }
+  const u=currentUser;
+  const initial=esc((u.name||'?').trim().charAt(0).toUpperCase());
+  const roleLabel=({admin:'Administrator',manager:'Manager',viewer:'Viewer'})[u.role]||u.role||'—';
+  const addBlock = _pkSupported ? `
+    <div class="pk-add">
+      <div class="fg"><label class="fl">Confirm your password</label><input class="fi" id="pk-confirm-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <div class="fg"><label class="fl">Device name</label><input class="fi" id="pk-device-name" placeholder="${esc(_guessDeviceName())}"></div>
+      <button class="btn bp bsm" id="pk-add-btn" onclick="passkeyRegister()">${icon('fingerprint',{size:13})} Add this device</button>
+    </div>`
+    : `<div class="st" style="margin-top:8px">This device doesn't support Face ID / fingerprint sign-in. Open the app on a phone with biometrics to set it up.</div>`;
+  setModal(`<div class="mhdr"><div class="mtl">${icon('lock',{size:16})} My Profile</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
+    <div class="mbody profile-modal">
+      <div class="profile-id">
+        <div class="ava profile-ava">${initial}</div>
+        <div style="min-width:0">
+          <div style="font-size:15px;font-weight:700">${esc(u.name||'')}</div>
+          <div class="st mono" style="font-size:11px;word-break:break-all">${esc(u.email||'')}</div>
+          <span class="bdg ${ROLE_COLORS[u.role]||'bi'}" style="margin-top:5px;display:inline-block">${esc(roleLabel)}</span>
+        </div>
+      </div>
+
+      <div class="profile-sec">
+        <div class="profile-sec-h">${icon('fingerprint',{size:14})} Face ID / Fingerprint sign-in</div>
+        <div id="pk-status" style="margin:2px 0 6px"></div>
+        <div id="pk-list" style="margin-bottom:6px"></div>
+        ${addBlock}
+      </div>
+
+      <div class="profile-sec">
+        <div class="profile-sec-h">${icon('database',{size:14})} Preferences</div>
+        <div class="fg"><label class="fl">Default page on login</label>
+          <select class="fi" id="pref-default-page" onchange="saveUserPref('defaultPage',this.value)" style="font-size:12px">
+            <option value="dashboard">Dashboard</option>
+            <option value="skus">SKUs</option>
+            <option value="pricing">Price Calculator</option>
+            <option value="brands">Brands</option>
+            <option value="thresholds">Profit Alerts</option>
+          </select>
+        </div>
+        <div class="fg" style="margin-bottom:0"><label class="fl">Items per page (SKU list)</label>
+          <select class="fi" id="pref-page-size" onchange="saveUserPref('pageSize',this.value);SKU_PAGE_SIZE_USER=parseInt(this.value);renderSKUs()" style="font-size:12px">
+            <option value="25">25</option><option value="50">50</option><option value="100">100</option>
+          </select>
+        </div>
+      </div>
+    </div>`);
+  loadUserPrefsUI();
+  _refreshPasskeyStatus();
 }
 
 // Login method chooser — the user taps the option they want; nothing
@@ -7162,14 +6905,13 @@ function showLoginMethods(){
   if(m) m.style.display='flex';
 }
 
-// Reveal passkey UI only where a platform authenticator exists.
-// Without one, the chooser is pointless — skip straight to the email form.
+// Reveal the login-screen passkey button only where a platform authenticator
+// exists. Without one, the chooser is pointless — skip to the email form.
 (async()=>{
   let ok=false;
   try{ ok=await passkeySupported(); }catch(e){}
   if(ok){
     const b=el('passkey-login-btn'); if(b) b.style.display='flex';
-    const c=el('passkey-settings-card'); if(c) c.style.display='';
   } else {
     const back=el('login-back-methods'); if(back) back.style.display='none';
     showEmailLogin();
@@ -7417,6 +7159,15 @@ function updateSidebarUser(user){
   if(ava)  ava.textContent  = user.name.charAt(0).toUpperCase();
   if(name) name.textContent = user.name;
   if(role) role.textContent = ROLE_LABELS[user.role]||user.role;
+  applyRoleVisibility();
+}
+
+// Show admin-only surfaces (App Configuration: DB/backups/app-info/danger,
+// and the Users hub card) only to admins. Server RLS remains the source of
+// truth; this is presentation gating consistent with the app's client model.
+function applyRoleVisibility(){
+  const admin = currentUser?.role==='admin';
+  document.querySelectorAll('.admin-only').forEach(node=>{ node.style.display = admin ? '' : 'none'; });
 }
 
 // Synchronous fallback hash (for backwards compat with existing hashes)
@@ -7498,93 +7249,30 @@ async function checkSession(){
 }
 
 // ═══════════════════════════════════════════════════════
-// EMAIL SYSTEM (uses EmailJS — free tier, 200 emails/mo)
-// Configure at emailjs.com and paste your keys below
+// PASSWORD RESET LINKS (share-a-link, no email dependency)
 // ═══════════════════════════════════════════════════════
-const EMAIL_CONFIG = {
-  serviceId:  'YOUR_EMAILJS_SERVICE_ID',   // from emailjs.com
-  templateWelcome: 'YOUR_WELCOME_TEMPLATE',
-  templateAlert:   'YOUR_ALERT_TEMPLATE',
-  templateReset:   'YOUR_RESET_TEMPLATE',
-  publicKey:  'YOUR_EMAILJS_PUBLIC_KEY',
-};
-
-function emailReady(){
-  return EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY' && typeof emailjs !== 'undefined';
-}
-
-async function sendEmail(templateId, params){
-  if(!emailReady()){ console.log('Email not configured — would send:', templateId, params); return false; }
-  try{
-    await emailjs.send(EMAIL_CONFIG.serviceId, templateId, params, EMAIL_CONFIG.publicKey);
-    return true;
-  } catch(e){ console.warn('Email send failed:', e); return false; }
-}
-
-function sendWelcomeEmail(user){
-  sendEmail(EMAIL_CONFIG.templateWelcome,{
-    to_name:  user.name,
-    to_email: user.email,
-    role:     user.role,
-    login_url: window.location.href,
-  });
-}
-
-async function sendPasswordResetEmail(user){
+// Mint a 30-minute reset token and return its shareable link. The admin
+// copies the link and hands it to the user directly.
+async function generateResetLink(user){
   const token = generateResetToken();
   const tokens = await dbGet(DB_KEYS.reset_tokens) || {};
   tokens[token] = { userId: user.id, email: user.email, expires: Date.now() + 30*60*1000 };
   await dbSet(DB_KEYS.reset_tokens, tokens);
   const baseUrl = window.location.origin + window.location.pathname;
-  const resetLink = baseUrl + '?reset=' + token;
-  sendEmail(EMAIL_CONFIG.templateReset,{
-    to_name:    user.name,
-    to_email:   user.email,
-    reset_link: resetLink,
-    login_url:  baseUrl,
-    reset_token: token,
-  });
-  return resetLink;
-}
-
-function sendThresholdAlertEmail(breachedList, alertEmail){
-  // Only include non-ignored, non-archived SKUs in alert emails
-  const filtered=breachedList.filter(s=>!s.archived&&!s.ignoreThreshold);
-  if(!filtered.length) return;
-  const totalActive=skuDB.filter(s=>!s.archived&&!s.ignoreThreshold).length;
-  const body = filtered.map(s=>{
-    const c=calcSKU(s), brand=brands.find(b=>b.id===s.brandId);
-    return `${s.sku||s.styleId} (${brand?.name||''}, ${s.category}): Net Profit ₹${c.profitRs.toFixed(0)} < Threshold ₹${c.threshold}`;
-  }).join('\n');
-  // Send to all comma-separated emails
-  const emails=alertEmail.split(',').map(e=>e.trim()).filter(Boolean);
-  emails.forEach(email=>{
-    sendEmail(EMAIL_CONFIG.templateAlert,{
-      to_email: email,
-      breach_count: filtered.length,
-      total_skus: totalActive,
-      breach_list: body,
-      date: new Date().toLocaleDateString('en-IN'),
-    });
-  });
+  return baseUrl + '?reset=' + token;
 }
 
 // ── Password reset from User Access page ─────────────
 async function resetUserPassword(userId){
   const user = users.find(u=>u.id===userId);
   if(!user) return;
-  const resetLink = await sendPasswordResetEmail(user);
-  if(emailReady()){
-    toast(`Reset link sent to ${esc(user.email)}`, 'green');
-  } else {
-    // Show link in a copyable modal if email isn't configured
-    setModal(`<div class="mhdr"><div class="mtl">${icon('lock',{size:16})} Password Reset Link</div><span class="mclose" onclick="closeModal()">×</span></div>
-      <div class="mbody">
-        <div style="font-size:13px;color:var(--tx2);margin-bottom:12px">Email not configured. Share this link with <strong>${esc(user.name)}</strong>:</div>
-        <div style="background:var(--s2);border:1px solid var(--bd2);border-radius:8px;padding:12px;word-break:break-all;font-family:var(--mono);font-size:12px;color:var(--ac);cursor:pointer" onclick="navigator.clipboard.writeText('${escAttr(resetLink)}');this.style.borderColor='var(--gr)';this.insertAdjacentHTML('afterend','<div style=\\'color:var(--gr);font-size:11px;margin-top:6px\\'>✓ Copied!</div>')">${esc(resetLink)}</div>
-        <div class="st" style="margin-top:8px">Click the link to copy. Expires in 30 minutes.</div>
-      </div>`);
-  }
+  const resetLink = await generateResetLink(user);
+  setModal(`<div class="mhdr"><div class="mtl">${icon('lock',{size:16})} Password Reset Link</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:12px">Share this one-time link with <strong>${esc(user.name)}</strong>:</div>
+      <div style="background:var(--s2);border:1px solid var(--bd2);border-radius:8px;padding:12px;word-break:break-all;font-family:var(--mono);font-size:12px;color:var(--ac);cursor:pointer" onclick="navigator.clipboard.writeText('${escAttr(resetLink)}');this.style.borderColor='var(--gr)';this.insertAdjacentHTML('afterend','<div style=\\'color:var(--gr);font-size:11px;margin-top:6px\\'>✓ Copied!</div>')">${esc(resetLink)}</div>
+      <div class="st" style="margin-top:8px">Click the link to copy. Expires in 30 minutes.</div>
+    </div>`);
 }
 
 // ── SKU EXCEL EXPORT ──────────────────────────────────
@@ -9365,10 +9053,10 @@ function renderAuditLog(){
     const label=actionLabels[e.action]||e.action;
     const color=actionColors[e.action]||'var(--tx2)';
     return`<tr>
-      <td class="mono st" style="font-size:11px;white-space:nowrap">${when}</td>
-      <td style="font-weight:500">${esc(e.user)}</td>
-      <td><span style="color:${color};font-weight:600;font-size:11px">${esc(label)}</span></td>
-      <td class="st" style="font-size:11px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.details)}">${esc(e.details)}</td>
+      <td class="mono st" data-label="When" style="font-size:11px;white-space:nowrap">${when}</td>
+      <td data-label="Who" style="font-weight:500">${esc(e.user)}</td>
+      <td data-label="Action"><span style="color:${color};font-weight:600;font-size:11px">${esc(label)}</span></td>
+      <td class="st det" data-label="Details" style="font-size:11px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.details)}">${esc(e.details)}</td>
     </tr>`;
   }).join('');
 
@@ -9629,12 +9317,12 @@ function renderImportLog(){
     const d=new Date(e.ts);
     const when=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
     return`<tr>
-      <td class="mono st" style="font-size:11px;white-space:nowrap">${when}</td>
-      <td style="font-weight:500">${esc(e.user)}</td>
-      <td class="mono" style="font-size:11px">${esc(e.file)}</td>
-      <td class="num" style="color:var(--gr);font-weight:600">${e.added}</td>
-      <td class="num" style="color:var(--ac);font-weight:600">${e.updated}</td>
-      <td class="num" style="color:${e.errors?'var(--re)':'var(--tx3)'}">${e.errors}</td>
+      <td class="mono st" data-label="Date" style="font-size:11px;white-space:nowrap">${when}</td>
+      <td data-label="By" style="font-weight:500">${esc(e.user)}</td>
+      <td class="mono" data-label="File" style="font-size:11px">${esc(e.file)}</td>
+      <td class="num" data-label="Added" style="color:var(--gr);font-weight:600">${e.added}</td>
+      <td class="num" data-label="Updated" style="color:var(--ac);font-weight:600">${e.updated}</td>
+      <td class="num" data-label="Errors" style="color:${e.errors?'var(--re)':'var(--tx3)'}">${e.errors}</td>
     </tr>`;
   }).join('');
 }
@@ -10034,10 +9722,6 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     await loadAuditLog();
     await loadImportLog();
   },100);
-  // Init EmailJS if configured
-  if(EMAIL_CONFIG.publicKey !== 'YOUR_EMAILJS_PUBLIC_KEY' && typeof emailjs !== 'undefined'){
-    emailjs.init(EMAIL_CONFIG.publicKey);
-  }
   // Start Supabase Realtime for live sync across PCs
   setupRealtime();
   // Flush debounced saves (audit/history) when user leaves

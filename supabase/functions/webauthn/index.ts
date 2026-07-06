@@ -27,6 +27,7 @@ import {
   isWebAuthnResponse,
   ORIGIN_RP,
   passkeysForRp,
+  passkeysForUser,
   rpIdForOrigin,
   sanitizePasskey,
   takeChallenge,
@@ -248,7 +249,7 @@ serve(async (req) => {
       });
       await saveKey(db, "pd_passkeys", passkeys);
 
-      return jsonResponse({ ok: true, passkeys: passkeysForRp(passkeys, rpId).map(sanitizePasskey) }, 200, cors);
+      return jsonResponse({ ok: true, passkeys: passkeysForUser(passkeys, rpId, pending.userId).map(sanitizePasskey) }, 200, cors);
     }
 
     // ── LOGIN: step 1 — authentication options ────────────────────────
@@ -320,7 +321,22 @@ serve(async (req) => {
       return jsonResponse({ user: safeUser(user), serverAuth: true, passkey: true }, 200, cors);
     }
 
-    // ── MANAGEMENT: list / remove (password re-auth) ──────────────────
+    // ── STATUS: does THIS user have passkeys? (no password) ───────────
+    // Low-sensitivity read used by the profile screen to show an at-a-glance
+    // enabled state without password friction. Only ever exposes the named
+    // user's own device labels for this rpId.
+    if (action === "status") {
+      const emailLower = String(body.email || "").trim().toLowerCase();
+      // deno-lint-ignore no-explicit-any
+      const users = await loadKey<any[]>(db, "pd_users", []);
+      const user = users.find((u) => u.email?.toLowerCase() === emailLower);
+      if (!user) return jsonResponse({ count: 0, devices: [] }, 200, cors);
+      const passkeys = await loadKey<StoredPasskey[]>(db, "pd_passkeys", []);
+      const mine = passkeysForUser(passkeys, rpId, user.id).map(sanitizePasskey);
+      return jsonResponse({ count: mine.length, devices: mine }, 200, cors);
+    }
+
+    // ── MANAGEMENT: list / remove (password re-auth, own credentials) ──
     if (action === "list" || action === "remove") {
       const user = await reauth(db, body.email, body.password);
       if (!user) return jsonResponse({ error: "Invalid email or password." }, 401, cors);
@@ -328,13 +344,14 @@ serve(async (req) => {
       let passkeys = await loadKey<StoredPasskey[]>(db, "pd_passkeys", []);
       if (action === "remove") {
         const before = passkeys.length;
-        passkeys = passkeys.filter((p) => p.id !== body.credentialId);
+        // Only the owner may remove a credential — match id AND userId.
+        passkeys = passkeys.filter((p) => !(p.id === body.credentialId && p.userId === user.id));
         if (passkeys.length === before) {
           return jsonResponse({ error: "Passkey not found" }, 404, cors);
         }
         await saveKey(db, "pd_passkeys", passkeys);
       }
-      return jsonResponse({ ok: true, passkeys: passkeysForRp(passkeys, rpId).map(sanitizePasskey) }, 200, cors);
+      return jsonResponse({ ok: true, passkeys: passkeysForUser(passkeys, rpId, user.id).map(sanitizePasskey) }, 200, cors);
     }
 
     return jsonResponse({ error: "Unknown action" }, 400, cors);

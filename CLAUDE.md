@@ -33,14 +33,15 @@
 - `pd_brands`, `pd_categories`, `pd_commissions`, `pd_thresholds`: normalized per-row config (replaces same-named keys in `app_data`)
 - `pd_audit_log`: append-only audit trail (RLS restricts to INSERT+SELECT for anon)
 - `pd_sku_history`: per-change SKU history
-- `app_data`: Key-value config (remaining keys: `pd_logistics`, `pd_wireframe`, `pd_users`, `pd_sessions`, `pd_email_config`, etc.)
+- `app_data`: Key-value config (remaining keys: `pd_logistics`, `pd_wireframe`, `pd_users`, `pd_sessions`, `pd_passkeys`, `pd_webauthn_challenges`, etc.)
 - `pd_sync`: Realtime notifications for `app_data` key changes (not used for normalized tables)
 - `pd_backups`: 7-day rolling daily backups
 
 ## Edge Functions
 - `login` — server-side password verification + rate limiting; client uses with anon JWT
 - `reset-password` — token request + reset (server-stored tokens)
-- `webauthn` — passkey (Face ID / fingerprint) registration + sign-in via `@simplewebauthn/server`; credentials live in `app_data` key `pd_passkeys`, pending challenges in `pd_webauthn_challenges` (5-min TTL); only this function writes either key; rpId is derived per allowed origin so passkeys are per-domain
+- `webauthn` — passkey (Face ID / fingerprint) registration + sign-in via `@simplewebauthn/server@11`; credentials in `app_data` key `pd_passkeys`, pending challenges in `pd_webauthn_challenges` (5-min TTL); only this function writes either; rpId derived per allowed origin (per-domain). Passkeys are **per-user**: `list`/`remove`/`status` are scoped to the reauthed user's own credentials (`passkeysForUser`); `status` (no password) powers the profile's enabled indicator; managed in the per-user Profile modal (sidebar user chip), not global settings
+- Note: EmailJS was removed entirely — no welcome/reset/alert emails. Password resets mint a shareable link (copy modal); new-user temp passwords shown in a copy modal
 - `claude-chat` — proxies to Anthropic API (needs `ANTHROPIC_API_KEY` env)
 - `batch-import` — atomic bulk SKU upsert; called by `confirmImport` with fallback to legacy `_doSaveSKUs`
 
