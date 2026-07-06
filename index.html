@@ -3030,6 +3030,18 @@ async function save(type, opts){
     wireframe:   WF,
     alert:       ALERT_SETTINGS,
   };
+  // Never let a users-save erase a stored password hash. Merge any missing
+  // hashes back from the current DB copy first (defense-in-depth against the
+  // in-memory array ever lacking a hash for some user).
+  if(type==='users'){
+    try{
+      const stored=await dbGet(DB_KEYS.users);
+      if(Array.isArray(stored)){
+        const byId=new Map(stored.map(u=>[u.id,u]));
+        users.forEach(u=>{ if(!u.passwordHash){ const s=byId.get(u.id); if(s&&s.passwordHash) u.passwordHash=s.passwordHash; } });
+      }
+    }catch(e){ console.warn('users hash-preserve read failed:',e.message); }
+  }
   const val = dataMap[type];
   if(val === undefined){ console.warn('Unknown save type:', type); return; }
   try{
@@ -3161,8 +3173,11 @@ async function loadFromStorage(){
     users = users.filter(u=>!(u.name==='Admin User'&&u.email==='admin@yourcompany.com'));
     if(users.length<_preLen) save('users');
     applyDefaultUsers();
-    // Strip password hashes from client-side users (hashes stay in DB, verified server-side)
-    if(_useServerAuth){ users.forEach(u=>{delete u.passwordHash;}); }
+    // NOTE: password hashes are intentionally KEPT on the in-memory users
+    // array. Deleting them here used to corrupt the DB: save('users')
+    // serializes this same array back to pd_users, so a stripped copy wiped
+    // the stored hash and broke password login. dbSaveUsers() also
+    // merge-preserves hashes as defense-in-depth.
 
     const anyData = Object.values(loaded).some(v=>v!==null);
     if(anyData){
@@ -6606,11 +6621,13 @@ async function doLogin(){
     // Server auth succeeded — user data has NO passwordHash
     user=serverResult.user;
     isFirstLogin=serverResult.isFirstLogin;
-    // Merge with local users array for UI (strip hashes from local copy)
+    // Merge server fields into the shared users array. Do NOT delete the
+    // stored passwordHash — the server payload has no passwordHash key, so
+    // Object.assign leaves the local hash intact. (The old `delete` here made
+    // save('users') persist a hash-less record and wipe the DB.)
     const localUser=users.find(u=>u.id===user.id);
     if(localUser){
       Object.assign(localUser, user);
-      delete localUser.passwordHash;
       user=localUser;
     } else {
       users.push(user);
@@ -6739,9 +6756,9 @@ async function passkeyLogin(){
     if(!cred) throw new Error('Biometric prompt was cancelled.');
     const data=await _wnCall('login-verify',{authResp:_wnPackCred(cred)});
     let user=data.user;
-    // Merge with local users array for UI (same as the server-login path)
+    // Merge server fields WITHOUT deleting the stored hash (see doLogin).
     const localUser=users.find(u=>u.id===user.id);
-    if(localUser){ Object.assign(localUser,user); delete localUser.passwordHash; user=localUser; }
+    if(localUser){ Object.assign(localUser,user); user=localUser; }
     else users.push(user);
     _useServerAuth=true;
     _completeLogin(user, false, ' (passkey)');
@@ -9546,7 +9563,16 @@ function applyRealtimeData(type, value){
         if(Array.isArray(value)) skuDB=value;
         return true;
       case 'brands': brands=value; return true;
-      case 'users': users=value; applyDefaultUsers(); return true;
+      case 'users': {
+        // Merge-preserve hashes: a device still running the old code could push
+        // a hash-less users array; keep the hash we already hold so realtime
+        // can't wipe it either.
+        if(Array.isArray(value)){
+          const prev=new Map((users||[]).map(u=>[u.id,u]));
+          value.forEach(u=>{ if(!u.passwordHash){ const p=prev.get(u.id); if(p&&p.passwordHash) u.passwordHash=p.passwordHash; } });
+        }
+        users=value; applyDefaultUsers(); return true;
+      }
       case 'thresholds': THRESHOLDS=value; return true;
       case 'categories': CATS=value; return true;
       case 'levels': LEVELS=value; return true;
