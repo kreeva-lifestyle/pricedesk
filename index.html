@@ -793,7 +793,10 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
   #ai-chat-btn{bottom:16px;right:16px;width:48px;height:48px;font-size:20px}
 }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabase client: same-origin copy first (works offline via the service
+     worker and never depends on a third-party CDN being reachable); the CDN
+     stays as an automatic fallback if the local file somehow fails. -->
+<script src="./vendor/supabase.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';document.head.appendChild(s);})()"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
@@ -9900,10 +9903,21 @@ document.addEventListener('DOMContentLoaded',async ()=>{
       document.getElementById('app-main').style.display='';
     }
   },30000);
-  // Wait for Supabase CDN to load (up to 10s)
+  // Wait for the Supabase library (local vendor copy, CDN fallback) — up to 10s
   for(let i=0;i<20&&(typeof window.supabase==='undefined'||!window.supabase.createClient);i++){
     await new Promise(r=>setTimeout(r,500));
-    if(i===19) console.error('Supabase JS library failed to load from CDN');
+    if(i===19){
+      console.error('Supabase JS library failed to load (local + CDN)');
+      // Never fail silently: without the library there is no data at all
+      const b=document.createElement('div');
+      b.id='db-lib-banner';
+      b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9998;background:#1a0a0a;border-bottom:2px solid var(--re);padding:12px 20px;display:flex;align-items:center;gap:14px;font-size:13px';
+      b.innerHTML=`<span style="color:var(--re);font-size:18px">⚠</span>
+        <div style="flex:1"><strong style="color:var(--tx)">Can't load the database library.</strong>
+        <span style="color:var(--tx2);margin-left:8px">Check your connection, then reload the app.</span></div>
+        <button onclick="location.reload()" style="background:var(--re);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:600">Reload</button>`;
+      document.body.appendChild(b);
+    }
   }
   try{ _db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
   catch(e){ console.warn('Supabase init failed:', e); }

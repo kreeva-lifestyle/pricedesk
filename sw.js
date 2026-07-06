@@ -1,8 +1,9 @@
-const CACHE_NAME = 'pricedesk-v2';
+const CACHE_NAME = 'pricedesk-v3';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './vendor/supabase.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-512-maskable.png',
