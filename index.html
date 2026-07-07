@@ -773,6 +773,9 @@ body:has(#login-screen.active){overflow:hidden}
   .dt-stack td.det{flex-direction:column;align-items:stretch;text-align:left}
   .dt-stack td[colspan]{display:block;text-align:center}
   .dt-stack td[colspan]::before{display:none}
+  /* Rate inputs in stacked cards need room for 4-digit values (e.g. 21.24);
+     the global mobile .ci (50-56px) clips the display (value stays intact). */
+  .dt-stack .ci{width:84px}
 
   /* SKU table: hide more columns for very small screens */
   #page-skus .ss th:nth-child(8),#page-skus .ss td:nth-child(8){display:none}
@@ -2696,11 +2699,17 @@ async function dbSaveCommissions(myntra, ppmp, cc, amazon){
   const rows=_commToRows(myntra, ppmp, cc, amazon);
   const{error}=await db.from('pd_commissions').upsert(rows,{onConflict:'marketplace,category,slab_index'});
   if(error)throw new Error(`Commission save failed: ${error.message}`);
-  // If the slab count shrank, stale higher-index rows would poison the next
-  // load (contiguity validation) — remove them
-  const slabCount=SLABS.length;
-  const{error:delErr}=await db.from('pd_commissions').delete().eq('marketplace','myntra').gte('slab_index',slabCount);
-  if(delErr)console.warn('Stale commission slab cleanup failed:',delErr.message);
+  // If a category's band count shrank, stale higher-index rows would poison
+  // the next load (per-category contiguity validation) — remove them PER
+  // CATEGORY. Using the global SLABS.length here would wrongly delete the top
+  // bands of custom categories that legitimately have MORE bands than the
+  // global cut (COMM_CAT_SLABS overrides), silently losing a band on reload.
+  for(const[cat,arr]of Object.entries(myntra||{})){
+    if(!Array.isArray(arr))continue;
+    const{error:delErr}=await db.from('pd_commissions').delete()
+      .eq('marketplace','myntra').eq('category',cat).gte('slab_index',arr.length);
+    if(delErr)console.warn(`Stale commission slab cleanup failed for ${cat}:`,delErr.message);
+  }
   _useCommTable=true;
   console.log(`✓ Saved ${rows.length} commission rows to pd_commissions`);
 }
