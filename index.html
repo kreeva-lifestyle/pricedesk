@@ -1971,6 +1971,18 @@ const DB_KEYS = {
   user_prefs:     'pd_user_preferences',
 };
 
+// Fire-and-forget pd_sync ping so OTHER devices learn that a per-row table
+// changed and reload it. Blob saves get this via dbSet automatically; the
+// per-row save paths (pd_commissions/pd_categories/pd_thresholds) return
+// before dbSet runs, so without this ping their edits never reach an open
+// device until a full reload.
+function _pingSync(key){
+  try{
+    const db=getDB();if(!db)return;
+    db.from('pd_sync').upsert({key,updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
+  }catch(e){/* non-fatal */}
+}
+
 // ── Save a single key to DB ────────────────────────────
 async function dbSet(key, value, retries=1){
   _lastWriteTs = Date.now(); // Mark own write for realtime debounce
@@ -2526,6 +2538,7 @@ async function dbSaveCategories(catsArr, catLevelMap){
   if(error)throw new Error(`Category save failed: ${error.message}`);
   _useCategoryTable=true;
   console.log(`✓ Saved ${rows.length} categories to pd_categories`);
+  _pingSync(DB_KEYS.categories);
 }
 
 async function dbDeleteCategory(name){
@@ -2588,6 +2601,7 @@ async function dbSaveThresholds(thresholdObj){
   if(error)throw new Error(`Threshold save failed: ${error.message}`);
   _useThresholdTable=true;
   console.log(`✓ Saved ${rows.length} thresholds to pd_thresholds`);
+  _pingSync(DB_KEYS.thresholds);
 }
 
 async function dbLoadAllThresholds(){
@@ -2712,6 +2726,7 @@ async function dbSaveCommissions(myntra, ppmp, cc, amazon){
   }
   _useCommTable=true;
   console.log(`✓ Saved ${rows.length} commission rows to pd_commissions`);
+  _pingSync(DB_KEYS.comm_myntra);
 }
 
 async function dbLoadAllCommissions(){
@@ -3135,7 +3150,8 @@ async function loadFromStorage(){
       hydrateLogisticsDerived();
     }
     if(loaded.wireframe){
-      const WF_VERSION = 8; // v8: collection fee lookup by category × price band
+      // WF_VERSION is global (declared with the WF defaults) so realtime
+      // sync and this loader agree on the current formula-schema version
       const PPMP_CC_VERSION = 6; // v6: new Ajio PPMP/CC formulas
       if(loaded.wireframe._v === WF_VERSION){
         // Same version — load all from saved data
@@ -3738,28 +3754,36 @@ function buildCommMyntra(){
   if(modeRadio) modeRadio.checked=true;
   const title=el('comm-myntra-title');
   if(title) title.textContent=slabOnly?'Commission % — Price Slab only (all categories)':'Commission % — Category × Price Slab (standard bands)';
+  // Levels never affect slab-only COMMISSION, but logistics (forward GT /
+  // return fees) may still be level-based. Show the Level selector exactly
+  // when the calc consumes it, so the category→level mapping always stays
+  // editable; with category-wise or fixed logistics charges it stays hidden.
+  const needLvl=(LOGISTICS_SETTINGS.myn_fwd_mode||'level')==='level'||(LOGISTICS_SETTINGS.myn_ret_mode||'level')==='level';
   const hint=el('comm-myntra-hint');
   if(hint) hint.innerHTML=slabOnly
-    ?'Myntra charges by <strong>seller price slab</strong> — one shared rate row for every category. Give any category its <strong>own slabs</strong> with the Custom slabs button.'
+    ?('Myntra charges by <strong>seller price slab</strong> — one shared rate row for every category. Give any category its <strong>own slabs</strong> with the Custom slabs button.'+(needLvl?' The <strong>Level</strong> column only sets logistics (GT &amp; return) fees — never commission.':''))
     :'Myntra charges by <strong>category + seller price slab</strong>. Set the <strong>level</strong> per category for logistics, edit commission cells, and Save.';
   COMM_SLAB_ONLY=_normSlabArr(COMM_SLAB_ONLY,n,18.88);
   const customBox=el('comm-myntra-custom');
 
   // ── Slab-only mode: shared "All Categories" row + per-category overrides.
-  // No Level column here — levels only matter for logistics and are managed
-  // in Level + Slab mode (and the Add Category modal).
+  // Levels don't affect commission here; the Level selector appears only when
+  // logistics fees are level-based (needLvl) so the mapping stays editable.
   if(slabOnly){
-    let h=`<thead><tr><th>Category</th>${SLABS.map(s=>`<th class="num">${s.label}</th>`).join('')}<th></th></tr></thead><tbody>`;
-    h+=`<tr style="background:rgba(240,177,42,.06)"><td data-label="Category"><strong style="color:var(--ac)">${icon('star',{size:12})} All Categories</strong></td>${
+    const lvlTh=needLvl?`<th title="Used for logistics (GT & return fees) only — never commission">Level <span style="color:var(--tx3);font-weight:400">(logistics)</span></th>`:'';
+    const lvlTd=cat=>needLvl?`<td data-label="Level"><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${_lvlOptions(cat)}</select></td>`:'';
+    let h=`<thead><tr><th>Category</th>${lvlTh}${SLABS.map(s=>`<th class="num">${s.label}</th>`).join('')}<th></th></tr></thead><tbody>`;
+    h+=`<tr style="background:rgba(240,177,42,.06)"><td data-label="Category"><strong style="color:var(--ac)">${icon('star',{size:12})} All Categories</strong></td>${needLvl?'<td data-label="Level"><span style="color:var(--tx3)">—</span></td>':''}${
       COMM_SLAB_ONLY.map((v,i)=>`<td class="num" data-label="${esc(SLABS[i].label)}"><input class="ci" style="border-color:var(--ac)" value="${v}" onchange="COMM_SLAB_ONLY[${i}]=+this.value||0;triggerRecalc();renderSKUs()"></td>`).join('')
     }<td data-label=""></td></tr>`;
     const shared=CATS.filter(cat=>!_slabCatOverride(cat));
     shared.forEach(cat=>{
       h+=`<tr><td data-label="Category"><div class="flex gap8">${esc(cat)} ${_skuBadge(cat)} <button class="row-del" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="margin-left:auto">${icon('x',{size:11})}</button></div></td>`+
+         lvlTd(cat)+
          COMM_SLAB_ONLY.map((v,i)=>`<td class="num" data-label="${esc(SLABS[i].label)}"><span style="color:var(--tx3)">${v}</span></td>`).join('')+
          `<td data-label=""><button class="btn bg bxs" style="white-space:nowrap" onclick="commSlabMakeCustom('${escAttr(cat)}')" title="Give this category its own price slabs & rates">${icon('edit',{size:11})} Custom slabs</button></td></tr>`;
     });
-    if(!shared.length) h+=`<tr><td colspan="${n+2}"><div class="st" style="text-align:center;padding:12px">All categories use custom slabs (below).</div></td></tr>`;
+    if(!shared.length) h+=`<tr><td colspan="${n+2+(needLvl?1:0)}"><div class="st" style="text-align:center;padding:12px">All categories use custom slabs (below).</div></td></tr>`;
     t.innerHTML=h+'</tbody>';
 
     // Categories with their OWN slab-only bounds + rates
@@ -3774,6 +3798,8 @@ function buildCommMyntra(){
           return `<div class="card mb12"><div class="ch">
             <div style="font-size:13px;font-weight:600">${esc(cat)} ${_skuBadge(cat)} <span class="bdg bi" style="margin-left:6px">custom slabs</span></div>
             <div class="flex gap8" style="align-items:center">
+              ${needLvl?`<label class="st" style="font-size:10px" title="Used for logistics (GT & return fees) only — never commission">Level</label>
+              <select class="sse" style="min-width:84px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${_lvlOptions(cat)}</select>`:''}
               <button class="btn bg bxs" onclick="commSlabEditBands('${escAttr(cat)}')">${icon('edit',{size:11})} Edit slabs</button>
               <button class="btn bg bxs" onclick="commSlabResetCat('${escAttr(cat)}')" title="Go back to the shared all-categories rates">Use shared</button>
             </div></div>
@@ -5622,6 +5648,7 @@ async function deleteUser(id){
 // ═══════════════════════════════════════════════════════
 // WIREFRAME
 // ═══════════════════════════════════════════════════════
+const WF_VERSION = 8; // v8: collection fee lookup by category × price band
 const WF={myntra:[
   {id:2,   t:'input',   l:'COST',                                     var:'cost',          desc:'Product cost price'},
   {id:3,   t:'input',   l:'Profit Margin%',                            var:'margin', fmt:'%', desc:'Desired profit margin on cost', pct:true},
@@ -9612,11 +9639,15 @@ function setupRealtime(){
         if(Date.now() - _lastWriteTs < 10000) return;
         const key = payload.new?.key;
         if(!key || key === DB_KEYS.sessions || key === 'pd_skus_v2'
-          || (key === DB_KEYS.brands && _useBrandTable)
-          || ((key === DB_KEYS.categories || key === DB_KEYS.cat_levels) && _useCategoryTable)
-          || (key === DB_KEYS.thresholds && _useThresholdTable)
-          || ((key === DB_KEYS.comm_myntra || key === DB_KEYS.comm_ppmp || key === DB_KEYS.comm_cc || key === DB_KEYS.comm_amazon) && _useCommTable)) return;
+          || (key === DB_KEYS.brands && _useBrandTable)) return;
         console.log(`⚡ Sync: ${key} changed`);
+        // Table-backed keys (commissions/categories/thresholds): the app_data
+        // blob is a stale pre-migration leftover — skip dbGet and let the
+        // handler reload from the per-row table (source of truth).
+        const tableBacked=((key === DB_KEYS.categories || key === DB_KEYS.cat_levels) && _useCategoryTable)
+          || (key === DB_KEYS.thresholds && _useThresholdTable)
+          || ((key === DB_KEYS.comm_myntra || key === DB_KEYS.comm_ppmp || key === DB_KEYS.comm_cc || key === DB_KEYS.comm_amazon) && _useCommTable);
+        if(tableBacked){ handleRealtimeUpdate(key, null); return; }
         dbGet(key).then(val=>{
           if(val) handleRealtimeUpdate(key, val);
         }).catch(e=>console.warn('Sync fetch failed:', key, e));
@@ -9705,8 +9736,9 @@ async function _pollForChanges(){
       _lastPollTs[r.key] = r.updated_at;
     });
     for(const key of changed){
-      const val = await dbGet(key);
-      if(val) handleRealtimeUpdate(key, val);
+      // Pass null — the handler fetches the blob itself, or reloads from the
+      // per-row table for table-backed types (blob would be stale for those)
+      await handleRealtimeUpdate(key, null);
     }
   }catch(e){/* pd_sync may not exist yet */}
 }
@@ -9718,36 +9750,63 @@ async function handleRealtimeUpdate(key, newValue){
   const type=keyToType[key];
   if(!type) return;
 
-  // Use payload value directly — only fetch from DB if payload is empty
-  // This avoids an extra DB read on every realtime notification
-  let freshValue = newValue;
-  if(!freshValue){
-    try{ freshValue = await dbGet(key); }catch(e){ console.warn('Realtime fetch failed:', key, e); return; }
+  // Table-backed types: reload from the per-row table (source of truth) —
+  // the app_data blob for these keys is a stale pre-migration leftover and
+  // must never be applied over live table data.
+  if((type==='comm_myntra'||type==='comm_ppmp'||type==='comm_cc'||type==='comm_amazon')&&_useCommTable){
+    try{
+      const c=await dbLoadAllCommissions();
+      if(!c) return;
+      COMM_MYNTRA=c.myntra;COMM_AJIO_PPMP=c.ppmp;COMM_AJIO_CC=c.cc;COMM_AMAZON=c.amazon;
+    }catch(e){ console.warn('Realtime commission reload failed:', e.message); return; }
+  }else if((type==='categories'||type==='cat_levels')&&_useCategoryTable){
+    try{
+      const c=await dbLoadAllCategories();
+      if(!c) return;
+      CATS=c.cats;CAT_LEVEL=c.catLevel;
+    }catch(e){ console.warn('Realtime category reload failed:', e.message); return; }
+  }else if(type==='thresholds'&&_useThresholdTable){
+    try{
+      const t=await dbLoadAllThresholds();
+      if(!t) return;
+      THRESHOLDS=t;
+    }catch(e){ console.warn('Realtime threshold reload failed:', e.message); return; }
+  }else{
+    // Use payload value directly — only fetch from DB if payload is empty
+    // This avoids an extra DB read on every realtime notification
+    let freshValue = newValue;
+    if(!freshValue){
+      try{ freshValue = await dbGet(key); }catch(e){ console.warn('Realtime fetch failed:', key, e); return; }
+    }
+    if(!freshValue) return;
+    const applied = applyRealtimeData(type, freshValue);
+    if(!applied) return;
   }
-  if(!freshValue) return;
 
-  // Apply the update
-  const applied = applyRealtimeData(type, freshValue);
-  if(!applied) return;
-
-  // Re-render affected views
+  // Re-render affected views. EVERY type that feeds calcSKU must bump the
+  // calc cache — otherwise this device keeps serving the pre-change payout/
+  // profit/breach numbers from cache until some unrelated local edit
+  // happens to invalidate it (stale calculations).
   const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
-  if(type==='skus'||type==='brands'){
+  const CALC_INPUT_TYPES=['skus','brands','thresholds','categories','levels','cat_levels','comm_myntra','comm_ppmp','comm_cc','comm_amazon','logistics','wireframe'];
+  if(CALC_INPUT_TYPES.includes(type)){
     invalidateCalcCache();
+    updateAlerts();
     if(activePage==='skus') renderSKUs();
     if(activePage==='archive') renderArchivedSKUs();
-    if(activePage==='dashboard'){renderBrandSummary();renderDashboardWidgets();updateAlerts();}
+    if(activePage==='dashboard'){renderBrandSummary();renderDashboardWidgets();}
     if(activePage==='thresholds'){renderBreachList?.();}
+    if(activePage==='commission'){buildCommMyntra();buildCommAjioBrands();buildCommAmazon();}
+    if(activePage==='logistics'&&type==='logistics'){renderGTTable?.();renderRetTable?.();renderGTCatTable?.();renderRetCatTable?.();renderCollTable?.();}
+    if(activePage==='wireframe'&&type==='wireframe'){renderWFBuilder?.();}
   }
   if(type==='brands'){
     if(activePage==='brands') renderBrands();
     populateFilters();
   }
+  if(type==='categories'||type==='cat_levels') populateFilters();
   if(type==='users'&&activePage==='users') renderUsers();
-  if(type==='thresholds'){
-    if(activePage==='thresholds') renderThresholds?.();
-    updateAlerts();
-  }
+  if(type==='thresholds'&&activePage==='thresholds') renderThresholds?.();
   if(key===DB_TASK_KEY||key===DB_COMPLETED_TASK_KEY){
     if(activePage==='dashboard') renderDashTasks();
   }
@@ -9790,6 +9849,12 @@ function applyRealtimeData(type, value){
         if(value.collFees) COLL_FEE_DATA=value.collFees;
         hydrateLogisticsDerived();
         return true;
+      case 'wireframe':
+        // Only accept same-version formula sets — an older device's save
+        // would need the loader's migration path. Compiled formulas re-key
+        // by expression string, so no compile-cache flush is needed.
+        if(value&&typeof value==='object'&&value._v===WF_VERSION){ Object.assign(WF,value); return true; }
+        return false;
       default: return false;
     }
   }catch(e){ console.warn('Realtime apply error:', type, e); return false; }
