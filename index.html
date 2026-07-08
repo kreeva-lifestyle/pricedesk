@@ -3738,28 +3738,36 @@ function buildCommMyntra(){
   if(modeRadio) modeRadio.checked=true;
   const title=el('comm-myntra-title');
   if(title) title.textContent=slabOnly?'Commission % — Price Slab only (all categories)':'Commission % — Category × Price Slab (standard bands)';
+  // Levels never affect slab-only COMMISSION, but logistics (forward GT /
+  // return fees) may still be level-based. Show the Level selector exactly
+  // when the calc consumes it, so the category→level mapping always stays
+  // editable; with category-wise or fixed logistics charges it stays hidden.
+  const needLvl=(LOGISTICS_SETTINGS.myn_fwd_mode||'level')==='level'||(LOGISTICS_SETTINGS.myn_ret_mode||'level')==='level';
   const hint=el('comm-myntra-hint');
   if(hint) hint.innerHTML=slabOnly
-    ?'Myntra charges by <strong>seller price slab</strong> — one shared rate row for every category. Give any category its <strong>own slabs</strong> with the Custom slabs button.'
+    ?('Myntra charges by <strong>seller price slab</strong> — one shared rate row for every category. Give any category its <strong>own slabs</strong> with the Custom slabs button.'+(needLvl?' The <strong>Level</strong> column only sets logistics (GT &amp; return) fees — never commission.':''))
     :'Myntra charges by <strong>category + seller price slab</strong>. Set the <strong>level</strong> per category for logistics, edit commission cells, and Save.';
   COMM_SLAB_ONLY=_normSlabArr(COMM_SLAB_ONLY,n,18.88);
   const customBox=el('comm-myntra-custom');
 
   // ── Slab-only mode: shared "All Categories" row + per-category overrides.
-  // No Level column here — levels only matter for logistics and are managed
-  // in Level + Slab mode (and the Add Category modal).
+  // Levels don't affect commission here; the Level selector appears only when
+  // logistics fees are level-based (needLvl) so the mapping stays editable.
   if(slabOnly){
-    let h=`<thead><tr><th>Category</th>${SLABS.map(s=>`<th class="num">${s.label}</th>`).join('')}<th></th></tr></thead><tbody>`;
-    h+=`<tr style="background:rgba(240,177,42,.06)"><td data-label="Category"><strong style="color:var(--ac)">${icon('star',{size:12})} All Categories</strong></td>${
+    const lvlTh=needLvl?`<th title="Used for logistics (GT & return fees) only — never commission">Level <span style="color:var(--tx3);font-weight:400">(logistics)</span></th>`:'';
+    const lvlTd=cat=>needLvl?`<td data-label="Level"><select class="sse" style="min-width:90px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${_lvlOptions(cat)}</select></td>`:'';
+    let h=`<thead><tr><th>Category</th>${lvlTh}${SLABS.map(s=>`<th class="num">${s.label}</th>`).join('')}<th></th></tr></thead><tbody>`;
+    h+=`<tr style="background:rgba(240,177,42,.06)"><td data-label="Category"><strong style="color:var(--ac)">${icon('star',{size:12})} All Categories</strong></td>${needLvl?'<td data-label="Level"><span style="color:var(--tx3)">—</span></td>':''}${
       COMM_SLAB_ONLY.map((v,i)=>`<td class="num" data-label="${esc(SLABS[i].label)}"><input class="ci" style="border-color:var(--ac)" value="${v}" onchange="COMM_SLAB_ONLY[${i}]=+this.value||0;triggerRecalc();renderSKUs()"></td>`).join('')
     }<td data-label=""></td></tr>`;
     const shared=CATS.filter(cat=>!_slabCatOverride(cat));
     shared.forEach(cat=>{
       h+=`<tr><td data-label="Category"><div class="flex gap8">${esc(cat)} ${_skuBadge(cat)} <button class="row-del" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="margin-left:auto">${icon('x',{size:11})}</button></div></td>`+
+         lvlTd(cat)+
          COMM_SLAB_ONLY.map((v,i)=>`<td class="num" data-label="${esc(SLABS[i].label)}"><span style="color:var(--tx3)">${v}</span></td>`).join('')+
          `<td data-label=""><button class="btn bg bxs" style="white-space:nowrap" onclick="commSlabMakeCustom('${escAttr(cat)}')" title="Give this category its own price slabs & rates">${icon('edit',{size:11})} Custom slabs</button></td></tr>`;
     });
-    if(!shared.length) h+=`<tr><td colspan="${n+2}"><div class="st" style="text-align:center;padding:12px">All categories use custom slabs (below).</div></td></tr>`;
+    if(!shared.length) h+=`<tr><td colspan="${n+2+(needLvl?1:0)}"><div class="st" style="text-align:center;padding:12px">All categories use custom slabs (below).</div></td></tr>`;
     t.innerHTML=h+'</tbody>';
 
     // Categories with their OWN slab-only bounds + rates
@@ -3774,6 +3782,8 @@ function buildCommMyntra(){
           return `<div class="card mb12"><div class="ch">
             <div style="font-size:13px;font-weight:600">${esc(cat)} ${_skuBadge(cat)} <span class="bdg bi" style="margin-left:6px">custom slabs</span></div>
             <div class="flex gap8" style="align-items:center">
+              ${needLvl?`<label class="st" style="font-size:10px" title="Used for logistics (GT & return fees) only — never commission">Level</label>
+              <select class="sse" style="min-width:84px;font-size:11px" onchange="CAT_LEVEL['${escAttr(cat)}']=this.value;triggerRecalc();renderSKUs()">${_lvlOptions(cat)}</select>`:''}
               <button class="btn bg bxs" onclick="commSlabEditBands('${escAttr(cat)}')">${icon('edit',{size:11})} Edit slabs</button>
               <button class="btn bg bxs" onclick="commSlabResetCat('${escAttr(cat)}')" title="Go back to the shared all-categories rates">Use shared</button>
             </div></div>
