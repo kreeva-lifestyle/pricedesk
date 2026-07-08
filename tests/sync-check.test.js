@@ -85,6 +85,13 @@ describe('source drift detection — production strings must match test copies',
     it('getMyntraComm is unchanged (tests/calc/myntra-commission.test.js)', () => {
       expect(HTML).toContain(
         `function getMyntraComm(cat,sp){
+  if(COMM_MODE==='slab'&&COMM_SLAB_CAT&&COMM_SLAB_CAT[cat]){
+    const o=COMM_SLAB_CAT[cat];
+    if(Array.isArray(o.bounds)&&o.bounds.length&&Array.isArray(o.rates)&&o.rates.length){
+      for(let i=0;i<o.bounds.length;i++){if(sp<o.bounds[i])return +o.rates[Math.min(i,o.rates.length-1)]||0;}
+      return +o.rates[Math.min(o.bounds.length,o.rates.length-1)]||0;
+    }
+  }
   const slabs=COMM_MODE==='slab'?COMM_SLAB_ONLY:COMM_MYNTRA[cat];
   if(!slabs||!slabs.length)return 18.88;
   const cb=COMM_MODE!=='slab'&&COMM_CAT_SLABS?COMM_CAT_SLABS[cat]:null;

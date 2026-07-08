@@ -29,8 +29,18 @@ let COMM_SLAB_ONLY = [0, 0, 21.24, 17.70, 18.88];
 // Optional per-category band cut-points (index.html:~3294). Absent category
 // ⇒ global SLABS. Reset before each per-category-slab test to avoid leakage.
 let COMM_CAT_SLABS = {};
+// Slab-only mode per-category overrides ({cat: {bounds, rates}}); a category
+// present here bypasses COMM_SLAB_ONLY entirely. Reset like COMM_CAT_SLABS.
+let COMM_SLAB_CAT = {};
 
 function getMyntraComm(cat,sp){
+  if(COMM_MODE==='slab'&&COMM_SLAB_CAT&&COMM_SLAB_CAT[cat]){
+    const o=COMM_SLAB_CAT[cat];
+    if(Array.isArray(o.bounds)&&o.bounds.length&&Array.isArray(o.rates)&&o.rates.length){
+      for(let i=0;i<o.bounds.length;i++){if(sp<o.bounds[i])return +o.rates[Math.min(i,o.rates.length-1)]||0;}
+      return +o.rates[Math.min(o.bounds.length,o.rates.length-1)]||0;
+    }
+  }
   const slabs=COMM_MODE==='slab'?COMM_SLAB_ONLY:COMM_MYNTRA[cat];
   if(!slabs||!slabs.length)return 18.88;
   const cb=COMM_MODE!=='slab'&&COMM_CAT_SLABS?COMM_CAT_SLABS[cat]:null;
@@ -211,8 +221,61 @@ describe('getMyntraComm — commission rate by category and seller price', () =>
       COMM_MODE = 'slab';
       COMM_SLAB_ONLY = [0, 0, 21.24, 17.70, 18.88];
       COMM_CAT_SLABS = { Sarees: [1000, 3000] };
-      // In slab-only mode the per-category bounds are ignored → global band.
+      // In slab-only mode the LEVEL-mode per-category bounds are ignored →
+      // global band. (Slab-only has its own overrides: COMM_SLAB_CAT below.)
       expect(getMyntraComm('Sarees', 800)).toBe(21.24);    // global 500–1000
+    });
+  });
+
+  describe('slab-only mode per-category overrides (COMM_SLAB_CAT)', () => {
+    beforeEach(() => {
+      COMM_MODE = 'slab';
+      COMM_SLAB_ONLY = [0, 0, 21.24, 17.70, 18.88];
+      COMM_SLAB_CAT = {};
+      COMM_CAT_SLABS = {};
+      COMM_MYNTRA = {};
+    });
+    afterEach(() => { COMM_SLAB_CAT = {}; COMM_MODE = 'level_slab'; });
+
+    it('a category with its own bounds+rates bypasses the shared row', () => {
+      COMM_SLAB_CAT = { Sarees: { bounds: [1000, 3000], rates: [12, 20, 25] } };
+      expect(getMyntraComm('Sarees', 500)).toBe(12);    // < 1000
+      expect(getMyntraComm('Sarees', 1000)).toBe(20);   // 1000–3000 (>= lower bound)
+      expect(getMyntraComm('Sarees', 2999)).toBe(20);
+      expect(getMyntraComm('Sarees', 3000)).toBe(25);   // 3000+
+      expect(getMyntraComm('Sarees', 99999)).toBe(25);
+    });
+
+    it('other categories still use the shared COMM_SLAB_ONLY row', () => {
+      COMM_SLAB_CAT = { Sarees: { bounds: [1000, 3000], rates: [12, 20, 25] } };
+      expect(getMyntraComm('Kurtas', 250)).toBe(0);      // global 0–300
+      expect(getMyntraComm('Kurtas', 800)).toBe(21.24);  // global 500–1000
+      expect(getMyntraComm('Kurtas', 1500)).toBe(17.70); // global 1000–2000
+      expect(getMyntraComm('Kurtas', 5000)).toBe(18.88); // global 2000+
+    });
+
+    it('level_slab mode ignores COMM_SLAB_CAT entirely', () => {
+      COMM_MODE = 'level_slab';
+      COMM_MYNTRA = { Sarees: [0, 0, 23.60, 20.06, 22.42] };
+      COMM_SLAB_CAT = { Sarees: { bounds: [1000, 3000], rates: [12, 20, 25] } };
+      expect(getMyntraComm('Sarees', 800)).toBe(23.60);  // per-category level rates
+    });
+
+    it('a malformed override (missing bounds or rates) falls back to the shared row', () => {
+      COMM_SLAB_CAT = { Sarees: { bounds: [], rates: [12, 20] } };
+      expect(getMyntraComm('Sarees', 800)).toBe(21.24);
+      COMM_SLAB_CAT = { Sarees: { bounds: [1000], rates: [] } };
+      expect(getMyntraComm('Sarees', 800)).toBe(21.24);
+      COMM_SLAB_CAT = { Sarees: {} };
+      expect(getMyntraComm('Sarees', 800)).toBe(21.24);
+    });
+
+    it('short rate arrays clamp to their last entry', () => {
+      COMM_SLAB_CAT = { Sarees: { bounds: [500, 1000, 2000], rates: [5, 9] } };
+      expect(getMyntraComm('Sarees', 100)).toBe(5);      // band 0
+      expect(getMyntraComm('Sarees', 700)).toBe(9);      // band 1
+      expect(getMyntraComm('Sarees', 1500)).toBe(9);     // band 2 → clamps to rates[1]
+      expect(getMyntraComm('Sarees', 9000)).toBe(9);     // band 3 → clamps to rates[1]
     });
   });
 });

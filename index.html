@@ -1308,7 +1308,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
     <div class="tab tamz-t" onclick="switchCommTab('amazon',this)"><span class="tdot" style="background:var(--amz)"></span>Amazon (Fixed %)</div>
   </div>
   <div id="comm-myntra">
-    <div class="success mb12">Myntra charges by <strong>category + seller price slab</strong>. Set the <strong>level</strong> per category for logistics, edit commission cells, and Save.</div>
+    <div class="success mb12" id="comm-myntra-hint">Myntra charges by <strong>category + seller price slab</strong>. Set the <strong>level</strong> per category for logistics, edit commission cells, and Save.</div>
     <div class="fg" style="margin-bottom:10px"><label class="fl">Commission Mode</label><div class="seg">
       <label class="seg-opt"><input type="radio" name="commmode" value="level_slab" checked onchange="setCommMode(this.value)"> Level + Slab (per category)</label>
       <label class="seg-opt"><input type="radio" name="commmode" value="slab" onchange="setCommMode(this.value)"> Slab only (same for all categories)</label>
@@ -3307,6 +3307,12 @@ let COMM_SLAB_ONLY=[0,0,21.24,17.70,18.88];
 // categories fall back to the global COMM_SLABS. Empty by default so
 // existing calculations are unchanged.
 let COMM_CAT_SLABS={};
+// Slab-only mode per-category overrides: { [category]: {bounds:number[],
+// rates:number[]} }. A category present here uses its own bounds+rates
+// instead of the shared COMM_SLAB_ONLY row. Kept SEPARATE from
+// COMM_CAT_SLABS/COMM_MYNTRA so switching commission modes never clobbers
+// either mode's data. Empty by default so existing calculations are unchanged.
+let COMM_SLAB_CAT={};
 
 // ═══════════════════════════════════════════════════════
 // COMMISSION DATA
@@ -3350,6 +3356,13 @@ let editId=null;
 function autoGST(sp){return sp>=2500?0.18:0.05;}
 function gstBadge(sp){return sp>=2500?'<span class="gst18">18%</span>':'<span class="gst5">5%</span>';}
 function getMyntraComm(cat,sp){
+  if(COMM_MODE==='slab'&&COMM_SLAB_CAT&&COMM_SLAB_CAT[cat]){
+    const o=COMM_SLAB_CAT[cat];
+    if(Array.isArray(o.bounds)&&o.bounds.length&&Array.isArray(o.rates)&&o.rates.length){
+      for(let i=0;i<o.bounds.length;i++){if(sp<o.bounds[i])return +o.rates[Math.min(i,o.rates.length-1)]||0;}
+      return +o.rates[Math.min(o.bounds.length,o.rates.length-1)]||0;
+    }
+  }
   const slabs=COMM_MODE==='slab'?COMM_SLAB_ONLY:COMM_MYNTRA[cat];
   if(!slabs||!slabs.length)return 18.88;
   const cb=COMM_MODE!=='slab'&&COMM_CAT_SLABS?COMM_CAT_SLABS[cat]:null;
@@ -3416,6 +3429,7 @@ function hydrateLogisticsDerived(){
   if(s.comm_mode==='slab'||s.comm_mode==='level_slab') COMM_MODE=s.comm_mode;
   if(Array.isArray(s.comm_slab_only)&&s.comm_slab_only.length) COMM_SLAB_ONLY=s.comm_slab_only;
   if(s.comm_cat_slabs&&typeof s.comm_cat_slabs==='object') COMM_CAT_SLABS=s.comm_cat_slabs;
+  if(s.comm_slab_cat&&typeof s.comm_slab_cat==='object') COMM_SLAB_CAT=s.comm_slab_cat;
 }
 
 // Pick a value from a per-price-slab array using upper-bound list `bounds`.
@@ -3724,17 +3738,51 @@ function buildCommMyntra(){
   if(modeRadio) modeRadio.checked=true;
   const title=el('comm-myntra-title');
   if(title) title.textContent=slabOnly?'Commission % — Price Slab only (all categories)':'Commission % — Category × Price Slab (standard bands)';
+  const hint=el('comm-myntra-hint');
+  if(hint) hint.innerHTML=slabOnly
+    ?'Myntra charges by <strong>seller price slab</strong> — one shared rate row for every category. Give any category its <strong>own slabs</strong> with the Custom slabs button.'
+    :'Myntra charges by <strong>category + seller price slab</strong>. Set the <strong>level</strong> per category for logistics, edit commission cells, and Save.';
   COMM_SLAB_ONLY=_normSlabArr(COMM_SLAB_ONLY,n,18.88);
   const customBox=el('comm-myntra-custom');
 
-  // ── Slab-only mode: just the single "All Categories" row ──
+  // ── Slab-only mode: shared "All Categories" row + per-category overrides.
+  // No Level column here — levels only matter for logistics and are managed
+  // in Level + Slab mode (and the Add Category modal).
   if(slabOnly){
-    let h=`<thead><tr><th>Applies to</th>${SLABS.map(s=>`<th class="num">${s.label}</th>`).join('')}</tr></thead><tbody>`;
-    h+=`<tr style="background:rgba(240,177,42,.06)"><td data-label="Applies to"><strong style="color:var(--ac)">${icon('star',{size:12})} All Categories</strong></td>${
+    let h=`<thead><tr><th>Category</th>${SLABS.map(s=>`<th class="num">${s.label}</th>`).join('')}<th></th></tr></thead><tbody>`;
+    h+=`<tr style="background:rgba(240,177,42,.06)"><td data-label="Category"><strong style="color:var(--ac)">${icon('star',{size:12})} All Categories</strong></td>${
       COMM_SLAB_ONLY.map((v,i)=>`<td class="num" data-label="${esc(SLABS[i].label)}"><input class="ci" style="border-color:var(--ac)" value="${v}" onchange="COMM_SLAB_ONLY[${i}]=+this.value||0;triggerRecalc();renderSKUs()"></td>`).join('')
-    }</tr>`;
+    }<td data-label=""></td></tr>`;
+    const shared=CATS.filter(cat=>!_slabCatOverride(cat));
+    shared.forEach(cat=>{
+      h+=`<tr><td data-label="Category"><div class="flex gap8">${esc(cat)} ${_skuBadge(cat)} <button class="row-del" onclick="deleteCategory('${escAttr(cat)}')" title="Delete category" style="margin-left:auto">${icon('x',{size:11})}</button></div></td>`+
+         COMM_SLAB_ONLY.map((v,i)=>`<td class="num" data-label="${esc(SLABS[i].label)}"><span style="color:var(--tx3)">${v}</span></td>`).join('')+
+         `<td data-label=""><button class="btn bg bxs" style="white-space:nowrap" onclick="commSlabMakeCustom('${escAttr(cat)}')" title="Give this category its own price slabs & rates">${icon('edit',{size:11})} Custom slabs</button></td></tr>`;
+    });
+    if(!shared.length) h+=`<tr><td colspan="${n+2}"><div class="st" style="text-align:center;padding:12px">All categories use custom slabs (below).</div></td></tr>`;
     t.innerHTML=h+'</tbody>';
-    if(customBox) customBox.innerHTML='<div class="st" style="padding:10px 2px">In slab-only mode every category uses the single rate row above; per-category bands are ignored. Switch to <strong>Level + Slab</strong> to give a category its own bands.</div>';
+
+    // Categories with their OWN slab-only bounds + rates
+    const custom=CATS.filter(cat=>_slabCatOverride(cat));
+    if(customBox){
+      if(!custom.length){ customBox.innerHTML=''; }
+      else{
+        customBox.innerHTML=`<div class="nav-sec" style="margin:16px 0 8px">Categories with their own slabs</div>`+custom.map(cat=>{
+          const o=COMM_SLAB_CAT[cat];
+          const labels=_slabsFromBounds(o.bounds);
+          o.rates=_normSlabArr(o.rates,labels.length,18.88);
+          return `<div class="card mb12"><div class="ch">
+            <div style="font-size:13px;font-weight:600">${esc(cat)} ${_skuBadge(cat)} <span class="bdg bi" style="margin-left:6px">custom slabs</span></div>
+            <div class="flex gap8" style="align-items:center">
+              <button class="btn bg bxs" onclick="commSlabEditBands('${escAttr(cat)}')">${icon('edit',{size:11})} Edit slabs</button>
+              <button class="btn bg bxs" onclick="commSlabResetCat('${escAttr(cat)}')" title="Go back to the shared all-categories rates">Use shared</button>
+            </div></div>
+            <div style="padding:0;overflow-x:auto"><table class="comm-table dt-stack"><thead><tr>${labels.map(s=>`<th class="num">${s.label}</th>`).join('')}</tr></thead><tbody><tr>${
+              o.rates.map((v,i)=>`<td class="num" data-label="${esc(labels[i].label)}"><input class="ci" value="${v}" onchange="COMM_SLAB_CAT['${escAttr(cat)}'].rates[${i}]=+this.value||0;triggerRecalc();renderSKUs()"></td>`).join('')
+            }</tr></tbody></table></div></div>`;
+        }).join('');
+      }
+    }
     return;
   }
 
@@ -3808,10 +3856,44 @@ function commEditCatBands(cat){
   }});
 }
 
+// ── Slab-only mode per-category overrides ──
+function _slabCatOverride(cat){
+  const o=COMM_SLAB_CAT[cat];
+  return !!(o&&Array.isArray(o.bounds)&&o.bounds.length&&Array.isArray(o.rates)&&o.rates.length);
+}
+// Give a category its own slab-only bounds + rates, seeded from the shared
+// row (identical bounds+rates ⇒ identical commission until the user edits).
+function commSlabMakeCustom(cat){
+  COMM_SLAB_CAT[cat]={bounds:[...COMM_SLABS],rates:_normSlabArr(COMM_SLAB_ONLY,COMM_SLABS.length+1,18.88)};
+  invalidateCalcCache();buildCommMyntra();triggerRecalc();renderSKUs();
+  audit('comm_slab_cat',`${cat} switched to custom slab-only rates`);
+  saveComm().catch(e=>toast('Save failed: '+e.message,'red'));
+}
+// Return a category to the shared all-categories rates.
+function commSlabResetCat(cat){
+  delete COMM_SLAB_CAT[cat];
+  invalidateCalcCache();buildCommMyntra();triggerRecalc();renderSKUs();
+  audit('comm_slab_cat',`${cat} reverted to the shared all-categories rates`);
+  saveComm().catch(e=>toast('Save failed: '+e.message,'red'));
+}
+// Edit one category's slab-only cut-points (reuses the shared slab editor).
+function commSlabEditBands(cat){
+  const o=COMM_SLAB_CAT[cat];if(!o)return;
+  const cur=o.bounds;
+  openSlabEditor({title:icon('edit',{size:15})+` ${esc(cat)} — Price Slabs`,hint:_SLAB_HINT+' These slabs apply to '+esc(cat)+' only (Seller Price).',bounds:cur,onApply:(bounds)=>{
+    o.rates=_remapRates(o.rates,cur,bounds);
+    o.bounds=bounds;
+    invalidateCalcCache();buildCommMyntra();triggerRecalc();renderSKUs();
+    audit('comm_slab_cat',`${cat} slab-only bands updated: ${bounds.join(', ')}`);
+    saveComm().catch(e=>toast('Save failed: '+e.message,'red'));
+  }});
+}
+
 function setCommMode(mode){
   COMM_MODE=(mode==='slab')?'slab':'level_slab';
   LOGISTICS_SETTINGS.comm_mode=COMM_MODE;
   LOGISTICS_SETTINGS.comm_slab_only=COMM_SLAB_ONLY;
+  LOGISTICS_SETTINGS.comm_slab_cat=COMM_SLAB_CAT;
   invalidateCalcCache();
   buildCommMyntra();
   triggerRecalc();renderSKUs();
@@ -3856,6 +3938,7 @@ async function saveComm(){
   LOGISTICS_SETTINGS.comm_mode=COMM_MODE;
   LOGISTICS_SETTINGS.comm_slab_only=COMM_SLAB_ONLY;
   LOGISTICS_SETTINGS.comm_cat_slabs=COMM_CAT_SLABS;
+  LOGISTICS_SETTINGS.comm_slab_cat=COMM_SLAB_CAT;
   triggerRecalc();renderSKUs();
   for(const t of['cat_levels','comm_myntra','comm_ppmp','comm_cc','comm_amazon','logistics'])await save(t);
   audit('commission','Commission rates updated');
@@ -3913,6 +3996,11 @@ async function deleteCategory(cat){
     if(affected.length) await dbSaveSKU(...affected);
   }
   delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];delete COLL_FEE_DATA[cat];delete GT_CAT_DATA[cat];delete REV_CAT_DATA[cat];
+  // Custom commission bands (both modes) live in the logistics blob — drop
+  // the deleted category's entries so they can't resurrect as stale config
+  delete COMM_CAT_SLABS[cat];delete COMM_SLAB_CAT[cat];
+  LOGISTICS_SETTINGS.comm_cat_slabs=COMM_CAT_SLABS;
+  LOGISTICS_SETTINGS.comm_slab_cat=COMM_SLAB_CAT;
   if(_useCategoryTable){
     try{await dbDeleteCategory(cat);}catch(e){console.warn('Category table delete failed, will sync via save:',e.message);}
   }
@@ -3930,7 +4018,7 @@ async function deleteCategory(cat){
       catch(e){console.warn('Threshold row delete failed for',cat,e.message);}
     }
   }
-  for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
+  for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds','logistics'])await save(t);
   invalidateCalcCache();buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
   audit('category_delete',`Category "${cat}" deleted${usedCount?` (${usedCount} SKUs moved to ${CATS[0]})`:''}`);
   toast(`"${cat}" removed — `,`red`);
@@ -6541,7 +6629,7 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
 }
 
 function exportData(){
-  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CATS,LEVELS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,GT_DATA,REVERSE_FEES,GT_CAT_DATA,REV_CAT_DATA,COLL_FEE_DATA,COLL_SLABS,GT_SLABS,REV_SLABS,COMM_SLABS,COMM_MODE,COMM_SLAB_ONLY,COMM_CAT_SLABS,LOGISTICS_SETTINGS,exportedAt:new Date().toISOString()},null,2);
+  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CATS,LEVELS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,GT_DATA,REVERSE_FEES,GT_CAT_DATA,REV_CAT_DATA,COLL_FEE_DATA,COLL_SLABS,GT_SLABS,REV_SLABS,COMM_SLABS,COMM_MODE,COMM_SLAB_ONLY,COMM_CAT_SLABS,COMM_SLAB_CAT,LOGISTICS_SETTINGS,exportedAt:new Date().toISOString()},null,2);
   const a=document.createElement('a');
   a.href='data:application/json,'+encodeURIComponent(data);
   a.download='pricedesk_backup_'+new Date().toISOString().slice(0,10)+'.json';
@@ -6578,6 +6666,7 @@ function importDataPrompt(){
         if(d.COMM_MODE)    COMM_MODE=d.COMM_MODE;
         if(d.COMM_SLAB_ONLY) COMM_SLAB_ONLY=d.COMM_SLAB_ONLY;
         if(d.COMM_CAT_SLABS) COMM_CAT_SLABS=d.COMM_CAT_SLABS;
+        if(d.COMM_SLAB_CAT)  COMM_SLAB_CAT=d.COMM_SLAB_CAT;
         if(d.LOGISTICS_SETTINGS) LOGISTICS_SETTINGS=d.LOGISTICS_SETTINGS;
         if(d.COMM_MYNTRA)    COMM_MYNTRA=d.COMM_MYNTRA;
         if(d.COMM_AJIO_PPMP) COMM_AJIO_PPMP=d.COMM_AJIO_PPMP;
@@ -7937,6 +8026,7 @@ function _syncMynLogisticsSettings(){
   LOGISTICS_SETTINGS.comm_mode     = COMM_MODE;
   LOGISTICS_SETTINGS.comm_slab_only= COMM_SLAB_ONLY;
   LOGISTICS_SETTINGS.comm_cat_slabs= COMM_CAT_SLABS;
+  LOGISTICS_SETTINGS.comm_slab_cat = COMM_SLAB_CAT;
 }
 
 function saveGTCharges(){
