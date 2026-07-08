@@ -1971,6 +1971,18 @@ const DB_KEYS = {
   user_prefs:     'pd_user_preferences',
 };
 
+// Fire-and-forget pd_sync ping so OTHER devices learn that a per-row table
+// changed and reload it. Blob saves get this via dbSet automatically; the
+// per-row save paths (pd_commissions/pd_categories/pd_thresholds) return
+// before dbSet runs, so without this ping their edits never reach an open
+// device until a full reload.
+function _pingSync(key){
+  try{
+    const db=getDB();if(!db)return;
+    db.from('pd_sync').upsert({key,updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
+  }catch(e){/* non-fatal */}
+}
+
 // ── Save a single key to DB ────────────────────────────
 async function dbSet(key, value, retries=1){
   _lastWriteTs = Date.now(); // Mark own write for realtime debounce
@@ -2526,6 +2538,7 @@ async function dbSaveCategories(catsArr, catLevelMap){
   if(error)throw new Error(`Category save failed: ${error.message}`);
   _useCategoryTable=true;
   console.log(`✓ Saved ${rows.length} categories to pd_categories`);
+  _pingSync(DB_KEYS.categories);
 }
 
 async function dbDeleteCategory(name){
@@ -2588,6 +2601,7 @@ async function dbSaveThresholds(thresholdObj){
   if(error)throw new Error(`Threshold save failed: ${error.message}`);
   _useThresholdTable=true;
   console.log(`✓ Saved ${rows.length} thresholds to pd_thresholds`);
+  _pingSync(DB_KEYS.thresholds);
 }
 
 async function dbLoadAllThresholds(){
@@ -2712,6 +2726,7 @@ async function dbSaveCommissions(myntra, ppmp, cc, amazon){
   }
   _useCommTable=true;
   console.log(`✓ Saved ${rows.length} commission rows to pd_commissions`);
+  _pingSync(DB_KEYS.comm_myntra);
 }
 
 async function dbLoadAllCommissions(){
@@ -3135,7 +3150,8 @@ async function loadFromStorage(){
       hydrateLogisticsDerived();
     }
     if(loaded.wireframe){
-      const WF_VERSION = 8; // v8: collection fee lookup by category × price band
+      // WF_VERSION is global (declared with the WF defaults) so realtime
+      // sync and this loader agree on the current formula-schema version
       const PPMP_CC_VERSION = 6; // v6: new Ajio PPMP/CC formulas
       if(loaded.wireframe._v === WF_VERSION){
         // Same version — load all from saved data
@@ -5632,6 +5648,7 @@ async function deleteUser(id){
 // ═══════════════════════════════════════════════════════
 // WIREFRAME
 // ═══════════════════════════════════════════════════════
+const WF_VERSION = 8; // v8: collection fee lookup by category × price band
 const WF={myntra:[
   {id:2,   t:'input',   l:'COST',                                     var:'cost',          desc:'Product cost price'},
   {id:3,   t:'input',   l:'Profit Margin%',                            var:'margin', fmt:'%', desc:'Desired profit margin on cost', pct:true},
@@ -9622,11 +9639,15 @@ function setupRealtime(){
         if(Date.now() - _lastWriteTs < 10000) return;
         const key = payload.new?.key;
         if(!key || key === DB_KEYS.sessions || key === 'pd_skus_v2'
-          || (key === DB_KEYS.brands && _useBrandTable)
-          || ((key === DB_KEYS.categories || key === DB_KEYS.cat_levels) && _useCategoryTable)
-          || (key === DB_KEYS.thresholds && _useThresholdTable)
-          || ((key === DB_KEYS.comm_myntra || key === DB_KEYS.comm_ppmp || key === DB_KEYS.comm_cc || key === DB_KEYS.comm_amazon) && _useCommTable)) return;
+          || (key === DB_KEYS.brands && _useBrandTable)) return;
         console.log(`⚡ Sync: ${key} changed`);
+        // Table-backed keys (commissions/categories/thresholds): the app_data
+        // blob is a stale pre-migration leftover — skip dbGet and let the
+        // handler reload from the per-row table (source of truth).
+        const tableBacked=((key === DB_KEYS.categories || key === DB_KEYS.cat_levels) && _useCategoryTable)
+          || (key === DB_KEYS.thresholds && _useThresholdTable)
+          || ((key === DB_KEYS.comm_myntra || key === DB_KEYS.comm_ppmp || key === DB_KEYS.comm_cc || key === DB_KEYS.comm_amazon) && _useCommTable);
+        if(tableBacked){ handleRealtimeUpdate(key, null); return; }
         dbGet(key).then(val=>{
           if(val) handleRealtimeUpdate(key, val);
         }).catch(e=>console.warn('Sync fetch failed:', key, e));
@@ -9715,8 +9736,9 @@ async function _pollForChanges(){
       _lastPollTs[r.key] = r.updated_at;
     });
     for(const key of changed){
-      const val = await dbGet(key);
-      if(val) handleRealtimeUpdate(key, val);
+      // Pass null — the handler fetches the blob itself, or reloads from the
+      // per-row table for table-backed types (blob would be stale for those)
+      await handleRealtimeUpdate(key, null);
     }
   }catch(e){/* pd_sync may not exist yet */}
 }
@@ -9728,36 +9750,63 @@ async function handleRealtimeUpdate(key, newValue){
   const type=keyToType[key];
   if(!type) return;
 
-  // Use payload value directly — only fetch from DB if payload is empty
-  // This avoids an extra DB read on every realtime notification
-  let freshValue = newValue;
-  if(!freshValue){
-    try{ freshValue = await dbGet(key); }catch(e){ console.warn('Realtime fetch failed:', key, e); return; }
+  // Table-backed types: reload from the per-row table (source of truth) —
+  // the app_data blob for these keys is a stale pre-migration leftover and
+  // must never be applied over live table data.
+  if((type==='comm_myntra'||type==='comm_ppmp'||type==='comm_cc'||type==='comm_amazon')&&_useCommTable){
+    try{
+      const c=await dbLoadAllCommissions();
+      if(!c) return;
+      COMM_MYNTRA=c.myntra;COMM_AJIO_PPMP=c.ppmp;COMM_AJIO_CC=c.cc;COMM_AMAZON=c.amazon;
+    }catch(e){ console.warn('Realtime commission reload failed:', e.message); return; }
+  }else if((type==='categories'||type==='cat_levels')&&_useCategoryTable){
+    try{
+      const c=await dbLoadAllCategories();
+      if(!c) return;
+      CATS=c.cats;CAT_LEVEL=c.catLevel;
+    }catch(e){ console.warn('Realtime category reload failed:', e.message); return; }
+  }else if(type==='thresholds'&&_useThresholdTable){
+    try{
+      const t=await dbLoadAllThresholds();
+      if(!t) return;
+      THRESHOLDS=t;
+    }catch(e){ console.warn('Realtime threshold reload failed:', e.message); return; }
+  }else{
+    // Use payload value directly — only fetch from DB if payload is empty
+    // This avoids an extra DB read on every realtime notification
+    let freshValue = newValue;
+    if(!freshValue){
+      try{ freshValue = await dbGet(key); }catch(e){ console.warn('Realtime fetch failed:', key, e); return; }
+    }
+    if(!freshValue) return;
+    const applied = applyRealtimeData(type, freshValue);
+    if(!applied) return;
   }
-  if(!freshValue) return;
 
-  // Apply the update
-  const applied = applyRealtimeData(type, freshValue);
-  if(!applied) return;
-
-  // Re-render affected views
+  // Re-render affected views. EVERY type that feeds calcSKU must bump the
+  // calc cache — otherwise this device keeps serving the pre-change payout/
+  // profit/breach numbers from cache until some unrelated local edit
+  // happens to invalidate it (stale calculations).
   const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
-  if(type==='skus'||type==='brands'){
+  const CALC_INPUT_TYPES=['skus','brands','thresholds','categories','levels','cat_levels','comm_myntra','comm_ppmp','comm_cc','comm_amazon','logistics','wireframe'];
+  if(CALC_INPUT_TYPES.includes(type)){
     invalidateCalcCache();
+    updateAlerts();
     if(activePage==='skus') renderSKUs();
     if(activePage==='archive') renderArchivedSKUs();
-    if(activePage==='dashboard'){renderBrandSummary();renderDashboardWidgets();updateAlerts();}
+    if(activePage==='dashboard'){renderBrandSummary();renderDashboardWidgets();}
     if(activePage==='thresholds'){renderBreachList?.();}
+    if(activePage==='commission'){buildCommMyntra();buildCommAjioBrands();buildCommAmazon();}
+    if(activePage==='logistics'&&type==='logistics'){renderGTTable?.();renderRetTable?.();renderGTCatTable?.();renderRetCatTable?.();renderCollTable?.();}
+    if(activePage==='wireframe'&&type==='wireframe'){renderWFBuilder?.();}
   }
   if(type==='brands'){
     if(activePage==='brands') renderBrands();
     populateFilters();
   }
+  if(type==='categories'||type==='cat_levels') populateFilters();
   if(type==='users'&&activePage==='users') renderUsers();
-  if(type==='thresholds'){
-    if(activePage==='thresholds') renderThresholds?.();
-    updateAlerts();
-  }
+  if(type==='thresholds'&&activePage==='thresholds') renderThresholds?.();
   if(key===DB_TASK_KEY||key===DB_COMPLETED_TASK_KEY){
     if(activePage==='dashboard') renderDashTasks();
   }
@@ -9800,6 +9849,12 @@ function applyRealtimeData(type, value){
         if(value.collFees) COLL_FEE_DATA=value.collFees;
         hydrateLogisticsDerived();
         return true;
+      case 'wireframe':
+        // Only accept same-version formula sets — an older device's save
+        // would need the loader's migration path. Compiled formulas re-key
+        // by expression string, so no compile-cache flush is needed.
+        if(value&&typeof value==='object'&&value._v===WF_VERSION){ Object.assign(WF,value); return true; }
+        return false;
       default: return false;
     }
   }catch(e){ console.warn('Realtime apply error:', type, e); return false; }
