@@ -4030,21 +4030,62 @@ async function addCategory(){
   closeModal();
 }
 let _deletedCategories=[];
+// Deleting a category that still has SKUs is a CALC-CHANGING operation: the
+// moved SKUs inherit the target category's commission, logistics level,
+// collection fees and threshold. So the user must SEE the affected SKUs and
+// explicitly pick where they go — never a silent "first available" move.
 async function deleteCategory(cat){
-  const usedCount=skuDB.filter(s=>s.category===cat).length;
-  const msg=usedCount
-    ?`Delete "${cat}"?\n\n⚠ ${usedCount} SKU${usedCount>1?'s':''} will be moved to the first available category.`
-    :`Delete category "${cat}"?`;
-  if(!confirm(msg))return;
-  // Stash for reinstate
-  _deletedCategories.push({name:cat,level:CAT_LEVEL[cat],threshold:THRESHOLDS[cat],commMyntra:COMM_MYNTRA[cat],commAmazon:COMM_AMAZON[cat]});
-  // Move SKUs to first remaining category
+  const affected=skuDB.filter(s=>s.category===cat);
+  const usedCount=affected.length;
+  if(!usedCount){
+    if(!confirm(`Delete category "${cat}"?`))return;
+    return _doDeleteCategory(cat,null);
+  }
+  const others=CATS.filter(c=>c!==cat);
+  if(!others.length){
+    toast(`Cannot delete "${cat}" — ${usedCount} SKU${usedCount>1?'s':''} use it and there is no other category to move them to. Add another category first.`,'red');
+    return;
+  }
+  const act=affected.filter(s=>!s.archived).length, arc=usedCount-act;
+  const LIST_CAP=60;
+  const list=affected.slice(0,LIST_CAP).map(s=>{
+    const b=brands.find(x=>x.id===s.brandId);
+    return `<div class="flex gap8" style="justify-content:space-between;padding:5px 9px;border-bottom:1px solid var(--bd);font-size:11px">
+      <span style="font-family:var(--mono)">${esc(s.sku||s.id)}</span>
+      <span class="st">${esc(b?b.name:'—')}${s.archived?' · <span style="color:var(--re)">archived</span>':''}</span></div>`;
+  }).join('')+(usedCount>LIST_CAP?`<div class="st" style="padding:6px 9px">…and ${usedCount-LIST_CAP} more</div>`:'');
+  setModal(`<div class="mhdr"><div class="mtl">${icon('trash',{size:15})} Delete "${esc(cat)}"</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div class="warn mb12">⚠ <strong>${usedCount} SKU${usedCount>1?'s':''}</strong> ${usedCount>1?'are':'is'} still in this category${arc?` (${act} active, ${arc} archived)`:''}. They must be moved to another category first.</div>
+      <div style="max-height:180px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;margin-bottom:12px">${list}</div>
+      <div class="fg"><label class="fl">Move ${usedCount>1?'these SKUs':'this SKU'} to *</label>
+        <select class="fi" id="delcat-target">${others.map(c=>`<option>${esc(c)}</option>`).join('')}</select>
+        <div class="st" style="margin-top:5px;color:var(--re)">Moved SKUs take the new category's commission, logistics level, collection fee and profit threshold — their prices &amp; profits will be recalculated.</div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg" onclick="closeModal()">Cancel</button>
+      <button class="btn br" onclick="_confirmDeleteCategory('${escAttr(cat)}')">${icon('trash',{size:13})} Move SKUs &amp; Delete</button>
+    </div>`);
+}
+function _confirmDeleteCategory(cat){
+  const target=el('delcat-target')?.value;
+  closeModal();
+  if(!target||!CATS.includes(target)||target===cat){toast('Pick a valid target category','red');return;}
+  _doDeleteCategory(cat,target);
+}
+async function _doDeleteCategory(cat,target){
+  const affected=skuDB.filter(s=>s.category===cat);
+  const usedCount=affected.length;
+  // Stash for reinstate — including the moved SKU ids and the category's
+  // custom slab config, so Undo restores BOTH the config and the SKUs
+  _deletedCategories.push({name:cat,level:CAT_LEVEL[cat],threshold:THRESHOLDS[cat],commMyntra:COMM_MYNTRA[cat],commAmazon:COMM_AMAZON[cat],
+    commCatSlabs:COMM_CAT_SLABS[cat],commSlabCat:COMM_SLAB_CAT[cat],collCatSlabs:COLL_CAT_SLABS[cat],
+    skuIds:affected.map(s=>s.id)});
   CATS=CATS.filter(c=>c!==cat);
-  if(usedCount&&CATS.length){
-    const fallback=CATS[0];
-    const affected=skuDB.filter(s=>s.category===cat);
-    affected.forEach(s=>{s.category=fallback;s.level=CAT_LEVEL[fallback]||'Level 2';});
-    if(affected.length) await dbSaveSKU(...affected);
+  if(usedCount&&target){
+    affected.forEach(s=>{s.category=target;s.level=CAT_LEVEL[target]||'Level 2';});
+    await dbSaveSKU(...affected);
   }
   delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];delete COLL_FEE_DATA[cat];delete GT_CAT_DATA[cat];delete REV_CAT_DATA[cat];
   // Custom commission bands (both modes) + custom collection slabs live in
@@ -4073,8 +4114,8 @@ async function deleteCategory(cat){
   }
   for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds','logistics'])await save(t);
   invalidateCalcCache();buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
-  audit('category_delete',`Category "${cat}" deleted${usedCount?` (${usedCount} SKUs moved to ${CATS[0]})`:''}`);
-  toast(`"${cat}" removed — `,`red`);
+  audit('category_delete',`Category "${cat}" deleted${usedCount?` (${usedCount} SKU${usedCount>1?'s':''} moved to ${target})`:''}`);
+  toast(`"${cat}" removed${usedCount?` — ${usedCount} SKU${usedCount>1?'s':''} → ${target}`:''} — `,`red`);
   // Show reinstate toast
   setTimeout(()=>{
     const t=document.querySelector('.toast:last-child');
@@ -4092,11 +4133,27 @@ async function _reinstateCategory(name){
   THRESHOLDS[name]=stashed.threshold||0;
   COMM_MYNTRA[name]=stashed.commMyntra||[0,0,18.88,18.88,18.88];
   COMM_AMAZON[name]=stashed.commAmazon||17;
+  // Restore the category's custom slab config (both commission modes +
+  // collection fee) so Undo really returns the previous calculations
+  if(stashed.commCatSlabs){COMM_CAT_SLABS[name]=stashed.commCatSlabs;LOGISTICS_SETTINGS.comm_cat_slabs=COMM_CAT_SLABS;}
+  if(stashed.commSlabCat){COMM_SLAB_CAT[name]=stashed.commSlabCat;LOGISTICS_SETTINGS.comm_slab_cat=COMM_SLAB_CAT;}
+  if(stashed.collCatSlabs){COLL_CAT_SLABS[name]=stashed.collCatSlabs;LOGISTICS_SETTINGS.coll_cat_slabs=COLL_CAT_SLABS;}
+  // Move the SKUs that were relocated by the delete BACK to this category —
+  // without this, Undo restored the config but left the SKUs (and their
+  // prices) permanently changed
+  let movedBack=0;
+  if(Array.isArray(stashed.skuIds)&&stashed.skuIds.length){
+    const ids=new Set(stashed.skuIds);
+    const backers=skuDB.filter(s=>ids.has(s.id));
+    backers.forEach(s=>{s.category=name;s.level=stashed.level||'Level 2';});
+    movedBack=backers.length;
+    if(backers.length) await dbSaveSKU(...backers);
+  }
   _deletedCategories=_deletedCategories.filter(d=>d.name!==name);
-  for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds'])await save(t);
-  buildCommMyntra();buildCommAmazon();populateFilters();
-  audit('category_reinstate',`Category "${name}" reinstated`);
-  toast(`"${name}" reinstated`,'green');
+  for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds','logistics'])await save(t);
+  invalidateCalcCache();buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
+  audit('category_reinstate',`Category "${name}" reinstated${movedBack?` (${movedBack} SKU${movedBack>1?'s':''} moved back)`:''}`);
+  toast(`"${name}" reinstated${movedBack?` — ${movedBack} SKU${movedBack>1?'s':''} moved back`:''}`,'green');
 }
 
 // ═══════════════════════════════════════════════════════
