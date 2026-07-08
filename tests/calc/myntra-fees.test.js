@@ -47,6 +47,9 @@ let REV_SLABS = [];
 let COLL_SLABS = [300,500,700,800,1000,2000];
 let GT_CAT_DATA = {};
 let REV_CAT_DATA = {};
+// Optional per-category collection-fee bounds ({cat: bounds[]}; [] = one
+// fixed fee, absent = global COLL_SLABS). Reset in beforeEach.
+let COLL_CAT_SLABS = {};
 let LOGISTICS_SETTINGS = {
   myn_fwd_mode: 'level', myn_ret_mode: 'level',
   myn_fwd_fixed: 230, myn_ret_fixed: 218,
@@ -77,6 +80,13 @@ function getMynRet(level, cat, price){
 function getMynColl(cat, sellerPrice){
   const slabs=COLL_FEE_DATA[cat]||[15,17,27,27,27,45,61];
   const p=sellerPrice||0;
+  const cb=COLL_CAT_SLABS?COLL_CAT_SLABS[cat]:null;
+  if(Array.isArray(cb)){
+    for(let i=0;i<cb.length;i++){
+      if(p<=cb[i]) return +slabs[Math.min(i,slabs.length-1)]||0;
+    }
+    return +slabs[Math.min(cb.length,slabs.length-1)]||0;
+  }
   for(let i=0;i<COLL_SLABS.length;i++){
     if(p<=COLL_SLABS[i]) return +slabs[Math.min(i,slabs.length-1)]||0;
   }
@@ -91,6 +101,7 @@ beforeEach(() => {
   GT_SLABS = [1,99,300,500,1000,2000];
   REV_SLABS = [];
   COLL_SLABS = [300,500,700,800,1000,2000];
+  COLL_CAT_SLABS = {};
   GT_CAT_DATA = {};
   REV_CAT_DATA = {};
   REVERSE_FEES = { 'Level 1': 167, 'Level 2': 218, 'Level 3': 259, 'Level 4': 331 };
@@ -258,6 +269,50 @@ describe('getMynColl — collection (fixed) fee by category and seller price', (
       expect(getMynColl('Kurta Sets', 1200)).toBe(5);  // slab 1
       expect(getMynColl('Kurta Sets', 2800)).toBe(19); // slab 2
       expect(getMynColl('Kurta Sets', 9000)).toBe(27); // > last bound
+    });
+  });
+
+  describe('per-category slab bounds (COLL_CAT_SLABS)', () => {
+    it('a category with its OWN bounds ignores the global COLL_SLABS', () => {
+      COLL_CAT_SLABS = { Sarees: [500, 1000] };
+      COLL_FEE_DATA['Sarees'] = [5, 10, 20];
+      expect(getMynColl('Sarees', 0)).toBe(5);       // ≤ 500
+      expect(getMynColl('Sarees', 500)).toBe(5);     // ≤ 500 (inclusive edge)
+      expect(getMynColl('Sarees', 501)).toBe(10);    // ≤ 1000
+      expect(getMynColl('Sarees', 1000)).toBe(10);   // ≤ 1000 (inclusive edge)
+      expect(getMynColl('Sarees', 1001)).toBe(20);   // > 1000
+      expect(getMynColl('Sarees', 99999)).toBe(20);
+      COLL_FEE_DATA['Sarees'] = [0, 3, 26, 27, 27, 45, 61]; // restore
+    });
+
+    it('other categories stay on the global bounds (unchanged)', () => {
+      COLL_CAT_SLABS = { Sarees: [500, 1000] };
+      expect(getMynColl('Kurta Sets', 600)).toBe(19);  // global 500–700 band
+      expect(getMynColl('Kurta Sets', 2001)).toBe(61); // global top band
+    });
+
+    it('an EMPTY bounds array means one fixed fee at every price', () => {
+      COLL_CAT_SLABS = { Sarees: [] };
+      COLL_FEE_DATA['Sarees'] = [35];
+      expect(getMynColl('Sarees', 0)).toBe(35);
+      expect(getMynColl('Sarees', 750)).toBe(35);
+      expect(getMynColl('Sarees', 99999)).toBe(35);
+      COLL_FEE_DATA['Sarees'] = [0, 3, 26, 27, 27, 45, 61]; // restore
+    });
+
+    it('short fee arrays clamp to their last entry under custom bounds', () => {
+      COLL_CAT_SLABS = { Sarees: [500, 1000, 2000] };
+      COLL_FEE_DATA['Sarees'] = [5, 9];
+      expect(getMynColl('Sarees', 100)).toBe(5);    // band 0
+      expect(getMynColl('Sarees', 700)).toBe(9);    // band 1
+      expect(getMynColl('Sarees', 1500)).toBe(9);   // band 2 → clamps
+      expect(getMynColl('Sarees', 9000)).toBe(9);   // band 3 → clamps
+      COLL_FEE_DATA['Sarees'] = [0, 3, 26, 27, 27, 45, 61]; // restore
+    });
+
+    it('a non-array override is ignored → global bounds', () => {
+      COLL_CAT_SLABS = { 'Kurta Sets': 'garbage' };
+      expect(getMynColl('Kurta Sets', 600)).toBe(19); // global 500–700 band
     });
   });
 });

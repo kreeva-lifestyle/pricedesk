@@ -60,6 +60,13 @@ describe('source drift detection — production strings must match test copies',
         `function getMynColl(cat, sellerPrice){
   const slabs=COLL_FEE_DATA[cat]||[15,17,27,27,27,45,61];
   const p=sellerPrice||0;
+  const cb=COLL_CAT_SLABS?COLL_CAT_SLABS[cat]:null;
+  if(Array.isArray(cb)){
+    for(let i=0;i<cb.length;i++){
+      if(p<=cb[i]) return +slabs[Math.min(i,slabs.length-1)]||0;
+    }
+    return +slabs[Math.min(cb.length,slabs.length-1)]||0;
+  }
   for(let i=0;i<COLL_SLABS.length;i++){
     if(p<=COLL_SLABS[i]) return +slabs[Math.min(i,slabs.length-1)]||0;
   }
