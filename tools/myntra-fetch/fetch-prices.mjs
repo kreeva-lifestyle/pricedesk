@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
 import { createClient } from "@supabase/supabase-js";
-import { fingerprintHtml, fingerprintSummary, parseMyntraPrice } from "./parse.mjs";
+import { fingerprintHtml, fingerprintSummary, isOutOfStock, parseMyntraPrice } from "./parse.mjs";
 import { validateCredentials } from "./config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -74,6 +74,13 @@ async function fetchStyle(styleId) {
     });
     if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}` };
     const html = await resp.text();
+    // Sold-out products have no selling price (only MRP) — flag OOS instead of
+    // reporting the MRP as a bogus price.
+    if (isOutOfStock(html)) {
+      const p = parseMyntraPrice(html);
+      const mrp = p ? (p.mrp != null ? p.mrp : p.price) : null;
+      return { ok: true, oos: true, mrp };
+    }
     const parsed = parseMyntraPrice(html);
     if (parsed) return { ok: true, price: parsed.price, mrp: parsed.mrp, strategy: parsed.strategy };
     return { ok: false, error: fingerprintSummary(fingerprintHtml(html)) };
@@ -159,7 +166,7 @@ async function main() {
   const mins = Math.max(1, Math.round((ids.length * cfg.PACING_MS) / cfg.MAX_CONCURRENCY / 60000));
   console.log(`Fetching ${ids.length} styles from this machine's IP (~${mins} min)…`);
 
-  let ok = 0, fail = 0, done = 0;
+  let ok = 0, fail = 0, oos = 0, done = 0;
   const errSample = {};
   const queue = [...ids];
   const startedAt = new Date().toISOString();
@@ -172,7 +179,11 @@ async function main() {
       const sid = queue.shift();
       const started = Date.now();
       const r = await fetchStyle(sid);
-      if (r.ok && typeof r.price === "number") {
+      if (r.ok && r.oos) {
+        // Sold out on Myntra — record it (the app shows "Out of stock").
+        live[sid] = { oos: true, mrp: r.mrp != null ? r.mrp : null, ts: Date.now() };
+        ok++; oos++;
+      } else if (r.ok && typeof r.price === "number") {
         live[sid] = { price: r.price, mrp: r.mrp != null ? r.mrp : null, ts: Date.now() };
         ok++;
       } else {
@@ -215,7 +226,7 @@ async function main() {
   });
   if (crashed) throw crashed;
 
-  console.log(`\nDone: ${ok} fetched, ${fail} failed of ${ids.length}.`);
+  console.log(`\nDone: ${ok} fetched${oos?` (${oos} out of stock)`:''}, ${fail} failed of ${ids.length}.`);
   if (fail) {
     const top = Object.entries(errSample).sort((a, b) => b[1] - a[1]).slice(0, 3);
     console.log("Most common errors:");
