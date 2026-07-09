@@ -1447,7 +1447,6 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
       <div class="sku-mp-tab" data-mp="amazon" onclick="switchSKUTab(this,'amazon')">Amazon</div>
     </div>
     <div class="sku-actions-wrap" style="display:flex;gap:6px;align-items:center">
-      <div class="btn bg bsm" id="fetch-live-btn" onclick="fetchAllLivePrices()" title="Fetch live selling prices from Myntra for all active Myntra SKUs"><span class="ic-h" data-icon="refresh" data-size="12"></span> Myntra ₹</div>
       <div class="btn bp bsm" onclick="addRow()">+ Add SKU</div>
       <div style="position:relative;display:inline-block" id="import-dropdown">
         <button class="btn bg bsm" onclick="toggleImportMenu()" style="min-width:80px">Import <span class="ic-h" data-icon="chevronDown" data-size="12"></span> </button>
@@ -1491,6 +1490,9 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
     </div>
   </div>
   <div id="active-filter-chips" class="active-filters" style="margin-bottom:8px"></div>
+  <!-- Live Myntra-fetch status: progress while the laptop fetcher runs, or a
+       "last updated" line when idle. Populated by renderLiveStatusBanner(). -->
+  <div id="live-status-banner" style="display:none;margin-bottom:8px"></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
     <div class="st" id="sku-count"></div>
   </div>
@@ -1991,6 +1993,7 @@ const DB_KEYS = {
   bulk_imports:   'pd_bulk_imports',
   user_prefs:     'pd_user_preferences',
   live_prices:    'pd_live_prices',
+  live_status:    'pd_live_status',
 };
 
 // Fire-and-forget pd_sync ping so OTHER devices learn that a per-row table
@@ -3077,6 +3080,7 @@ async function save(type, opts){
     wireframe:   WF,
     alert:       ALERT_SETTINGS,
     live_prices: LIVE_PRICES,
+    live_status: LIVE_STATUS,
   };
   // Never let a users-save erase a stored password hash. Merge any missing
   // hashes back from the current DB copy first (defense-in-depth against the
@@ -3114,7 +3118,7 @@ async function loadFromStorage(){
     const loaded = {};
     const [skusResult, brandsResult, catResult, threshResult, usersResult,
            levelsResult, alertResult, commResult, logisticsResult,
-           wireframeResult, livePricesResult] = await Promise.all([
+           wireframeResult, livePricesResult, liveStatusResult] = await Promise.all([
       dbLoadAllSKUs(),
       dbLoadAllBrands(),
       dbLoadAllCategories(),
@@ -3125,7 +3129,8 @@ async function loadFromStorage(){
       dbLoadAllCommissions(),
       dbGet(DB_KEYS.logistics).catch(()=>null),
       dbGet(DB_KEYS.wireframe).catch(()=>null),
-      dbGet(DB_KEYS.live_prices).catch(()=>null)
+      dbGet(DB_KEYS.live_prices).catch(()=>null),
+      dbGet(DB_KEYS.live_status).catch(()=>null)
     ]);
     loaded.skus = skusResult;
     loaded.brands = brandsResult;
@@ -3135,6 +3140,7 @@ async function loadFromStorage(){
     loaded.logistics = logisticsResult;
     loaded.wireframe = wireframeResult;
     loaded.live_prices = livePricesResult;
+    loaded.live_status = liveStatusResult;
     if(catResult){ loaded.categories=catResult.cats; loaded.cat_levels=catResult.catLevel; }
     else {
       const [bc, bl] = await Promise.all([
@@ -3161,6 +3167,7 @@ async function loadFromStorage(){
     if(loaded.thresholds)  THRESHOLDS      = loaded.thresholds;
     if(loaded.alert)       ALERT_SETTINGS  = loaded.alert;
     if(loaded.live_prices) LIVE_PRICES     = loaded.live_prices;
+    if(loaded.live_status) LIVE_STATUS     = loaded.live_status;
     if(loaded.categories)  CATS            = loaded.categories;
     if(loaded.levels)      LEVELS          = loaded.levels;
     if(loaded.cat_levels)  CAT_LEVEL       = loaded.cat_levels;
@@ -3373,9 +3380,13 @@ let THRESHOLDS={
 };
 let ALERT_SETTINGS={email:'',frequency:'Immediately on breach'};
 // Live Myntra selling prices keyed by Style ID — display-only (never feeds
-// calcSKU), fetched via the myntra-price Edge Function, synced as a blob.
+// calcSKU), fetched by the laptop tool (tools/myntra-fetch), synced as a blob.
 // Shape: { [styleId]: { price, mrp, ts, err } }
 let LIVE_PRICES={};
+// Progress/status of the last (or in-flight) Myntra price fetch, written by
+// the laptop fetcher (tools/myntra-fetch). Display-only. Shape:
+// { running, total, done, ok, fail, startedAt, finishedAt, source }
+let LIVE_STATUS={};
 
 // ═══════════════════════════════════════════════════════
 // BRANDS
@@ -5031,6 +5042,7 @@ function renderSKUs(){
   // Update archive nav badge
   const navCount=el('nav-archive-count');
   if(navCount){const archCount=skuDB.filter(s=>s.archived).length;navCount.textContent=archCount;navCount.style.display=archCount?'':'none';}
+  renderLiveStatusBanner();
 }
 
 const _MP_LABEL={'myntra':'Myntra','ajio-ppmp':'Ajio PPMP','ajio-cc':'Ajio CC','amazon':'Amazon'};
@@ -5092,7 +5104,6 @@ function renderSKUCard(s,c,brand,statusIcon,profColor,ifDelColor){
 // between what we computed and what Myntra actually charges is visible at a
 // glance. Never feeds calcSKU.
 const LIVE_PRICE_STALE_MS=24*60*60*1000;
-let _liveFetchActive=false;
 
 function _liveAgo(ts){
   const m=Math.max(0,Math.round((Date.now()-ts)/60000));
@@ -5103,29 +5114,106 @@ function _liveAgo(ts){
   return Math.round(h/24)+'d ago';
 }
 
+// Banner on the SKUs page reflecting the laptop fetcher's status. States:
+//  • running & fresh   → live "Updating… X/Y" progress bar
+//  • running but stale  → the laptop went to sleep/off mid-run → "interrupted"
+//  • idle, recent       → muted "prices last updated N ago"
+//  • idle, old (>2d)    → amber "prices may be outdated — run the fetcher"
+// A run is considered stalled if its status hasn't updated in STALL_MS (the
+// fetcher heartbeats every checkpoint), which is how we detect "laptop off".
+// Display-only.
+const LIVE_STALL_MS=15*60*1000;        // no heartbeat this long ⇒ run died
+const LIVE_STATUS_OLD_MS=2*24*60*60*1000; // prices older than this ⇒ warn
+let _liveStatusTimer=null;
+function renderLiveStatusBanner(){
+  const el=document.getElementById('live-status-banner');
+  if(!el)return;
+  const s=LIVE_STATUS||{};
+  const hasAny=s.running||s.finishedAt||s.startedAt;
+  if(!hasAny){el.style.display='none';el.innerHTML='';_stopLiveStatusTick();return;}
+  const src=s.source?` · ${esc(String(s.source))}`:'';
+  const heartbeat=s.ts||(s.startedAt?Date.parse(s.startedAt):0);
+  const stalled=s.running&&heartbeat&&(Date.now()-heartbeat>LIVE_STALL_MS);
+  el.style.display='';
+
+  if(s.running&&!stalled){
+    const total=s.total||0, done=s.done||0;
+    const pct=total?Math.min(100,Math.round(done/total*100)):0;
+    el.innerHTML=`<div style="background:rgba(78,142,247,.10);border:1px solid rgba(78,142,247,.30);border-radius:8px;padding:8px 12px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--bl);font-weight:600">
+        <span style="animation:pulse 1.2s infinite;display:inline-flex">${icon('refresh',{size:14})}</span>
+        <span>Updating Myntra prices… ${done.toLocaleString('en-IN')}/${total.toLocaleString('en-IN')}${s.fail?` · ${s.fail} failed`:''}${src}</span>
+      </div>
+      <div style="height:4px;background:rgba(78,142,247,.15);border-radius:3px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--bl);transition:width .4s"></div></div>
+    </div>`;
+    _startLiveStatusTick();
+    return;
+  }
+
+  if(stalled){
+    // The laptop stopped mid-run (turned off / slept). Show what got done.
+    const done=s.done||0, total=s.total||0;
+    el.innerHTML=`<div style="background:rgba(255,180,0,.10);border:1px solid rgba(255,180,0,.30);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--ac);display:flex;align-items:center;gap:8px">
+      ${icon('alert',{size:14})}
+      <span>Myntra price update didn't finish — the laptop may have turned off (${done.toLocaleString('en-IN')}/${total.toLocaleString('en-IN')} done, ${esc(_liveAgo(heartbeat))}). Run the fetcher again on a laptop to complete it.</span>
+    </div>`;
+    _startLiveStatusTick();
+    return;
+  }
+
+  // Idle — freshness of the last completed run
+  const when=s.finishedAt?Date.parse(s.finishedAt):heartbeat;
+  if(!when){el.style.display='none';el.innerHTML='';_stopLiveStatusTick();return;}
+  const okTxt=s.ok!=null?`${s.ok.toLocaleString('en-IN')} Myntra price${s.ok===1?'':'s'}`:'Myntra prices';
+  const failTxt=s.fail?` · ${s.fail} failed`:'';
+  if(Date.now()-when>LIVE_STATUS_OLD_MS){
+    // Prices are old and nothing is running → the laptop hasn't refreshed lately
+    el.innerHTML=`<div style="background:rgba(255,180,0,.08);border:1px solid rgba(255,180,0,.25);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--ac);display:flex;align-items:center;gap:8px">
+      ${icon('alert',{size:13})}
+      <span>Myntra prices may be outdated — last updated ${esc(_liveAgo(when))}. Run the price fetcher on a laptop to refresh.</span>
+    </div>`;
+  }else{
+    el.innerHTML=`<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
+      ${icon('refresh',{size:12})} <span>${okTxt} last updated ${esc(_liveAgo(when))}${failTxt}${src}</span>
+    </div>`;
+  }
+  _startLiveStatusTick(); // keep the "N ago" / stall detection fresh
+}
+function _startLiveStatusTick(){
+  if(_liveStatusTimer)return;
+  _liveStatusTimer=setInterval(()=>{
+    const activePage=document.querySelector('.page.active')?.id?.replace('page-','');
+    if(activePage!=='skus'){_stopLiveStatusTick();return;}
+    renderLiveStatusBanner();
+  },30000);
+}
+function _stopLiveStatusTick(){ if(_liveStatusTimer){clearInterval(_liveStatusTimer);_liveStatusTimer=null;} }
+
+// A Myntra price within ±₹10 of Customer Paid is treated as a match (green ✓)
+// — small rounding/fee differences are expected and considered safe.
+const LIVE_PRICE_MATCH_TOL=10;
 function _livePriceInfo(s,c){
   const lp=LIVE_PRICES[String(s.styleId||'').trim()];
   if(!lp)return {state:'none'};
   if(lp.price==null)return {state:'error',err:lp.err||'fetch failed',ts:lp.ts};
   const diff=lp.price-Math.round(c.custPaid);
-  return {state:'ok',price:lp.price,mrp:lp.mrp,ts:lp.ts,diff,match:Math.abs(diff)<=1,
+  return {state:'ok',price:lp.price,mrp:lp.mrp,ts:lp.ts,diff,match:Math.abs(diff)<=LIVE_PRICE_MATCH_TOL,
     stale:Date.now()-(lp.ts||0)>LIVE_PRICE_STALE_MS};
 }
 
+// Display-only Myntra ₹ cell. Prices are fetched by the laptop tool
+// (tools/myntra-fetch) and land here via pd_live_prices — nothing to click.
 function _livePriceCell(s,brand,c){
   const isMyntra=brand&&brand.model==='myntra';
   if(!isMyntra||!s.styleId)return '<td class="mono" style="color:var(--tx3)">—</td>';
-  // JS-escape THEN HTML-escape: sid lands inside '...' inside onclick="..."
-  const sid=esc(escAttr(String(s.styleId).trim()));
-  const refetch=`<span onclick="event.stopPropagation();fetchLivePrice('${sid}')" title="Refresh from Myntra" style="cursor:pointer;color:var(--tx3);display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;vertical-align:middle;margin-left:3px">${icon('refresh',{size:11})}</span>`;
   const i=_livePriceInfo(s,c);
-  if(i.state==='none')return `<td class="mono"><span onclick="event.stopPropagation();fetchLivePrice('${sid}')" title="Fetch live price from Myntra" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px;color:var(--tx3);font-size:10px">${icon('refresh',{size:11})} fetch</span></td>`;
-  if(i.state==='error')return `<td class="mono"><span title="${esc(i.err)}${i.ts?' · '+_liveAgo(i.ts):''}" style="color:var(--re);font-size:11px;cursor:help">✕ n/a</span>${refetch}</td>`;
+  if(i.state==='none')return '<td class="mono" style="color:var(--tx3)">—</td>';
+  if(i.state==='error')return `<td class="mono"><span title="${esc(i.err)}${i.ts?' · '+_liveAgo(i.ts):''}" style="color:var(--re);font-size:11px;cursor:help">✕ n/a</span></td>`;
   const col=i.match?'var(--gr)':(i.diff<0?'var(--re)':'var(--ac)');
   const bg=i.match?'rgba(45,212,160,.10)':(i.diff<0?'rgba(245,87,92,.10)':'rgba(255,180,0,.10)');
   const delta=i.match?'✓':`${i.diff>0?'▲':'▼'}₹${Math.abs(i.diff).toLocaleString('en-IN')}`;
-  const tip=`Myntra live price ₹${i.price.toLocaleString('en-IN')}${i.mrp?' (MRP ₹'+i.mrp.toLocaleString('en-IN')+')':''} · fetched ${_liveAgo(i.ts)} · ${i.match?'matches Cust. Paid':`₹${Math.abs(i.diff).toLocaleString('en-IN')} ${i.diff>0?'above':'below'} Cust. Paid`}${i.stale?' · stale, refresh recommended':''}`;
-  return `<td class="mono" style="background:${bg}"><span title="${esc(tip)}" style="color:${col};font-weight:600;cursor:help${i.stale?';opacity:.55':''}">₹${i.price.toLocaleString('en-IN')} <span style="font-size:9px">${delta}</span></span>${refetch}</td>`;
+  const tip=`Myntra live price ₹${i.price.toLocaleString('en-IN')}${i.mrp?' (MRP ₹'+i.mrp.toLocaleString('en-IN')+')':''} · updated ${_liveAgo(i.ts)} · ${i.match?'matches Cust. Paid':`₹${Math.abs(i.diff).toLocaleString('en-IN')} ${i.diff>0?'above':'below'} Cust. Paid`}${i.stale?' · stale, refresh on your laptop':''}`;
+  return `<td class="mono" style="background:${bg}"><span title="${esc(tip)}" style="color:${col};font-weight:600;cursor:help${i.stale?';opacity:.55':''}">₹${i.price.toLocaleString('en-IN')} <span style="font-size:9px">${delta}</span></span></td>`;
 }
 
 function _livePriceCardCell(s,c){
@@ -5138,191 +5226,6 @@ function _livePriceCardCell(s,c){
   const col=i.match?'var(--gr)':(i.diff<0?'var(--re)':'var(--ac)');
   const delta=i.match?'✓':`${i.diff>0?'▲':'▼'}₹${Math.abs(i.diff).toLocaleString('en-IN')}`;
   return `<div class="skc-cell"><span>Myntra ₹</span><b style="color:${col}${i.stale?';opacity:.55':''}">₹${Math.round(i.price).toLocaleString('en-IN')} <small style="font-size:9px">${delta}</small></b></div>`;
-}
-
-async function _fetchLiveBatch(styleIds){
-  const resp=await fetch(`${SUPABASE_URL}/functions/v1/myntra-price`,{
-    method:'POST',
-    headers:{
-      'Authorization':`Bearer ${SUPABASE_ANON}`,
-      'apikey':SUPABASE_ANON,
-      'Content-Type':'application/json',
-    },
-    body:JSON.stringify({styleIds}),
-  });
-  const data=await resp.json().catch(()=>({}));
-  if(!resp.ok){
-    const err=new Error(resp.status===404
-      ?'myntra-price Edge Function not deployed (404)'
-      :(data.error||`myntra-price HTTP ${resp.status}`));
-    err._status=resp.status;
-    err._retryAfter=parseInt(resp.headers.get('Retry-After')||'',10)||0;
-    throw err;
-  }
-  return data.results||[];
-}
-
-function _applyLiveResults(results){
-  let ok=0,fail=0;
-  (results||[]).forEach(r=>{
-    if(!r||!r.styleId)return;
-    // Re-validate server-supplied values before they reach innerHTML
-    const price=typeof r.price==='number'&&isFinite(r.price)&&r.price>0?r.price:null;
-    const mrp=typeof r.mrp==='number'&&isFinite(r.mrp)&&r.mrp>0?r.mrp:null;
-    if(r.ok&&price!=null){
-      LIVE_PRICES[r.styleId]={price,mrp,ts:Date.now()};ok++;
-    }else{
-      fail++;
-      // Keep a previously fetched good price rather than clobbering it with
-      // a transient error; only record the error when we have nothing better
-      const prev=LIVE_PRICES[r.styleId];
-      if(!prev||prev.price==null)LIVE_PRICES[r.styleId]={price:null,mrp:null,ts:Date.now(),err:r.error||'fetch failed'};
-    }
-  });
-  return {ok,fail};
-}
-
-// Diagnostics helper — run `await myntraDebug('40451814')` in the browser
-// console to see exactly what Myntra serves the Edge Function (title + a
-// price-focused page excerpt), so the parser can be tuned to the live markup.
-window.myntraDebug=async function(styleId){
-  const sid=String(styleId||'').trim();
-  if(!/^\d{4,12}$/.test(sid)){console.warn('Pass a numeric Style ID');return;}
-  const resp=await fetch(`${SUPABASE_URL}/functions/v1/myntra-price`,{
-    method:'POST',
-    headers:{'Authorization':`Bearer ${SUPABASE_ANON}`,'apikey':SUPABASE_ANON,'Content-Type':'application/json'},
-    body:JSON.stringify({styleIds:[sid],debug:true}),
-  });
-  const data=await resp.json().catch(()=>({}));
-  const r=(data.results||[])[0]||data;
-  console.log('%cmyntra-price debug for '+sid,'font-weight:bold');
-  console.log('result:',{ok:r.ok,price:r.price,mrp:r.mrp,strategy:r.strategy,error:r.error});
-  console.log('page excerpt:\n'+(r.debug||'(none)'));
-  return r;
-};
-
-async function fetchLivePrice(styleId){
-  const sid=String(styleId).trim();
-  if(!/^\d{4,12}$/.test(sid)){toast('Style ID must be numeric to fetch from Myntra','red');return;}
-  try{
-    toast('Fetching live price from Myntra…','blue');
-    const results=await _fetchLiveBatch([sid]);
-    const {ok}=_applyLiveResults(results);
-    await save('live_prices');
-    if(!editId)renderSKUs();
-    const lp=LIVE_PRICES[sid];
-    if(ok&&lp&&lp.price!=null)toast(`Myntra live price: ₹${lp.price.toLocaleString('en-IN')}`,'green');
-    else toast(`Could not fetch price${lp&&lp.err?' — '+esc(lp.err):''}`,'red');
-  }catch(e){toast('Live price fetch failed: '+esc(e.message),'red');}
-}
-
-async function fetchAllLivePrices(){
-  if(_liveFetchActive){toast('Live price fetch already running','blue');return;}
-  const all=[...new Set(skuDB.filter(s=>{
-    if(s.archived||!s.styleId)return false;
-    const b=brands.find(x=>x.id===s.brandId);
-    return b&&b.model==='myntra';
-  }).map(s=>String(s.styleId).trim()))];
-  // Pre-filter with the SAME rule the server enforces — one bad id would
-  // otherwise 400 its whole batch and silently drop 9 valid SKUs
-  const ids=all.filter(id=>/^\d{4,12}$/.test(id));
-  const skipped=all.length-ids.length;
-  if(!ids.length){toast('No active Myntra SKUs with numeric Style IDs','red');return;}
-  const mins=Math.max(1,Math.round(ids.length*0.8/60));
-  if(!confirm(`Fetch live Myntra prices for ${ids.length} style${ids.length>1?'s':''}?${skipped?` (${skipped} non-numeric Style ID${skipped>1?'s':''} skipped.)`:''} Takes about ${mins} minute${mins>1?'s':''}.`))return;
-  _liveFetchActive=true;
-  const btn=el('fetch-live-btn');
-  const orig=btn?btn.innerHTML:'';
-  if(btn){btn.style.pointerEvents='none';btn.style.opacity='.7';}
-  let okTotal=0,failTotal=0,attempted=0,aborted='';
-  const errCounts={};
-  const countErr=(m,n)=>{const k=String(m||'fetch failed');errCounts[k]=(errCounts[k]||0)+(n||1);};
-  let notFound=0; // consecutive leading 404 batches ⇒ Edge Function missing
-  try{
-    for(let i=0;i<ids.length;i+=10){
-      const batch=ids.slice(i,i+10);
-      const batchStart=Date.now();
-      let rateWaits=0;
-      // Bounded retry: up to 3 rate-limit waits per batch, then count it
-      // failed and move on — never loop forever on a persistent 429
-      for(;;){
-        try{
-          const results=await _fetchLiveBatch(batch);
-          const r=_applyLiveResults(results);
-          okTotal+=r.ok;failTotal+=r.fail;
-          results.forEach(x=>{if(x&&!x.ok)countErr(x.error);});
-          notFound=-1; // any answered call proves the function is deployed
-        }catch(e){
-          if((e._status===429||/rate limit/i.test(e.message))&&rateWaits<3){
-            rateWaits++;
-            if(btn)btn.innerHTML=`Rate limited — waiting… (${rateWaits}/3)`;
-            await new Promise(r=>setTimeout(r,Math.max(5,e._retryAfter||30)*1000));
-            continue;
-          }
-          failTotal+=batch.length;
-          countErr(e.message,batch.length);
-          if(e._status===404&&notFound>=0)notFound++;
-        }
-        break;
-      }
-      attempted+=batch.length;
-      // Fail fast: the first two batches both 404ing means the Edge Function
-      // isn't deployed — every remaining batch would fail identically
-      if(notFound>=2){
-        aborted='The myntra-price Edge Function is not deployed to Supabase yet. Deploy it once (Dashboard → Edge Functions, or `supabase functions deploy myntra-price`), then fetch again.';
-        break;
-      }
-      const done=Math.min(i+10,ids.length);
-      if(btn)btn.innerHTML=`Fetching ${done}/${ids.length}…`;
-      const activePage=document.querySelector('.page.active')?.id?.replace('page-','');
-      if(!editId&&activePage==='skus')renderSKUs();
-      if(done%100===0)await save('live_prices');
-      // Pace under the server's 40 req/min limit even when responses are fast
-      const elapsed=Date.now()-batchStart;
-      if(elapsed<1600&&done<ids.length)await new Promise(r=>setTimeout(r,1600-elapsed));
-    }
-  }catch(e){
-    // Unexpected failure — still fall through to the summary below
-    countErr(e.message);
-  }finally{
-    _liveFetchActive=false;
-    if(btn){btn.innerHTML=orig;btn.style.pointerEvents='';btn.style.opacity='';}
-  }
-  // The outcome must ALWAYS be reported — each step guarded so a save or
-  // audit hiccup can't swallow the summary (the original silent-finish bug)
-  try{if(attempted)await save('live_prices');}catch(e){countErr('Saving results failed: '+e.message);}
-  try{audit('live_price_fetch',`Fetched Myntra live prices: ${okTotal} ok, ${failTotal} failed of ${ids.length} styles${skipped?` (${skipped} non-numeric skipped)`:''}${aborted?' — aborted: function not deployed':''}`);}catch(e){}
-  const activePage=document.querySelector('.page.active')?.id?.replace('page-','');
-  if(!editId&&activePage==='skus')renderSKUs();
-  if(failTotal||aborted||Object.keys(errCounts).length){
-    _showLiveFetchSummary({okTotal,failTotal,skipped,total:ids.length,notAttempted:Math.max(0,ids.length-attempted),errCounts,aborted});
-  }else{
-    toast(`Myntra prices: ${okTotal} fetched${skipped?`, ${skipped} skipped`:''}`,'green');
-  }
-}
-
-// Post-run summary modal — unlike a toast this stays until dismissed, so a
-// fully-failed run (e.g. Edge Function not deployed) can't end silently
-function _showLiveFetchSummary(sum){
-  const top=Object.entries(sum.errCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
-  const hint=sum.aborted
-    ||(top.length&&/not deployed|404/.test(top[0][0])?'The myntra-price Edge Function is not deployed to Supabase yet. Deploy it once (Dashboard → Edge Functions, or `supabase functions deploy myntra-price`), then fetch again.':'')
-    ||(top.length&&/blocked|challenged|site maintenance|scraper_template/i.test(top[0][0])?'Myntra is blocking direct server requests (it serves a "Site Maintenance" page to datacenter IPs). Configure a residential scraping proxy on the Edge Function — set the SCRAPER_TEMPLATE and SCRAPER_KEY secrets in Supabase, then fetch again.':'')
-    ||(top.length&&/rate limit/i.test(top[0][0])?'Rate limits kicked in — wait a minute and fetch again. Prices already fetched are kept.':'');
-  const chip=(txt,fg,bg)=>`<div style="padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;background:${bg};color:${fg}">${txt}</div>`;
-  setModal(`<div class="mhdr"><div class="mtl">${icon('refresh',{size:16})} Myntra Price Fetch</div><span class="mclose" onclick="closeModal()">×</span></div>
-    <div class="mbody">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-        ${chip(`✓ ${sum.okTotal} fetched`,'var(--gr)','rgba(45,212,160,.12)')}
-        ${sum.failTotal?chip(`✕ ${sum.failTotal} failed`,'var(--re)','rgba(245,87,92,.12)'):''}
-        ${sum.skipped?chip(`${sum.skipped} skipped — non-numeric Style ID`,'var(--ac)','rgba(255,180,0,.12)'):''}
-        ${sum.notAttempted?chip(`${sum.notAttempted} not attempted`,'var(--tx3)','var(--s2)'):''}
-      </div>
-      ${hint?`<div class="info" style="font-size:12px;line-height:1.6">${esc(hint)}</div>`:''}
-      ${top.length?`<div style="font-size:11px;color:var(--tx2);margin-top:12px"><strong>Most common error${top.length>1?'s':''}:</strong>${top.map(([m,n])=>`<div style="margin-top:4px;font-family:var(--mono);font-size:10px;word-break:break-word">${n}× ${esc(m)}</div>`).join('')}</div>`:''}
-      ${sum.okTotal?`<div class="st" style="margin-top:12px">Fetched prices now show in the "Myntra ₹" column beside Cust. Paid (and on each mobile card).</div>`:''}
-    </div>
-    <div class="mfoot"><button class="btn bp" onclick="closeModal()">OK</button></div>`);
 }
 
 // Card overflow menu — mirrors toggleSkuMenu but targets the card's scm-<id>
@@ -10296,6 +10199,7 @@ async function handleRealtimeUpdate(key, newValue){
   // Display-only: repaint the SKU list so the Myntra ₹ column updates, but do
   // NOT add 'live_prices' to CALC_INPUT_TYPES — it never feeds calcSKU
   if(type==='live_prices'&&activePage==='skus'&&!editId) renderSKUs();
+  if(type==='live_status'&&activePage==='skus') renderLiveStatusBanner();
   if(key===DB_TASK_KEY||key===DB_COMPLETED_TASK_KEY){
     if(activePage==='dashboard') renderDashTasks();
   }
@@ -10324,14 +10228,8 @@ function applyRealtimeData(type, value){
         users=value; applyDefaultUsers(); return true;
       }
       case 'thresholds': THRESHOLDS=value; return true;
-      case 'live_prices':
-        if(value&&typeof value==='object'){
-          // During an active bulk fetch, merge (local wins) so a remote blob
-          // replace can't discard prices fetched here but not yet saved
-          LIVE_PRICES=_liveFetchActive?{...value,...LIVE_PRICES}:value;
-          return true;
-        }
-        return false;
+      case 'live_prices': if(value&&typeof value==='object'){LIVE_PRICES=value; return true;} return false;
+      case 'live_status': if(value&&typeof value==='object'){LIVE_STATUS=value; return true;} return false;
       case 'categories': CATS=value; return true;
       case 'levels': LEVELS=value; return true;
       case 'cat_levels': CAT_LEVEL=value; return true;

@@ -106,6 +106,5 @@ the shared `pd_live_prices` store — the exact place the app's Myntra ₹ colum
 reads from, so the app updates live. It never changes your SKUs, costs, or any
 other data; it only writes live prices.
 
-The price-reading logic in `parse.mjs` is a mirror of the app's
-`supabase/functions/myntra-price/parse.ts` and is kept in sync by an automated
-test in the main project.
+The price-reading logic lives in `parse.mjs` and is unit-tested in the main
+project (`tests/edge-functions/myntra-fetch-parse.test.js`).

@@ -15,6 +15,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { hostname } from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import { fingerprintHtml, fingerprintSummary, parseMyntraPrice } from "./parse.mjs";
 import { validateCredentials } from "./config.mjs";
@@ -50,6 +51,7 @@ function loadConfig() {
 }
 
 const LIVE_KEY = "pd_live_prices";
+const STATUS_KEY = "pd_live_status";
 // Browser-like headers so Myntra serves the full PDP (matches the Edge Function).
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -116,18 +118,30 @@ async function readLivePrices(db) {
   return (data && data.value && typeof data.value === "object") ? data.value : {};
 }
 
+async function ping(db, key) {
+  // Ping pd_sync so every open app/phone refreshes in realtime — same
+  // mechanism the app uses (index.html dbSet).
+  await db.from("pd_sync").upsert({ key, updated_at: new Date().toISOString() }, { onConflict: "key" })
+    .then(() => {}, () => {});
+}
+
 async function writeLivePrices(db, value) {
-  const now = new Date().toISOString();
   const { error } = await db
     .from("app_data")
-    .upsert({ key: LIVE_KEY, value, updated_at: now }, { onConflict: "key" });
+    .upsert({ key: LIVE_KEY, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
   if (error) throw new Error(`write failed: ${error.message}`);
-  // Ping pd_sync so every open app/phone refreshes the column in realtime —
-  // same mechanism the app uses (index.html dbSet).
-  await db.from("pd_sync").upsert({ key: LIVE_KEY, updated_at: now }, { onConflict: "key" }).then(
-    () => {},
-    () => {},
-  );
+  await ping(db, LIVE_KEY);
+}
+
+// Report run progress into pd_live_status so the app can show a live banner
+// (and detect "laptop turned off" via a stale heartbeat: `ts`). Best-effort —
+// a status write must never break the actual price run.
+async function writeStatus(db, status) {
+  try {
+    const value = { ...status, ts: Date.now() };
+    await db.from("app_data").upsert({ key: STATUS_KEY, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    await ping(db, STATUS_KEY);
+  } catch { /* ignore — status is cosmetic */ }
 }
 
 async function main() {
@@ -148,6 +162,10 @@ async function main() {
   let ok = 0, fail = 0, done = 0;
   const errSample = {};
   const queue = [...ids];
+  const startedAt = new Date().toISOString();
+  const src = hostname() || "a laptop";
+  // Announce the run so the app shows a live progress banner.
+  await writeStatus(db, { running: true, total: ids.length, done: 0, ok: 0, fail: 0, startedAt, source: src });
 
   const worker = async () => {
     while (queue.length) {
@@ -170,15 +188,32 @@ async function main() {
       if (done % 25 === 0 || done === ids.length) {
         process.stdout.write(`\r  ${done}/${ids.length}  (${ok} ok, ${fail} failed)   `);
       }
-      // Periodic checkpoint so a long run isn't lost if the laptop sleeps.
+      // Periodic checkpoint so a long run isn't lost if the laptop sleeps, and
+      // a status heartbeat so the app's banner shows progress (and can detect
+      // a laptop that went off mid-run via the stale `ts`).
+      if (done % 50 === 0) {
+        await writeStatus(db, { running: true, total: ids.length, done, ok, fail, startedAt, source: src });
+      }
       if (done % 200 === 0) await writeLivePrices(db, live);
       const elapsed = Date.now() - started;
       if (elapsed < cfg.PACING_MS) await sleep(cfg.PACING_MS - elapsed);
     }
   };
 
-  await Promise.all(Array.from({ length: Math.max(1, cfg.MAX_CONCURRENCY) }, worker));
+  let crashed = null;
+  try {
+    await Promise.all(Array.from({ length: Math.max(1, cfg.MAX_CONCURRENCY) }, worker));
+  } catch (e) {
+    crashed = e;
+  }
   await writeLivePrices(db, live);
+  // Final status — running:false so the app switches the banner to
+  // "last updated N ago". Always written, even if the run threw.
+  await writeStatus(db, {
+    running: false, total: ids.length, done, ok, fail,
+    startedAt, finishedAt: new Date().toISOString(), source: src,
+  });
+  if (crashed) throw crashed;
 
   console.log(`\nDone: ${ok} fetched, ${fail} failed of ${ids.length}.`);
   if (fail) {

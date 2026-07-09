@@ -1,11 +1,10 @@
-// Plain-JS mirror of the pure price parser in
-// supabase/functions/myntra-price/parse.ts — used by the self-hosted laptop
-// fetcher (fetch-prices.mjs), which runs on plain Node with no TS toolchain.
-//
-// KEEP IN SYNC with parse.ts. The function bodies are copied verbatim (only
-// TypeScript type annotations removed); tests/edge-functions/myntra-fetch-sync.test.js
-// asserts the distinctive source strings below appear in BOTH files and will
-// fail loudly if they drift.
+// Myntra PDP price parser for the self-hosted laptop fetcher (fetch-prices.mjs).
+// Myntra serves the selling price in several redundant places; parsing tries
+// them most- to least-structured so a markup change in one spot doesn't break
+// the whole thing: JSON-LD → embedded SPA state (window.__myx /
+// __INITIAL_STATE__ / pdpData, deep-walked) → raw regex keys → og:price meta →
+// rendered pdp-price DOM node. Unit-tested in
+// tests/edge-functions/myntra-fetch-parse.test.js.
 
 // Prices are INR integers on Myntra; anything non-finite, non-positive, or
 // absurdly large is a parse artifact, not a price.
