@@ -8,6 +8,7 @@ import {
   fingerprintHtml,
   fingerprintSummary,
   debugSnippet,
+  buildScraperUrl,
 } from '../../supabase/functions/myntra-price/parse.ts';
 
 // These exercise the pure parsing/validation logic — they do NOT call
@@ -201,6 +202,29 @@ describe('fingerprintHtml / fingerprintSummary — failure diagnostics', () => {
     expect(fp.priceKeys).toContain('mrp');
     expect(fingerprintSummary(fp)).toMatch(/pdp-price/);
     expect(fingerprintSummary(fp)).toMatch(/keys:mrp/);
+  });
+});
+
+describe('buildScraperUrl', () => {
+  const SCRAPERAPI = 'https://api.scraperapi.com/?api_key={key}&url={url}&country_code=in';
+  it('substitutes key and URL-encodes the target', () => {
+    const out = buildScraperUrl(SCRAPERAPI, 'SECRET123', 'https://www.myntra.com/40451814');
+    expect(out).toBe('https://api.scraperapi.com/?api_key=SECRET123&url=https%3A%2F%2Fwww.myntra.com%2F40451814&country_code=in');
+  });
+  it('encodes gateway URLs with slashes', () => {
+    const out = buildScraperUrl(SCRAPERAPI, 'K', 'https://www.myntra.com/gateway/v2/product/40451814');
+    expect(out).toContain('url=https%3A%2F%2Fwww.myntra.com%2Fgateway%2Fv2%2Fproduct%2F40451814');
+    expect(out).not.toContain('{url}');
+    expect(out).not.toContain('{key}');
+  });
+  it('works with a ScrapingBee-style template and a missing key', () => {
+    const bee = 'https://app.scrapingbee.com/api/v1/?api_key={key}&url={url}';
+    const out = buildScraperUrl(bee, '', 'https://www.myntra.com/1');
+    expect(out).toBe('https://app.scrapingbee.com/api/v1/?api_key=&url=https%3A%2F%2Fwww.myntra.com%2F1');
+  });
+  it('returns null for a template without the {url} placeholder', () => {
+    expect(buildScraperUrl('https://x.com/?k={key}', 'K', 'https://www.myntra.com/1')).toBeNull();
+    expect(buildScraperUrl('', 'K', 'https://www.myntra.com/1')).toBeNull();
   });
 });
 

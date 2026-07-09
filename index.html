@@ -5307,6 +5307,7 @@ function _showLiveFetchSummary(sum){
   const top=Object.entries(sum.errCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
   const hint=sum.aborted
     ||(top.length&&/not deployed|404/.test(top[0][0])?'The myntra-price Edge Function is not deployed to Supabase yet. Deploy it once (Dashboard → Edge Functions, or `supabase functions deploy myntra-price`), then fetch again.':'')
+    ||(top.length&&/blocked|challenged|site maintenance|scraper_template/i.test(top[0][0])?'Myntra is blocking direct server requests (it serves a "Site Maintenance" page to datacenter IPs). Configure a residential scraping proxy on the Edge Function — set the SCRAPER_TEMPLATE and SCRAPER_KEY secrets in Supabase, then fetch again.':'')
     ||(top.length&&/rate limit/i.test(top[0][0])?'Rate limits kicked in — wait a minute and fetch again. Prices already fetched are kept.':'');
   const chip=(txt,fg,bg)=>`<div style="padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;background:${bg};color:${fg}">${txt}</div>`;
   setModal(`<div class="mhdr"><div class="mtl">${icon('refresh',{size:16})} Myntra Price Fetch</div><span class="mclose" onclick="closeModal()">×</span></div>
