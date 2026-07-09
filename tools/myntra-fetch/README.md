@@ -85,6 +85,16 @@ If you ever see lots of "blocked / Site Maintenance" errors, Myntra is
 rate-limiting that connection — raise `PACING_MS` (e.g. `3000`) or run from a
 different internet connection.
 
+## Troubleshooting
+
+- **"Missing SUPABASE_URL / SUPABASE_ANON"** — you haven't created `config.json`
+  yet (only `config.example.json` exists). Copy it: `copy config.example.json config.json`
+  (Windows) / `cp config.example.json config.json` (Mac/Linux).
+- **"Your SUPABASE_ANON key contains an invalid character…"** — the key got a
+  stray character (often a `•` bullet) when it was copied from a hidden/masked
+  field. Open `config.json` and re-paste the key as plain text — it should be one
+  long line of letters, numbers and dots only, starting with `eyJ`.
+
 ---
 
 ## How it works (for the curious)
