@@ -17,6 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { fingerprintHtml, fingerprintSummary, parseMyntraPrice } from "./parse.mjs";
+import { validateCredentials } from "./config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -29,20 +30,23 @@ function loadConfig() {
   } catch {
     /* no config.json — rely on env / defaults */
   }
-  const cfg = {
-    SUPABASE_URL: process.env.SUPABASE_URL || file.SUPABASE_URL,
-    SUPABASE_ANON: process.env.SUPABASE_ANON || file.SUPABASE_ANON,
+  let creds;
+  try {
+    creds = validateCredentials(
+      process.env.SUPABASE_URL || file.SUPABASE_URL,
+      process.env.SUPABASE_ANON || file.SUPABASE_ANON,
+    );
+  } catch (e) {
+    console.error(e.message);
+    process.exit(2);
+  }
+  return {
+    SUPABASE_URL: creds.url,
+    SUPABASE_ANON: creds.anon,
     PACING_MS: Number(process.env.PACING_MS || file.PACING_MS || 1500),
     MAX_CONCURRENCY: Number(process.env.MAX_CONCURRENCY || file.MAX_CONCURRENCY || 2),
     LIMIT: Number(process.env.LIMIT || file.LIMIT || 0), // 0 = all
   };
-  if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON) {
-    console.error(
-      "Missing SUPABASE_URL / SUPABASE_ANON. Copy config.example.json to config.json and fill them in.",
-    );
-    process.exit(2);
-  }
-  return cfg;
 }
 
 const LIVE_KEY = "pd_live_prices";
