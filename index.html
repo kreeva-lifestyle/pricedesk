@@ -5129,8 +5129,12 @@ function _livePriceCell(s,brand,c){
 }
 
 function _livePriceCardCell(s,c){
+  // Mirror the desktop column's three states — an error or a never-fetched
+  // style must be VISIBLE on mobile, not an absent cell
+  if(!s.styleId)return '';
   const i=_livePriceInfo(s,c);
-  if(i.state!=='ok')return '';
+  if(i.state==='none')return `<div class="skc-cell"><span>Myntra ₹</span><b style="color:var(--tx3);font-weight:400">—</b></div>`;
+  if(i.state==='error')return `<div class="skc-cell"><span>Myntra ₹</span><b style="color:var(--re)" title="${esc(i.err)}">✕ n/a</b></div>`;
   const col=i.match?'var(--gr)':(i.diff<0?'var(--re)':'var(--ac)');
   const delta=i.match?'✓':`${i.diff>0?'▲':'▼'}₹${Math.abs(i.diff).toLocaleString('en-IN')}`;
   return `<div class="skc-cell"><span>Myntra ₹</span><b style="color:${col}${i.stale?';opacity:.55':''}">₹${Math.round(i.price).toLocaleString('en-IN')} <small style="font-size:9px">${delta}</small></b></div>`;
@@ -5148,7 +5152,9 @@ async function _fetchLiveBatch(styleIds){
   });
   const data=await resp.json().catch(()=>({}));
   if(!resp.ok){
-    const err=new Error(data.error||`myntra-price HTTP ${resp.status}`);
+    const err=new Error(resp.status===404
+      ?'myntra-price Edge Function not deployed (404)'
+      :(data.error||`myntra-price HTTP ${resp.status}`));
     err._status=resp.status;
     err._retryAfter=parseInt(resp.headers.get('Retry-After')||'',10)||0;
     throw err;
@@ -5175,6 +5181,25 @@ function _applyLiveResults(results){
   });
   return {ok,fail};
 }
+
+// Diagnostics helper — run `await myntraDebug('40451814')` in the browser
+// console to see exactly what Myntra serves the Edge Function (title + a
+// price-focused page excerpt), so the parser can be tuned to the live markup.
+window.myntraDebug=async function(styleId){
+  const sid=String(styleId||'').trim();
+  if(!/^\d{4,12}$/.test(sid)){console.warn('Pass a numeric Style ID');return;}
+  const resp=await fetch(`${SUPABASE_URL}/functions/v1/myntra-price`,{
+    method:'POST',
+    headers:{'Authorization':`Bearer ${SUPABASE_ANON}`,'apikey':SUPABASE_ANON,'Content-Type':'application/json'},
+    body:JSON.stringify({styleIds:[sid],debug:true}),
+  });
+  const data=await resp.json().catch(()=>({}));
+  const r=(data.results||[])[0]||data;
+  console.log('%cmyntra-price debug for '+sid,'font-weight:bold');
+  console.log('result:',{ok:r.ok,price:r.price,mrp:r.mrp,strategy:r.strategy,error:r.error});
+  console.log('page excerpt:\n'+(r.debug||'(none)'));
+  return r;
+};
 
 async function fetchLivePrice(styleId){
   const sid=String(styleId).trim();
@@ -5209,7 +5234,10 @@ async function fetchAllLivePrices(){
   const btn=el('fetch-live-btn');
   const orig=btn?btn.innerHTML:'';
   if(btn){btn.style.pointerEvents='none';btn.style.opacity='.7';}
-  let okTotal=0,failTotal=0;
+  let okTotal=0,failTotal=0,attempted=0,aborted='';
+  const errCounts={};
+  const countErr=(m,n)=>{const k=String(m||'fetch failed');errCounts[k]=(errCounts[k]||0)+(n||1);};
+  let notFound=0; // consecutive leading 404 batches ⇒ Edge Function missing
   try{
     for(let i=0;i<ids.length;i+=10){
       const batch=ids.slice(i,i+10);
@@ -5222,6 +5250,8 @@ async function fetchAllLivePrices(){
           const results=await _fetchLiveBatch(batch);
           const r=_applyLiveResults(results);
           okTotal+=r.ok;failTotal+=r.fail;
+          results.forEach(x=>{if(x&&!x.ok)countErr(x.error);});
+          notFound=-1; // any answered call proves the function is deployed
         }catch(e){
           if((e._status===429||/rate limit/i.test(e.message))&&rateWaits<3){
             rateWaits++;
@@ -5230,7 +5260,16 @@ async function fetchAllLivePrices(){
             continue;
           }
           failTotal+=batch.length;
+          countErr(e.message,batch.length);
+          if(e._status===404&&notFound>=0)notFound++;
         }
+        break;
+      }
+      attempted+=batch.length;
+      // Fail fast: the first two batches both 404ing means the Edge Function
+      // isn't deployed — every remaining batch would fail identically
+      if(notFound>=2){
+        aborted='The myntra-price Edge Function is not deployed to Supabase yet. Deploy it once (Dashboard → Edge Functions, or `supabase functions deploy myntra-price`), then fetch again.';
         break;
       }
       const done=Math.min(i+10,ids.length);
@@ -5242,13 +5281,47 @@ async function fetchAllLivePrices(){
       const elapsed=Date.now()-batchStart;
       if(elapsed<1600&&done<ids.length)await new Promise(r=>setTimeout(r,1600-elapsed));
     }
-    await save('live_prices');
-    audit('live_price_fetch',`Fetched Myntra live prices: ${okTotal} ok, ${failTotal} failed of ${ids.length} styles${skipped?` (${skipped} non-numeric skipped)`:''}`);
-    toast(`Myntra prices: ${okTotal} fetched${failTotal?`, ${failTotal} failed`:''}${skipped?`, ${skipped} skipped`:''}`,failTotal?'red':'green');
+  }catch(e){
+    // Unexpected failure — still fall through to the summary below
+    countErr(e.message);
   }finally{
     _liveFetchActive=false;
     if(btn){btn.innerHTML=orig;btn.style.pointerEvents='';btn.style.opacity='';}
   }
+  // The outcome must ALWAYS be reported — each step guarded so a save or
+  // audit hiccup can't swallow the summary (the original silent-finish bug)
+  try{if(attempted)await save('live_prices');}catch(e){countErr('Saving results failed: '+e.message);}
+  try{audit('live_price_fetch',`Fetched Myntra live prices: ${okTotal} ok, ${failTotal} failed of ${ids.length} styles${skipped?` (${skipped} non-numeric skipped)`:''}${aborted?' — aborted: function not deployed':''}`);}catch(e){}
+  const activePage=document.querySelector('.page.active')?.id?.replace('page-','');
+  if(!editId&&activePage==='skus')renderSKUs();
+  if(failTotal||aborted||Object.keys(errCounts).length){
+    _showLiveFetchSummary({okTotal,failTotal,skipped,total:ids.length,notAttempted:Math.max(0,ids.length-attempted),errCounts,aborted});
+  }else{
+    toast(`Myntra prices: ${okTotal} fetched${skipped?`, ${skipped} skipped`:''}`,'green');
+  }
+}
+
+// Post-run summary modal — unlike a toast this stays until dismissed, so a
+// fully-failed run (e.g. Edge Function not deployed) can't end silently
+function _showLiveFetchSummary(sum){
+  const top=Object.entries(sum.errCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const hint=sum.aborted
+    ||(top.length&&/not deployed|404/.test(top[0][0])?'The myntra-price Edge Function is not deployed to Supabase yet. Deploy it once (Dashboard → Edge Functions, or `supabase functions deploy myntra-price`), then fetch again.':'')
+    ||(top.length&&/rate limit/i.test(top[0][0])?'Rate limits kicked in — wait a minute and fetch again. Prices already fetched are kept.':'');
+  const chip=(txt,fg,bg)=>`<div style="padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;background:${bg};color:${fg}">${txt}</div>`;
+  setModal(`<div class="mhdr"><div class="mtl">${icon('refresh',{size:16})} Myntra Price Fetch</div><span class="mclose" onclick="closeModal()">×</span></div>
+    <div class="mbody">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        ${chip(`✓ ${sum.okTotal} fetched`,'var(--gr)','rgba(45,212,160,.12)')}
+        ${sum.failTotal?chip(`✕ ${sum.failTotal} failed`,'var(--re)','rgba(245,87,92,.12)'):''}
+        ${sum.skipped?chip(`${sum.skipped} skipped — non-numeric Style ID`,'var(--ac)','rgba(255,180,0,.12)'):''}
+        ${sum.notAttempted?chip(`${sum.notAttempted} not attempted`,'var(--tx3)','var(--s2)'):''}
+      </div>
+      ${hint?`<div class="info" style="font-size:12px;line-height:1.6">${esc(hint)}</div>`:''}
+      ${top.length?`<div style="font-size:11px;color:var(--tx2);margin-top:12px"><strong>Most common error${top.length>1?'s':''}:</strong>${top.map(([m,n])=>`<div style="margin-top:4px;font-family:var(--mono);font-size:10px;word-break:break-word">${n}× ${esc(m)}</div>`).join('')}</div>`:''}
+      ${sum.okTotal?`<div class="st" style="margin-top:12px">Fetched prices now show in the "Myntra ₹" column beside Cust. Paid (and on each mobile card).</div>`:''}
+    </div>
+    <div class="mfoot"><button class="btn bp" onclick="closeModal()">OK</button></div>`);
 }
 
 // Card overflow menu — mirrors toggleSkuMenu but targets the card's scm-<id>
