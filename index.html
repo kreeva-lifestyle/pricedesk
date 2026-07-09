@@ -1481,6 +1481,16 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
         <option value="healthy">Healthy</option>
       </select>
       <select id="f-tag" class="filter-select" onchange="renderSKUs()"><option value="">All Tags</option></select>
+      <select id="f-live" class="filter-select" onchange="renderSKUs()">
+        <option value="">Myntra ₹: All</option>
+        <option value="match">✓ Price match</option>
+        <option value="above">▲ Above Cust. Paid</option>
+        <option value="below">▼ Below Cust. Paid</option>
+        <option value="oos">Out of stock</option>
+        <option value="nodisc">⚠ Set discount</option>
+        <option value="error">✕ Fetch error</option>
+        <option value="none">— Not fetched</option>
+      </select>
       <div class="filter-sep"></div>
       <span class="filter-label">Profit ₹</span>
       <input id="f-profit-min" class="filter-select" type="number" placeholder="Min" style="width:70px;min-width:0" oninput="debouncedRenderSKUs()">
@@ -4804,6 +4814,7 @@ function filteredSKUs(){
   const fCat=el('f-cat')?.value||'';
   const fStatus=el('f-status')?.value||'';
   const fTag=el('f-tag')?.value||'';
+  const fLive=el('f-live')?.value||'';
   const fProfitMin=el('f-profit-min')?.value;
   const fProfitMax=el('f-profit-max')?.value;
   const hasProfitFilter=fProfitMin!==''||fProfitMax!=='';
@@ -4823,6 +4834,17 @@ function filteredSKUs(){
       const brand=brands.find(b=>b.id===s.brandId);
       if(brand?.model!==_skuMPTab)return false;
     }
+    // Myntra ₹ state filter — only Myntra SKUs can match (the column shows
+    // "—" for everything else, so other marketplaces are excluded)
+    if(fLive){
+      const brand=brands.find(b=>b.id===s.brandId);
+      if(!brand||brand.model!=='myntra')return false;
+      const i=_livePriceInfo(s,calcSKU(s));
+      if(fLive==='match'){if(!(i.state==='ok'&&i.match))return false;}
+      else if(fLive==='above'){if(!(i.state==='ok'&&!i.match&&i.diff>0))return false;}
+      else if(fLive==='below'){if(!(i.state==='ok'&&!i.match&&i.diff<0))return false;}
+      else if(i.state!==fLive)return false; // oos / nodisc / error / none
+    }
     if(fStatus||hasProfitFilter){
       const c=calcSKU(s);
       if(fStatus==='breached'&&(!c.isBreach||s.ignoreThreshold))return false;
@@ -4838,7 +4860,7 @@ function filteredSKUs(){
 
 function renderActiveFilterChips(){
   const chips=[];
-  const labels={'f-brand':'Brand','f-cat':'Category','f-status':'Status'};
+  const labels={'f-brand':'Brand','f-cat':'Category','f-status':'Status','f-live':'Myntra ₹'};
   // Search text chip
   const q=el('f-search')?.value||'';
   if(q) chips.push(`<span class="af-chip" onclick="el('f-search').value='';renderSKUs()">Search: "${esc(q)}" ${icon('x',{size:11})}</span>`);
@@ -4849,7 +4871,7 @@ function renderActiveFilterChips(){
   }
   const fTag=el('f-tag')?.value||'';
   if(fTag) chips.push(`<span class="af-chip" onclick="el('f-tag').value='';renderSKUs()">Tag: ${esc(fTag)} ${icon('x',{size:10})}</span>`);
-  ['f-brand','f-cat','f-status'].forEach(fid=>{
+  ['f-brand','f-cat','f-status','f-live'].forEach(fid=>{
     const e=el(fid);
     if(e&&e.value){
       const text=e.options[e.selectedIndex]?.text||e.value;
@@ -4870,7 +4892,7 @@ function renderActiveFilterChips(){
 }
 
 function clearFilters(){
-  ['f-search','f-brand','f-cat','f-status','f-tag','f-profit-min','f-profit-max'].forEach(fid=>{const e=el(fid);if(e)e.value='';});
+  ['f-search','f-brand','f-cat','f-status','f-tag','f-live','f-profit-min','f-profit-max'].forEach(fid=>{const e=el(fid);if(e)e.value='';});
   // Reset marketplace tab to All
   _skuMPTab='';
   document.querySelectorAll('.sku-mp-tab').forEach(t=>t.classList.remove('active'));
@@ -5026,7 +5048,7 @@ function renderSKUs(){
     </tr>`;
   });
   if(editId==='new')html+=renderNewRow();
-  const hasFilters=!!(el('f-search')?.value||el('f-brand')?.value||el('f-cat')?.value||el('f-status')?.value||el('f-tag')?.value||el('f-profit-min')?.value||el('f-profit-max')?.value||_skuMPTab);
+  const hasFilters=!!(el('f-search')?.value||el('f-brand')?.value||el('f-cat')?.value||el('f-status')?.value||el('f-tag')?.value||el('f-live')?.value||el('f-profit-min')?.value||el('f-profit-max')?.value||_skuMPTab);
   const emptyMsg=hasFilters
     ?`<tr><td colspan="16" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs match your filters. <a href="#" onclick="clearFilters();return false" style="color:var(--ac)">Clear all filters</a></td></tr>`
     :`<tr><td colspan="16" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs yet. Click <a href="#" onclick="addRow();return false" style="color:var(--ac)">+ Add SKU</a> to get started.</td></tr>`;
@@ -5266,7 +5288,7 @@ function toggleFilters(){
 function updateFilterCount(){
   const badge=el('filter-count-badge'), btn=el('filter-toggle');
   if(!badge)return;
-  const n=['f-brand','f-cat','f-status','f-tag','f-profit-min','f-profit-max']
+  const n=['f-brand','f-cat','f-status','f-tag','f-live','f-profit-min','f-profit-max']
     .reduce((a,id)=>a+((el(id)?.value||'')!==''?1:0),0);
   badge.textContent=n; badge.style.display=n?'inline-flex':'none';
   if(btn) btn.classList.toggle('has-filters',n>0);
