@@ -1,0 +1,139 @@
+import { describe, it, expect } from 'vitest';
+import {
+  MAX_STYLE_IDS,
+  validateStyleIds,
+  parseMyntraPrice,
+  parseGatewayProduct,
+} from '../../supabase/functions/myntra-price/parse.ts';
+
+// These exercise the pure parsing/validation logic — they do NOT call
+// myntra.com or run the Deno serve handler.
+
+describe('validateStyleIds', () => {
+  it('accepts a list of numeric style ids', () => {
+    const r = validateStyleIds(['40451814', '40455542']);
+    expect(r.ok).toBe(true);
+    expect(r.ids).toEqual(['40451814', '40455542']);
+  });
+
+  it('accepts numbers and trims strings', () => {
+    const r = validateStyleIds([40451814, ' 40455542 ']);
+    expect(r.ok).toBe(true);
+    expect(r.ids).toEqual(['40451814', '40455542']);
+  });
+
+  it('dedupes repeated ids', () => {
+    const r = validateStyleIds(['40451814', '40451814']);
+    expect(r.ids).toEqual(['40451814']);
+  });
+
+  it('rejects empty, non-array, and oversize inputs', () => {
+    expect(validateStyleIds([]).ok).toBe(false);
+    expect(validateStyleIds('40451814').ok).toBe(false);
+    expect(validateStyleIds(undefined).ok).toBe(false);
+    expect(validateStyleIds(Array.from({ length: MAX_STYLE_IDS + 1 }, (_, i) => String(10000000 + i))).ok).toBe(false);
+  });
+
+  it('rejects non-numeric ids (path traversal / URL smuggling)', () => {
+    expect(validateStyleIds(['../gateway/secret']).ok).toBe(false);
+    expect(validateStyleIds(['40451814?x=1']).ok).toBe(false);
+    expect(validateStyleIds(['abc123']).ok).toBe(false);
+    expect(validateStyleIds(['123']).ok).toBe(false); // too short
+  });
+
+  it('quarantines malformed ids per-id instead of poisoning the batch', () => {
+    const r = validateStyleIds(['40451814', 'TBD', '40455542']);
+    expect(r.ok).toBe(true);
+    expect(r.ids).toEqual(['40451814', '40455542']);
+    expect(r.invalid).toEqual(['TBD']);
+  });
+
+  it('reports invalid ids when nothing valid remains', () => {
+    const r = validateStyleIds(['TBD', 'MYN-123']);
+    expect(r.ok).toBe(false);
+    expect(r.invalid).toEqual(['TBD', 'MYN-123']);
+  });
+});
+
+describe('parseMyntraPrice — JSON-LD strategy', () => {
+  const ldPage = `<html><head>
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"Product","name":"Fusionic Lehenga","offers":{"@type":"Offer","priceCurrency":"INR","price":"2951","availability":"InStock"}}</script>
+    </head><body><span>"mrp":9000</span></body></html>`;
+
+  it('extracts price from a Product offers block', () => {
+    const r = parseMyntraPrice(ldPage);
+    expect(r).toMatchObject({ price: 2951, strategy: 'json-ld' });
+    expect(r.mrp).toBe(9000);
+  });
+
+  it('handles an array of JSON-LD nodes and offer arrays', () => {
+    const page = `<script type="application/ld+json">[{"@type":"BreadcrumbList"},{"@type":"Product","offers":[{"price":1499}]}]</script>`;
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 1499, strategy: 'json-ld' });
+  });
+
+  it('skips malformed JSON-LD and falls through', () => {
+    const page = `<script type="application/ld+json">{broken json</script>
+      <script>window.__myx = {"pdpData":{"price":{"discounted":2951,"mrp":9000}}};</script>`;
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 2951, mrp: 9000, strategy: '__myx' });
+  });
+});
+
+describe('parseMyntraPrice — __myx state strategy', () => {
+  it('extracts discounted price and mrp from pdpData', () => {
+    const page = `<script>window.__myx = {"pdpData":{"id":40451814,"name":"X","price":{"mrp":9000,"discounted":2951}},"other":{"nested":"{\\"quoted\\":1}"}};</script>`;
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 2951, mrp: 9000, strategy: '__myx' });
+  });
+
+  it('survives braces inside string values (balanced-brace scan)', () => {
+    const page = `<script>window.__myx = {"pdpData":{"desc":"has { and } inside","price":{"discounted":777,"mrp":2000}}};</script>`;
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 777, mrp: 2000, strategy: '__myx' });
+  });
+});
+
+describe('parseMyntraPrice — regex + DOM fallbacks', () => {
+  it('falls back to raw "discounted" key', () => {
+    const page = `<script>var state={"style":{"mrp":9000,"prices":{"discounted":2951}}};</script>`;
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 2951, mrp: 9000, strategy: 'regex' });
+  });
+
+  it('parses the rendered pdp-price DOM node (screenshot markup)', () => {
+    const page = `<p class="pdp-discount-container"><span class="pdp-price" tabindex="0"><strong>₹2951</strong></span><span class="pdp-mrp"></span></p>`;
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 2951, strategy: 'dom' });
+  });
+
+  it('parses comma-grouped DOM prices', () => {
+    const page = `<span class="pdp-price"><strong>₹12,499</strong></span>`;
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 12499, strategy: 'dom' });
+  });
+
+  it('returns null for pages with no price (bot challenge, 404 page)', () => {
+    expect(parseMyntraPrice('<html><body>Access Denied</body></html>')).toBeNull();
+    expect(parseMyntraPrice('')).toBeNull();
+    expect(parseMyntraPrice(null)).toBeNull();
+  });
+
+  it('rejects absurd values instead of returning garbage', () => {
+    expect(parseMyntraPrice('<script>var x={"discounted":0};</script>')).toBeNull();
+    expect(parseMyntraPrice('<script>var x={"discounted":99999999999};</script>')).toBeNull();
+  });
+});
+
+describe('parseGatewayProduct', () => {
+  it('reads the documented style.price shape', () => {
+    const data = { style: { id: 40451814, mrp: 9000, price: { discounted: 2951, mrp: 9000 } } };
+    expect(parseGatewayProduct(data)).toMatchObject({ price: 2951, mrp: 9000, strategy: 'gateway' });
+  });
+
+  it('finds a nested price object anywhere in the tree', () => {
+    const data = { a: { b: [{ c: { price: { discounted: 1499 }, mrp: 4000 } }] } };
+    expect(parseGatewayProduct(data)).toMatchObject({ price: 1499, mrp: 4000 });
+  });
+
+  it('returns null when no price exists and survives cycles', () => {
+    const cyclic = { a: {} };
+    cyclic.a.back = cyclic;
+    expect(parseGatewayProduct(cyclic)).toBeNull();
+    expect(parseGatewayProduct(null)).toBeNull();
+    expect(parseGatewayProduct({ error: 'not found' })).toBeNull();
+  });
+});
