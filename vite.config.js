@@ -6,8 +6,18 @@ import { defineConfig } from 'vite';
 //   index.html's plain references (manifest.json) keep working.
 // - Inline scripts in index.html are classic (no type="module"),
 //   so Vite passes them through unchanged.
+// Stamp the build time into index.html so the app can show which version is
+// running (the source keeps the literal placeholder and displays "dev").
+const buildStamp = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+
 export default defineConfig({
   base: './',
+  plugins: [{
+    name: 'pd-build-stamp',
+    transformIndexHtml(html) {
+      return html.replace('__PD_BUILD__', buildStamp);
+    },
+  }],
   build: {
     outDir: 'dist',
     emptyOutDir: true,

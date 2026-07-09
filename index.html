@@ -1750,6 +1750,23 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
     <div class="shub-card" onclick="nav('activity')"><span class="ic-h" data-icon="history" data-size="20"></span><div><div class="shub-t">Activity</div><div class="shub-d">Audit log, SKU history & import log</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
     <div class="shub-card admin-only" onclick="nav('users')"><span class="ic-h" data-icon="lock" data-size="20"></span><div><div class="shub-t">Users</div><div class="shub-d">Team members & access roles</div></div><span class="shub-arrow ic-h" data-icon="chevronDown" data-size="16"></span></div>
   </div>
+  <!-- App update card — visible to every user; fetches the latest deploy
+       without removing/reinstalling the PWA -->
+  <div class="card mb16" id="app-update-card">
+    <div class="ch">
+      <div>
+        <div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="refresh" data-size="15"></span> App Updates</div>
+        <div class="st" style="margin-top:2px">Build <span id="app-build-stamp">—</span></div>
+      </div>
+    </div>
+    <div class="cb">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn bg bsm" onclick="checkForUpdates(true)"><span class="ic-h" data-icon="search" data-size="13"></span> Check for Updates</button>
+        <button class="btn bp bsm" onclick="updateApp()"><span class="ic-h" data-icon="refresh" data-size="13"></span> Update App (clear cache)</button>
+      </div>
+      <div class="st" style="margin-top:10px;line-height:1.6">Update App clears every cached file and reloads the newest deployed version — your data is safe in the cloud. Use it whenever the app looks stale; there is no need to remove and reinstall the PWA.</div>
+    </div>
+  </div>
   <div class="nav-sec admin-only" style="padding-left:2px;margin-bottom:8px"><span class="ic-h" data-icon="lock" data-size="12" style="opacity:.6"></span> App configuration <span class="st" style="font-weight:400;text-transform:none;letter-spacing:0">— admins only</span></div>
   <div class="g2 admin-only" id="app-config-section">
     <div>
@@ -10560,9 +10577,71 @@ async function sendAIChat(){
   sendBtn.disabled=false;
   msgs.scrollTop=msgs.scrollHeight;
 }
-// Service Worker registration
+// ── App updates ───────────────────────────────────────
+// The service worker is network-first, so a normal reload already picks up
+// new deploys. This section handles the stragglers: long-lived PWA windows
+// (periodic checks + "app updated" toast) and stale/corrupted caches (the
+// Settings "Update App" hard reset) — no more removing and reinstalling.
+const APP_BUILD='__PD_BUILD__'; // replaced with the build time by vite
+let _swReg=null,_updateToastShown=false;
+
+async function updateApp(){
+  toast('Updating app — clearing caches…','blue');
+  try{
+    if('serviceWorker' in navigator){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r=>r.unregister()));
+    }
+    if(window.caches){
+      const keys=await caches.keys();
+      await Promise.all(keys.map(k=>caches.delete(k)));
+    }
+  }catch(e){console.warn('updateApp cleanup failed:',e.message);}
+  // Cache-busting param defeats any HTTP-cached copy of index.html; init
+  // strips it back off the URL after the fresh load
+  location.href=location.pathname+'?upd='+Date.now();
+}
+
+async function checkForUpdates(manual){
+  if(!('serviceWorker' in navigator)){if(manual)toast('Updates are managed by the browser here','blue');return;}
+  try{
+    const reg=_swReg||await navigator.serviceWorker.getRegistration();
+    if(!reg){if(manual)toast('No update service on this page — a normal reload always fetches the latest version','blue');return;}
+    await reg.update();
+    if(reg.installing||reg.waiting){if(manual)toast('Update found — installing…','blue');}
+    else if(manual)toast('You are on the latest version','green');
+  }catch(e){if(manual)toast('Update check failed: '+esc(e.message),'red');}
+}
+
+function _notifyAppUpdated(){
+  if(_updateToastShown)return;
+  _updateToastShown=true;
+  toast('App updated — ','blue');
+  setTimeout(()=>{
+    const t=document.querySelector('.toast:last-child');
+    if(t)t.innerHTML+=`<button onclick="location.reload()" style="background:var(--ac);color:#000;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:2px">Reload for the new version</button>`;
+  },50);
+}
+
+// Clean the ?upd cache-buster off the URL + show which build is running
+if(/[?&]upd=/.test(location.search)&&!/[?&]reset=/.test(location.search))history.replaceState(null,'',location.pathname);
+(function(){const bs=document.getElementById('app-build-stamp');if(bs)bs.textContent=APP_BUILD.indexOf('__')===0?'dev':APP_BUILD;})();
+
+// Service Worker registration + update detection
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js').then(()=>console.log('SW registered')).catch(()=>{});
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    _swReg=reg;
+    console.log('SW registered');
+    // A new worker taking control mid-session means a fresh deploy landed
+    let hadController=!!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(hadController)_notifyAppUpdated();
+      hadController=true;
+    });
+    // Long-lived PWA windows: look for new deploys every 30 min + on focus
+    setInterval(()=>checkForUpdates(false),30*60*1000);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkForUpdates(false);});
+  }).catch(()=>{});
 }
 // Offline/Online detection
 const _offlineBar=document.getElementById('offline-bar');
