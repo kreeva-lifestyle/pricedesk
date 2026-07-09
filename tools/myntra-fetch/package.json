@@ -1,0 +1,19 @@
+{
+  "name": "pricedesk-myntra-fetch",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted Myntra live-price fetcher for PriceDesk — runs on your own laptop (residential IP) and writes prices to Supabase.",
+  "bin": {
+    "myntra-fetch": "fetch-prices.mjs"
+  },
+  "scripts": {
+    "start": "node fetch-prices.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
