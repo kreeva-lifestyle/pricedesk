@@ -34,7 +34,7 @@
 - `pd_brands`, `pd_categories`, `pd_commissions`, `pd_thresholds`: normalized per-row config (replaces same-named keys in `app_data`)
 - `pd_audit_log`: append-only audit trail (RLS restricts to INSERT+SELECT for anon)
 - `pd_sku_history`: per-change SKU history
-- `app_data`: Key-value config (remaining keys: `pd_logistics`, `pd_wireframe`, `pd_users`, `pd_sessions`, `pd_passkeys`, `pd_webauthn_challenges`, etc.)
+- `app_data`: Key-value config (remaining keys: `pd_logistics`, `pd_wireframe`, `pd_users`, `pd_sessions`, `pd_passkeys`, `pd_webauthn_challenges`, `pd_live_prices`, etc.)
 - `pd_sync`: Realtime notifications for `app_data` key changes (not used for normalized tables)
 - `pd_backups`: 7-day rolling daily backups
 
@@ -45,6 +45,7 @@
 - Note: EmailJS was removed entirely — no welcome/reset/alert emails. Password resets mint a shareable link (copy modal); new-user temp passwords shown in a copy modal
 - `claude-chat` — proxies to Anthropic API (needs `ANTHROPIC_API_KEY` env)
 - `batch-import` — atomic bulk SKU upsert; called by `confirmImport` with fallback to legacy `_doSaveSKUs`
+- `myntra-price` — server-side scrape of live Myntra selling prices by Style ID (max 10/call, per-IP rate limit in `pd_myntra_rate_limits`); parsing strategies (JSON-LD → `__myx` state → regex → `pdp-price` DOM, plus gateway JSON API fallback) live in pure `parse.ts` (Vitest-covered). Client stores results in `app_data` key `pd_live_prices` (`LIVE_PRICES` global, `{[styleId]:{price,mrp,ts,err}}`) shown in the SKU table's "Myntra ₹" column beside Cust. Paid — **display-only, never feeds `calcSKU`** (keep `live_prices` OUT of `CALC_INPUT_TYPES`)
 
 ## Critical Code Patterns
 - Per-row save functions (`dbSaveBrands`, `dbSaveCategories`, `dbSaveThresholds`, `dbSaveCommissions`, `dbSaveSKU`, `dbDeleteSKU`) write directly to their tables; failures throw rather than silently writing to blobs

@@ -1447,6 +1447,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
       <div class="sku-mp-tab" data-mp="amazon" onclick="switchSKUTab(this,'amazon')">Amazon</div>
     </div>
     <div class="sku-actions-wrap" style="display:flex;gap:6px;align-items:center">
+      <div class="btn bg bsm" id="fetch-live-btn" onclick="fetchAllLivePrices()" title="Fetch live selling prices from Myntra for all active Myntra SKUs"><span class="ic-h" data-icon="refresh" data-size="12"></span> Myntra ₹</div>
       <div class="btn bp bsm" onclick="addRow()">+ Add SKU</div>
       <div style="position:relative;display:inline-block" id="import-dropdown">
         <button class="btn bg bsm" onclick="toggleImportMenu()" style="min-width:80px">Import <span class="ic-h" data-icon="chevronDown" data-size="12"></span> </button>
@@ -1494,7 +1495,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
     <div class="st" id="sku-count"></div>
   </div>
   <div class="ss-wrap">
-    <table class="ss" style="width:100%;min-width:1250px">
+    <table class="ss" style="width:100%;min-width:1345px">
       <colgroup>
         <col style="width:100px"><!-- SKU -->
         <col style="width:90px"><!-- Style ID -->
@@ -1507,6 +1508,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
         <col style="width:80px"><!-- Discount -->
         <col style="width:95px"><!-- Seller Price -->
         <col style="width:95px"><!-- Customer Paid -->
+        <col style="width:95px"><!-- Myntra Live Price -->
         <col style="width:88px"><!-- Net Profit -->
         <col style="width:88px"><!-- If Delivered -->
         <col style="width:100px"><!-- Gross Settlement -->
@@ -1524,6 +1526,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
         <th class="sortable" onclick="sortSKUs('discount')" data-sort="discount">Discount % <span class="sort-arrow" id="sort-discount"></span></th>
         <th class="sortable" onclick="sortSKUs('sp')" data-sort="sp">Seller Price <span class="sort-arrow" id="sort-sp"></span></th>
         <th class="sortable" onclick="sortSKUs('custPaid')" data-sort="custPaid">Cust. Paid <span class="sort-arrow" id="sort-custPaid"></span></th>
+        <th class="sortable" onclick="sortSKUs('livePrice')" data-sort="livePrice" title="Live selling price scraped from Myntra — compare against Cust. Paid">Myntra ₹ <span class="sort-arrow" id="sort-livePrice"></span></th>
         <th class="sortable" onclick="sortSKUs('profit')" data-sort="profit">Net Profit <span class="sort-arrow" id="sort-profit"></span></th>
         <th class="sortable" onclick="sortSKUs('ifDelivered')" data-sort="ifDelivered">If Delivered <span class="sort-arrow" id="sort-ifDelivered"></span></th>
         <th class="sortable" onclick="sortSKUs('grossSettlement')" data-sort="grossSettlement">Gross Sett. <span class="sort-arrow" id="sort-grossSettlement"></span></th>
@@ -1970,6 +1973,7 @@ const DB_KEYS = {
   sku_history:    'pd_sku_history',
   bulk_imports:   'pd_bulk_imports',
   user_prefs:     'pd_user_preferences',
+  live_prices:    'pd_live_prices',
 };
 
 // Fire-and-forget pd_sync ping so OTHER devices learn that a per-row table
@@ -2958,7 +2962,7 @@ async function save(type, opts){
     // Save ALL data types sequentially
     const types=['skus','brands','users','thresholds','cat_levels',
       'comm_myntra','comm_ppmp','comm_cc','comm_amazon',
-      'logistics','wireframe'];
+      'logistics','wireframe','live_prices'];
     for(const t of types) await save(t);
     return;
   }
@@ -3055,6 +3059,7 @@ async function save(type, opts){
     logistics:   { gt: GT_DATA, rev: REVERSE_FEES, settings: LOGISTICS_SETTINGS, collFees: COLL_FEE_DATA },
     wireframe:   WF,
     alert:       ALERT_SETTINGS,
+    live_prices: LIVE_PRICES,
   };
   // Never let a users-save erase a stored password hash. Merge any missing
   // hashes back from the current DB copy first (defense-in-depth against the
@@ -3092,7 +3097,7 @@ async function loadFromStorage(){
     const loaded = {};
     const [skusResult, brandsResult, catResult, threshResult, usersResult,
            levelsResult, alertResult, commResult, logisticsResult,
-           wireframeResult] = await Promise.all([
+           wireframeResult, livePricesResult] = await Promise.all([
       dbLoadAllSKUs(),
       dbLoadAllBrands(),
       dbLoadAllCategories(),
@@ -3102,7 +3107,8 @@ async function loadFromStorage(){
       dbGet(DB_KEYS.alert).catch(()=>null),
       dbLoadAllCommissions(),
       dbGet(DB_KEYS.logistics).catch(()=>null),
-      dbGet(DB_KEYS.wireframe).catch(()=>null)
+      dbGet(DB_KEYS.wireframe).catch(()=>null),
+      dbGet(DB_KEYS.live_prices).catch(()=>null)
     ]);
     loaded.skus = skusResult;
     loaded.brands = brandsResult;
@@ -3111,6 +3117,7 @@ async function loadFromStorage(){
     loaded.alert = alertResult;
     loaded.logistics = logisticsResult;
     loaded.wireframe = wireframeResult;
+    loaded.live_prices = livePricesResult;
     if(catResult){ loaded.categories=catResult.cats; loaded.cat_levels=catResult.catLevel; }
     else {
       const [bc, bl] = await Promise.all([
@@ -3136,6 +3143,7 @@ async function loadFromStorage(){
     if(loaded.brands)      brands          = loaded.brands;
     if(loaded.thresholds)  THRESHOLDS      = loaded.thresholds;
     if(loaded.alert)       ALERT_SETTINGS  = loaded.alert;
+    if(loaded.live_prices) LIVE_PRICES     = loaded.live_prices;
     if(loaded.categories)  CATS            = loaded.categories;
     if(loaded.levels)      LEVELS          = loaded.levels;
     if(loaded.cat_levels)  CAT_LEVEL       = loaded.cat_levels;
@@ -3347,6 +3355,10 @@ let THRESHOLDS={
   'Sarees':300,'Co-Ords':250,'Jumpsuit':250,'Tops':150,'Kurtas':300,
 };
 let ALERT_SETTINGS={email:'',frequency:'Immediately on breach'};
+// Live Myntra selling prices keyed by Style ID — display-only (never feeds
+// calcSKU), fetched via the myntra-price Edge Function, synced as a blob.
+// Shape: { [styleId]: { price, mrp, ts, err } }
+let LIVE_PRICES={};
 
 // ═══════════════════════════════════════════════════════
 // BRANDS
@@ -4750,6 +4762,7 @@ function applySKUSort(list){
     else if(_skuSortCol==='profit'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.profitRs;vb=cb.profitRs;}
     else if(_skuSortCol==='ifDelivered'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.ifDelivered;vb=cb.ifDelivered;}
     else if(_skuSortCol==='grossSettlement'){const ca=calcSKU(a),cb=calcSKU(b);va=ca.grossSettlement;vb=cb.grossSettlement;}
+    else if(_skuSortCol==='livePrice'){va=LIVE_PRICES[String(a.styleId||'').trim()]?.price;vb=LIVE_PRICES[String(b.styleId||'').trim()]?.price;}
     else{va=a[_skuSortCol];vb=b[_skuSortCol];}
     if(typeof va==='string'&&typeof vb==='string') return va.localeCompare(vb)*dir;
     return ((va||0)-(vb||0))*dir;
@@ -4907,7 +4920,7 @@ function debouncedRenderSKUs(){
 }
 function renderSKUs(){
   if(!_dataReady){
-    const t=el('sku-body');if(t)t.innerHTML=`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)"><div style="animation:pulse 1.5s infinite">Loading SKUs...</div></td></tr>`;
+    const t=el('sku-body');if(t)t.innerHTML=`<tr><td colspan="16" style="text-align:center;padding:28px;color:var(--tx3)"><div style="animation:pulse 1.5s infinite">Loading SKUs...</div></td></tr>`;
     el('sku-count')&&(el('sku-count').textContent='');
     const pgEl=el('sku-pagination');if(pgEl)pgEl.innerHTML='';
     // Data still loading — retry so the table paints itself when ready
@@ -4964,6 +4977,7 @@ function renderSKUs(){
       <td class="mono">${s.discount||0}%</td>
       <td class="mono" style="color:var(--bl)">₹${Math.round(c.sp).toLocaleString('en-IN')}</td>
       <td class="mono">₹${Math.round(c.custPaid).toLocaleString('en-IN')}</td>
+      ${_livePriceCell(s,brand,c)}
       <td class="mono" style="color:${profColor};font-weight:600">₹${c.profitRs.toFixed(0)}</td>
       <td class="mono" style="color:${ifDelColor}">₹${c.ifDelivered.toFixed(0)}</td>
       <td class="mono" style="color:${brand&&brand.model==='myntra'?(c.grossSettlement>=0?'var(--bl)':'var(--re)'):'var(--tx3)'}">${brand&&brand.model==='myntra'?'₹'+c.grossSettlement.toFixed(0):'—'}</td>
@@ -4986,8 +5000,8 @@ function renderSKUs(){
   if(editId==='new')html+=renderNewRow();
   const hasFilters=!!(el('f-search')?.value||el('f-brand')?.value||el('f-cat')?.value||el('f-status')?.value||el('f-tag')?.value||el('f-profit-min')?.value||el('f-profit-max')?.value||_skuMPTab);
   const emptyMsg=hasFilters
-    ?`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs match your filters. <a href="#" onclick="clearFilters();return false" style="color:var(--ac)">Clear all filters</a></td></tr>`
-    :`<tr><td colspan="13" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs yet. Click <a href="#" onclick="addRow();return false" style="color:var(--ac)">+ Add SKU</a> to get started.</td></tr>`;
+    ?`<tr><td colspan="16" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs match your filters. <a href="#" onclick="clearFilters();return false" style="color:var(--ac)">Clear all filters</a></td></tr>`
+    :`<tr><td colspan="16" style="text-align:center;padding:28px;color:var(--tx3)">No SKUs yet. Click <a href="#" onclick="addRow();return false" style="color:var(--ac)">+ Add SKU</a> to get started.</td></tr>`;
   t.innerHTML=html||emptyMsg;
   if(cardsEl){
     const cardEmpty=hasFilters
@@ -5034,6 +5048,7 @@ function renderSKUCard(s,c,brand,statusIcon,profColor,ifDelColor){
       <div class="skc-cell"><span>MRP</span><b>₹${inr(c.mrp)}</b></div>
       <div class="skc-cell"><span>Seller</span><b style="color:var(--bl)">₹${inr(c.sp)}</b></div>
       <div class="skc-cell"><span>Cust Paid</span><b>₹${inr(c.custPaid)}</b></div>
+      ${isMyntra?_livePriceCardCell(s,c):''}
       <div class="skc-cell"><span>Cost</span><b>₹${inr(s.cost)}</b></div>
       <div class="skc-cell"><span>Markup</span><b>${s.markup}%</b></div>
       <div class="skc-cell"><span>Discount</span><b>${s.discount||0}%</b></div>
@@ -5053,6 +5068,170 @@ function renderSKUCard(s,c,brand,statusIcon,profColor,ifDelColor){
       </div>
     </div>
   </div>`;
+}
+
+// ── Live Myntra price (display-only) ─────────────────
+// Scraped selling prices from myntra.com shown beside Cust. Paid so drift
+// between what we computed and what Myntra actually charges is visible at a
+// glance. Never feeds calcSKU.
+const LIVE_PRICE_STALE_MS=24*60*60*1000;
+let _liveFetchActive=false;
+
+function _liveAgo(ts){
+  const m=Math.max(0,Math.round((Date.now()-ts)/60000));
+  if(m<1)return 'just now';
+  if(m<60)return m+'m ago';
+  const h=Math.round(m/60);
+  if(h<24)return h+'h ago';
+  return Math.round(h/24)+'d ago';
+}
+
+function _livePriceInfo(s,c){
+  const lp=LIVE_PRICES[String(s.styleId||'').trim()];
+  if(!lp)return {state:'none'};
+  if(lp.price==null)return {state:'error',err:lp.err||'fetch failed',ts:lp.ts};
+  const diff=lp.price-Math.round(c.custPaid);
+  return {state:'ok',price:lp.price,mrp:lp.mrp,ts:lp.ts,diff,match:Math.abs(diff)<=1,
+    stale:Date.now()-(lp.ts||0)>LIVE_PRICE_STALE_MS};
+}
+
+function _livePriceCell(s,brand,c){
+  const isMyntra=brand&&brand.model==='myntra';
+  if(!isMyntra||!s.styleId)return '<td class="mono" style="color:var(--tx3)">—</td>';
+  // JS-escape THEN HTML-escape: sid lands inside '...' inside onclick="..."
+  const sid=esc(escAttr(String(s.styleId).trim()));
+  const refetch=`<span onclick="event.stopPropagation();fetchLivePrice('${sid}')" title="Refresh from Myntra" style="cursor:pointer;color:var(--tx3);display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;vertical-align:middle;margin-left:3px">${icon('refresh',{size:11})}</span>`;
+  const i=_livePriceInfo(s,c);
+  if(i.state==='none')return `<td class="mono"><span onclick="event.stopPropagation();fetchLivePrice('${sid}')" title="Fetch live price from Myntra" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px;color:var(--tx3);font-size:10px">${icon('refresh',{size:11})} fetch</span></td>`;
+  if(i.state==='error')return `<td class="mono"><span title="${esc(i.err)}${i.ts?' · '+_liveAgo(i.ts):''}" style="color:var(--re);font-size:11px;cursor:help">✕ n/a</span>${refetch}</td>`;
+  const col=i.match?'var(--gr)':(i.diff<0?'var(--re)':'var(--ac)');
+  const bg=i.match?'rgba(45,212,160,.10)':(i.diff<0?'rgba(245,87,92,.10)':'rgba(255,180,0,.10)');
+  const delta=i.match?'✓':`${i.diff>0?'▲':'▼'}₹${Math.abs(i.diff).toLocaleString('en-IN')}`;
+  const tip=`Myntra live price ₹${i.price.toLocaleString('en-IN')}${i.mrp?' (MRP ₹'+i.mrp.toLocaleString('en-IN')+')':''} · fetched ${_liveAgo(i.ts)} · ${i.match?'matches Cust. Paid':`₹${Math.abs(i.diff).toLocaleString('en-IN')} ${i.diff>0?'above':'below'} Cust. Paid`}${i.stale?' · stale, refresh recommended':''}`;
+  return `<td class="mono" style="background:${bg}"><span title="${esc(tip)}" style="color:${col};font-weight:600;cursor:help${i.stale?';opacity:.55':''}">₹${i.price.toLocaleString('en-IN')} <span style="font-size:9px">${delta}</span></span>${refetch}</td>`;
+}
+
+function _livePriceCardCell(s,c){
+  const i=_livePriceInfo(s,c);
+  if(i.state!=='ok')return '';
+  const col=i.match?'var(--gr)':(i.diff<0?'var(--re)':'var(--ac)');
+  const delta=i.match?'✓':`${i.diff>0?'▲':'▼'}₹${Math.abs(i.diff).toLocaleString('en-IN')}`;
+  return `<div class="skc-cell"><span>Myntra ₹</span><b style="color:${col}${i.stale?';opacity:.55':''}">₹${Math.round(i.price).toLocaleString('en-IN')} <small style="font-size:9px">${delta}</small></b></div>`;
+}
+
+async function _fetchLiveBatch(styleIds){
+  const resp=await fetch(`${SUPABASE_URL}/functions/v1/myntra-price`,{
+    method:'POST',
+    headers:{
+      'Authorization':`Bearer ${SUPABASE_ANON}`,
+      'apikey':SUPABASE_ANON,
+      'Content-Type':'application/json',
+    },
+    body:JSON.stringify({styleIds}),
+  });
+  const data=await resp.json().catch(()=>({}));
+  if(!resp.ok){
+    const err=new Error(data.error||`myntra-price HTTP ${resp.status}`);
+    err._status=resp.status;
+    err._retryAfter=parseInt(resp.headers.get('Retry-After')||'',10)||0;
+    throw err;
+  }
+  return data.results||[];
+}
+
+function _applyLiveResults(results){
+  let ok=0,fail=0;
+  (results||[]).forEach(r=>{
+    if(!r||!r.styleId)return;
+    // Re-validate server-supplied values before they reach innerHTML
+    const price=typeof r.price==='number'&&isFinite(r.price)&&r.price>0?r.price:null;
+    const mrp=typeof r.mrp==='number'&&isFinite(r.mrp)&&r.mrp>0?r.mrp:null;
+    if(r.ok&&price!=null){
+      LIVE_PRICES[r.styleId]={price,mrp,ts:Date.now()};ok++;
+    }else{
+      fail++;
+      // Keep a previously fetched good price rather than clobbering it with
+      // a transient error; only record the error when we have nothing better
+      const prev=LIVE_PRICES[r.styleId];
+      if(!prev||prev.price==null)LIVE_PRICES[r.styleId]={price:null,mrp:null,ts:Date.now(),err:r.error||'fetch failed'};
+    }
+  });
+  return {ok,fail};
+}
+
+async function fetchLivePrice(styleId){
+  const sid=String(styleId).trim();
+  if(!/^\d{4,12}$/.test(sid)){toast('Style ID must be numeric to fetch from Myntra','red');return;}
+  try{
+    toast('Fetching live price from Myntra…','blue');
+    const results=await _fetchLiveBatch([sid]);
+    const {ok}=_applyLiveResults(results);
+    await save('live_prices');
+    if(!editId)renderSKUs();
+    const lp=LIVE_PRICES[sid];
+    if(ok&&lp&&lp.price!=null)toast(`Myntra live price: ₹${lp.price.toLocaleString('en-IN')}`,'green');
+    else toast(`Could not fetch price${lp&&lp.err?' — '+esc(lp.err):''}`,'red');
+  }catch(e){toast('Live price fetch failed: '+esc(e.message),'red');}
+}
+
+async function fetchAllLivePrices(){
+  if(_liveFetchActive){toast('Live price fetch already running','blue');return;}
+  const all=[...new Set(skuDB.filter(s=>{
+    if(s.archived||!s.styleId)return false;
+    const b=brands.find(x=>x.id===s.brandId);
+    return b&&b.model==='myntra';
+  }).map(s=>String(s.styleId).trim()))];
+  // Pre-filter with the SAME rule the server enforces — one bad id would
+  // otherwise 400 its whole batch and silently drop 9 valid SKUs
+  const ids=all.filter(id=>/^\d{4,12}$/.test(id));
+  const skipped=all.length-ids.length;
+  if(!ids.length){toast('No active Myntra SKUs with numeric Style IDs','red');return;}
+  const mins=Math.max(1,Math.round(ids.length*0.8/60));
+  if(!confirm(`Fetch live Myntra prices for ${ids.length} style${ids.length>1?'s':''}?${skipped?` (${skipped} non-numeric Style ID${skipped>1?'s':''} skipped.)`:''} Takes about ${mins} minute${mins>1?'s':''}.`))return;
+  _liveFetchActive=true;
+  const btn=el('fetch-live-btn');
+  const orig=btn?btn.innerHTML:'';
+  if(btn){btn.style.pointerEvents='none';btn.style.opacity='.7';}
+  let okTotal=0,failTotal=0;
+  try{
+    for(let i=0;i<ids.length;i+=10){
+      const batch=ids.slice(i,i+10);
+      const batchStart=Date.now();
+      let rateWaits=0;
+      // Bounded retry: up to 3 rate-limit waits per batch, then count it
+      // failed and move on — never loop forever on a persistent 429
+      for(;;){
+        try{
+          const results=await _fetchLiveBatch(batch);
+          const r=_applyLiveResults(results);
+          okTotal+=r.ok;failTotal+=r.fail;
+        }catch(e){
+          if((e._status===429||/rate limit/i.test(e.message))&&rateWaits<3){
+            rateWaits++;
+            if(btn)btn.innerHTML=`Rate limited — waiting… (${rateWaits}/3)`;
+            await new Promise(r=>setTimeout(r,Math.max(5,e._retryAfter||30)*1000));
+            continue;
+          }
+          failTotal+=batch.length;
+        }
+        break;
+      }
+      const done=Math.min(i+10,ids.length);
+      if(btn)btn.innerHTML=`Fetching ${done}/${ids.length}…`;
+      const activePage=document.querySelector('.page.active')?.id?.replace('page-','');
+      if(!editId&&activePage==='skus')renderSKUs();
+      if(done%100===0)await save('live_prices');
+      // Pace under the server's 40 req/min limit even when responses are fast
+      const elapsed=Date.now()-batchStart;
+      if(elapsed<1600&&done<ids.length)await new Promise(r=>setTimeout(r,1600-elapsed));
+    }
+    await save('live_prices');
+    audit('live_price_fetch',`Fetched Myntra live prices: ${okTotal} ok, ${failTotal} failed of ${ids.length} styles${skipped?` (${skipped} non-numeric skipped)`:''}`);
+    toast(`Myntra prices: ${okTotal} fetched${failTotal?`, ${failTotal} failed`:''}${skipped?`, ${skipped} skipped`:''}`,failTotal?'red':'green');
+  }finally{
+    _liveFetchActive=false;
+    if(btn){btn.innerHTML=orig;btn.style.pointerEvents='';btn.style.opacity='';}
+  }
 }
 
 // Card overflow menu — mirrors toggleSkuMenu but targets the card's scm-<id>
@@ -5113,6 +5292,7 @@ function renderEditRow(s){
     <td><input class="si" data-lc id="e-disc" type="number" value="${s.discount||0}" placeholder="%" style="width:55px"></td>
     <td><div class="av" id="e-sp" style="color:var(--bl)">₹${Math.round(c.sp).toLocaleString('en-IN')}</div></td>
     <td><div class="av" id="e-cp">₹${Math.round(c.custPaid).toLocaleString('en-IN')}</div></td>
+    <td><div class="av na">—</div></td>
     <td><div class="av" id="e-pp" style="color:${c.profitRs>0?'var(--gr)':'var(--re)'}">₹${c.profitRs.toFixed(0)}</div></td>
     <td><div class="av" id="e-ifd" style="color:${c.ifDelivered>=0?'var(--gr)':'var(--re)'}">₹${c.ifDelivered.toFixed(0)}</div></td>
     <td><div class="av" id="e-gs" style="color:${c.grossSettlement>=0?'var(--bl)':'var(--re)'}">₹${c.grossSettlement.toFixed(0)}</div></td>
@@ -5156,6 +5336,7 @@ function renderNewRow(){
     <td><input class="si" data-lc id="n-disc" type="number" placeholder="%" value="0" style="width:55px"></td>
     <td><div class="av na" id="n-sp">—</div></td>
     <td><div class="av na" id="n-cp">—</div></td>
+    <td><div class="av na">—</div></td>
     <td><div class="av na" id="n-pp">—</div></td>
     <td><div class="av na" id="n-ifd">—</div></td>
     <td><div class="av na" id="n-gs">—</div></td>
@@ -6765,7 +6946,7 @@ CREATE POLICY "allow_all_backups" ON pd_backups FOR ALL USING (true) WITH CHECK 
 }
 
 function exportData(){
-  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CATS,LEVELS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,GT_DATA,REVERSE_FEES,GT_CAT_DATA,REV_CAT_DATA,COLL_FEE_DATA,COLL_SLABS,COLL_CAT_SLABS,GT_SLABS,REV_SLABS,COMM_SLABS,COMM_MODE,COMM_SLAB_ONLY,COMM_CAT_SLABS,COMM_SLAB_CAT,LOGISTICS_SETTINGS,exportedAt:new Date().toISOString()},null,2);
+  const data=JSON.stringify({skuDB,brands,users,THRESHOLDS,CATS,LEVELS,CAT_LEVEL,COMM_MYNTRA,COMM_AJIO_PPMP,COMM_AJIO_CC,COMM_AMAZON,GT_DATA,REVERSE_FEES,GT_CAT_DATA,REV_CAT_DATA,COLL_FEE_DATA,COLL_SLABS,COLL_CAT_SLABS,GT_SLABS,REV_SLABS,COMM_SLABS,COMM_MODE,COMM_SLAB_ONLY,COMM_CAT_SLABS,COMM_SLAB_CAT,LOGISTICS_SETTINGS,LIVE_PRICES,exportedAt:new Date().toISOString()},null,2);
   const a=document.createElement('a');
   a.href='data:application/json,'+encodeURIComponent(data);
   a.download='pricedesk_backup_'+new Date().toISOString().slice(0,10)+'.json';
@@ -6809,6 +6990,7 @@ function importDataPrompt(){
         if(d.COMM_AJIO_PPMP) COMM_AJIO_PPMP=d.COMM_AJIO_PPMP;
         if(d.COMM_AJIO_CC)   COMM_AJIO_CC=d.COMM_AJIO_CC;
         if(d.COMM_AMAZON)    COMM_AMAZON=d.COMM_AMAZON;
+        if(d.LIVE_PRICES)    LIVE_PRICES=d.LIVE_PRICES;
         save();populateFilters();renderBrands();renderSKUs();updateAlerts();renderUsers();
         toast('Backup restored successfully','green');
       }catch(err){toast('Error reading backup file','red');}
@@ -10020,6 +10202,9 @@ async function handleRealtimeUpdate(key, newValue){
   }
   if(type==='users'&&activePage==='users') renderUsers();
   if(type==='thresholds'&&activePage==='thresholds') renderThresholds?.();
+  // Display-only: repaint the SKU list so the Myntra ₹ column updates, but do
+  // NOT add 'live_prices' to CALC_INPUT_TYPES — it never feeds calcSKU
+  if(type==='live_prices'&&activePage==='skus'&&!editId) renderSKUs();
   if(key===DB_TASK_KEY||key===DB_COMPLETED_TASK_KEY){
     if(activePage==='dashboard') renderDashTasks();
   }
@@ -10048,6 +10233,14 @@ function applyRealtimeData(type, value){
         users=value; applyDefaultUsers(); return true;
       }
       case 'thresholds': THRESHOLDS=value; return true;
+      case 'live_prices':
+        if(value&&typeof value==='object'){
+          // During an active bulk fetch, merge (local wins) so a remote blob
+          // replace can't discard prices fetched here but not yet saved
+          LIVE_PRICES=_liveFetchActive?{...value,...LIVE_PRICES}:value;
+          return true;
+        }
+        return false;
       case 'categories': CATS=value; return true;
       case 'levels': LEVELS=value; return true;
       case 'cat_levels': CAT_LEVEL=value; return true;
