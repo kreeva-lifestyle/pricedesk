@@ -6,7 +6,14 @@
 // Parsing lives in ./parse.ts (pure, unit-tested by Vitest).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { parseGatewayProduct, parseMyntraPrice, validateStyleIds } from "./parse.ts";
+import {
+  debugSnippet,
+  fingerprintHtml,
+  fingerprintSummary,
+  parseGatewayProduct,
+  parseMyntraPrice,
+  validateStyleIds,
+} from "./parse.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -155,10 +162,25 @@ interface StyleResult {
   mrp?: number | null;
   strategy?: string;
   error?: string;
+  debug?: string;
 }
 
-async function fetchStylePrice(styleId: string): Promise<StyleResult> {
+// Parse a JSON body defensively — Myntra's gateway sometimes serves the SPA
+// HTML shell (a `<!doctype html>` page) for unknown routes, which would make
+// a bare JSON.parse throw the confusing "unexpected token !doctype" error.
+function safeJson(text: string): unknown | null {
+  const t = text.trimStart();
+  if (!t || t[0] === "<") return null; // HTML, not JSON
+  try {
+    return JSON.parse(t);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchStylePrice(styleId: string, debug = false): Promise<StyleResult> {
   let lastError = "";
+  let pdpHtml = "";
   // 1. PDP HTML — what a real browser sees; myntra.com/<styleId> redirects
   //    to the canonical product URL.
   try {
@@ -167,18 +189,22 @@ async function fetchStylePrice(styleId: string): Promise<StyleResult> {
       "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     );
     if (resp.ok && !isMyntraHost(resp.url)) {
-      lastError = "Redirected off myntra.com";
+      lastError = "redirected off myntra.com";
     } else if (resp.ok) {
-      const parsed = parseMyntraPrice(await readCapped(resp));
+      pdpHtml = await readCapped(resp);
+      const parsed = parseMyntraPrice(pdpHtml);
       if (parsed) {
-        return { styleId, ok: true, price: parsed.price, mrp: parsed.mrp, strategy: parsed.strategy };
+        const out: StyleResult = { styleId, ok: true, price: parsed.price, mrp: parsed.mrp, strategy: parsed.strategy };
+        if (debug) out.debug = debugSnippet(pdpHtml);
+        return out;
       }
-      lastError = "Price not found in product page";
+      // Fingerprint the page we couldn't parse so the error is actionable
+      lastError = fingerprintSummary(fingerprintHtml(pdpHtml));
     } else {
-      lastError = `Product page HTTP ${resp.status}`;
+      lastError = `product page HTTP ${resp.status}`;
     }
   } catch (e) {
-    lastError = `Product page fetch failed: ${(e as Error).message}`;
+    lastError = `product page fetch failed: ${(e as Error).message}`;
   }
   // 2. Gateway JSON API fallback
   try {
@@ -186,21 +212,30 @@ async function fetchStylePrice(styleId: string): Promise<StyleResult> {
       `https://www.myntra.com/gateway/v2/product/${styleId}`,
       "application/json",
     );
-    if (resp.ok && !isMyntraHost(resp.url)) {
-      lastError += "; gateway redirected off myntra.com";
-    } else if (resp.ok) {
-      const parsed = parseGatewayProduct(JSON.parse(await readCapped(resp)));
-      if (parsed) {
-        return { styleId, ok: true, price: parsed.price, mrp: parsed.mrp, strategy: parsed.strategy };
+    if (resp.ok && isMyntraHost(resp.url)) {
+      const json = safeJson(await readCapped(resp));
+      if (json === null) {
+        lastError += "; gateway returned non-JSON (HTML shell)";
+      } else {
+        const parsed = parseGatewayProduct(json);
+        if (parsed) {
+          const out: StyleResult = { styleId, ok: true, price: parsed.price, mrp: parsed.mrp, strategy: parsed.strategy };
+          if (debug) out.debug = "gateway JSON parsed";
+          return out;
+        }
+        lastError += "; gateway JSON had no price";
       }
-      lastError += "; gateway response had no price";
+    } else if (resp.ok) {
+      lastError += "; gateway redirected off myntra.com";
     } else {
       lastError += `; gateway HTTP ${resp.status}`;
     }
   } catch (e) {
     lastError += `; gateway fetch failed: ${(e as Error).message}`;
   }
-  return { styleId, ok: false, error: lastError };
+  const out: StyleResult = { styleId, ok: false, error: lastError };
+  if (debug && pdpHtml) out.debug = debugSnippet(pdpHtml);
+  return out;
 }
 
 serve(async (req) => {
@@ -233,6 +268,9 @@ serve(async (req) => {
     if (!check.ok || !check.ids) {
       return jsonResponse({ error: check.error || "Invalid styleIds" }, 400, cors);
     }
+    // Opt-in diagnostics: returns a capped page excerpt per style so the
+    // exact Myntra markup can be inspected when parsing fails.
+    const debug = (body as Record<string, unknown>)?.debug === true;
 
     // Fetch with small concurrency — fast enough for a 10-id batch without
     // hammering Myntra from a single datacenter IP. Malformed ids come back
@@ -247,7 +285,7 @@ serve(async (req) => {
       while (queue.length) {
         const id = queue.shift();
         if (!id) break;
-        results.push(await fetchStylePrice(id));
+        results.push(await fetchStylePrice(id, debug));
       }
     });
     await Promise.all(workers);

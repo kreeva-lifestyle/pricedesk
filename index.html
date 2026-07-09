@@ -5182,6 +5182,25 @@ function _applyLiveResults(results){
   return {ok,fail};
 }
 
+// Diagnostics helper — run `await myntraDebug('40451814')` in the browser
+// console to see exactly what Myntra serves the Edge Function (title + a
+// price-focused page excerpt), so the parser can be tuned to the live markup.
+window.myntraDebug=async function(styleId){
+  const sid=String(styleId||'').trim();
+  if(!/^\d{4,12}$/.test(sid)){console.warn('Pass a numeric Style ID');return;}
+  const resp=await fetch(`${SUPABASE_URL}/functions/v1/myntra-price`,{
+    method:'POST',
+    headers:{'Authorization':`Bearer ${SUPABASE_ANON}`,'apikey':SUPABASE_ANON,'Content-Type':'application/json'},
+    body:JSON.stringify({styleIds:[sid],debug:true}),
+  });
+  const data=await resp.json().catch(()=>({}));
+  const r=(data.results||[])[0]||data;
+  console.log('%cmyntra-price debug for '+sid,'font-weight:bold');
+  console.log('result:',{ok:r.ok,price:r.price,mrp:r.mrp,strategy:r.strategy,error:r.error});
+  console.log('page excerpt:\n'+(r.debug||'(none)'));
+  return r;
+};
+
 async function fetchLivePrice(styleId){
   const sid=String(styleId).trim();
   if(!/^\d{4,12}$/.test(sid)){toast('Style ID must be numeric to fetch from Myntra','red');return;}

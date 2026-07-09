@@ -4,6 +4,10 @@ import {
   validateStyleIds,
   parseMyntraPrice,
   parseGatewayProduct,
+  deepFindPrice,
+  fingerprintHtml,
+  fingerprintSummary,
+  debugSnippet,
 } from '../../supabase/functions/myntra-price/parse.ts';
 
 // These exercise the pure parsing/validation logic — they do NOT call
@@ -74,19 +78,45 @@ describe('parseMyntraPrice — JSON-LD strategy', () => {
   it('skips malformed JSON-LD and falls through', () => {
     const page = `<script type="application/ld+json">{broken json</script>
       <script>window.__myx = {"pdpData":{"price":{"discounted":2951,"mrp":9000}}};</script>`;
-    expect(parseMyntraPrice(page)).toMatchObject({ price: 2951, mrp: 9000, strategy: '__myx' });
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 2951, mrp: 9000, strategy: 'state' });
+  });
+
+  it('reads offers.lowPrice and priceSpecification.price too', () => {
+    const p1 = `<script type="application/ld+json">{"@type":"Product","offers":{"lowPrice":"1999"}}</script>`;
+    expect(parseMyntraPrice(p1)).toMatchObject({ price: 1999, strategy: 'json-ld' });
+    const p2 = `<script type="application/ld+json">{"@type":"Product","offers":{"priceSpecification":{"price":2499}}}</script>`;
+    expect(parseMyntraPrice(p2)).toMatchObject({ price: 2499, strategy: 'json-ld' });
   });
 });
 
-describe('parseMyntraPrice — __myx state strategy', () => {
-  it('extracts discounted price and mrp from pdpData', () => {
+describe('parseMyntraPrice — embedded state strategy', () => {
+  it('extracts discounted price and mrp from window.__myx pdpData', () => {
     const page = `<script>window.__myx = {"pdpData":{"id":40451814,"name":"X","price":{"mrp":9000,"discounted":2951}},"other":{"nested":"{\\"quoted\\":1}"}};</script>`;
-    expect(parseMyntraPrice(page)).toMatchObject({ price: 2951, mrp: 9000, strategy: '__myx' });
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 2951, mrp: 9000, strategy: 'state' });
   });
 
   it('survives braces inside string values (balanced-brace scan)', () => {
     const page = `<script>window.__myx = {"pdpData":{"desc":"has { and } inside","price":{"discounted":777,"mrp":2000}}};</script>`;
-    expect(parseMyntraPrice(page)).toMatchObject({ price: 777, mrp: 2000, strategy: '__myx' });
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 777, mrp: 2000, strategy: 'state' });
+  });
+
+  it('reads a sellingPrice-shaped state under an alternate marker', () => {
+    const page = `<script>window.__INITIAL_STATE__ = {"product":{"mrp":6000,"sellingPrice":2799}};</script>`;
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 2799, mrp: 6000, strategy: 'state' });
+  });
+
+  it('handles sellingPrice wrapped as {value}', () => {
+    const page = `<script>window.__myx={"pdpData":{"price":{"discounted":{"value":1234},"mrp":{"value":5000}}}}</script>`;
+    expect(parseMyntraPrice(page)).toMatchObject({ price: 1234, mrp: 5000, strategy: 'state' });
+  });
+});
+
+describe('parseMyntraPrice — meta tag strategy', () => {
+  it('reads og:price:amount (either attribute order)', () => {
+    const p1 = `<meta property="og:price:amount" content="3499"/>`;
+    expect(parseMyntraPrice(p1)).toMatchObject({ price: 3499, strategy: 'meta' });
+    const p2 = `<meta content="4599" property="product:price:amount"/>`;
+    expect(parseMyntraPrice(p2)).toMatchObject({ price: 4599, strategy: 'meta' });
   });
 });
 
@@ -135,5 +165,53 @@ describe('parseGatewayProduct', () => {
     expect(parseGatewayProduct(cyclic)).toBeNull();
     expect(parseGatewayProduct(null)).toBeNull();
     expect(parseGatewayProduct({ error: 'not found' })).toBeNull();
+  });
+
+  it('reads a sellingPrice-only gateway node', () => {
+    expect(parseGatewayProduct({ data: { sellingPrice: 899, mrp: 1999 } }))
+      .toMatchObject({ price: 899, mrp: 1999 });
+  });
+});
+
+describe('deepFindPrice', () => {
+  it('finds discounted, sellingPrice, or finalPrice at any depth', () => {
+    expect(deepFindPrice({ x: { discounted: 100 } })).toMatchObject({ price: 100 });
+    expect(deepFindPrice({ x: { sellingPrice: 200, mrp: 500 } })).toMatchObject({ price: 200, mrp: 500 });
+    expect(deepFindPrice({ x: { price: { finalPrice: 300 } } })).toMatchObject({ price: 300 });
+  });
+  it('returns null when there is no price', () => {
+    expect(deepFindPrice({ a: 1, b: { c: 'x' } })).toBeNull();
+  });
+});
+
+describe('fingerprintHtml / fingerprintSummary — failure diagnostics', () => {
+  it('flags a bot-challenge / blocked page', () => {
+    const fp = fingerprintHtml('<html><title>Access Denied</title><body>unusual traffic</body></html>');
+    expect(fp.looksBlocked).toBe(true);
+    expect(fingerprintSummary(fp)).toMatch(/blocked|challenged/i);
+  });
+  it('flags a tiny page as blocked', () => {
+    expect(fingerprintHtml('<html></html>').looksBlocked).toBe(true);
+  });
+  it('reports present markers on a real-but-unparsed page', () => {
+    const big = '<html><title>Kurta</title>' + 'x'.repeat(3000) + '<script>var a={"mrp":9000}</script><div class="pdp-price"></div></html>';
+    const fp = fingerprintHtml(big);
+    expect(fp.looksBlocked).toBe(false);
+    expect(fp.hasPdpPrice).toBe(true);
+    expect(fp.priceKeys).toContain('mrp');
+    expect(fingerprintSummary(fp)).toMatch(/pdp-price/);
+    expect(fingerprintSummary(fp)).toMatch(/keys:mrp/);
+  });
+});
+
+describe('debugSnippet', () => {
+  it('returns the title and a window around the first price marker', () => {
+    const page = '<html><title>Fusionic Lehenga</title>' + 'y'.repeat(500) + '<script>var s={"discounted":2951}</script></html>';
+    const snip = debugSnippet(page);
+    expect(snip).toMatch(/Fusionic Lehenga/);
+    expect(snip).toMatch(/discounted.*2951/);
+  });
+  it('caps its length', () => {
+    expect(debugSnippet('z'.repeat(50000)).length).toBeLessThan(2200);
   });
 });
