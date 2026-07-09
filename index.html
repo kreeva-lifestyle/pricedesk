@@ -5195,7 +5195,12 @@ const LIVE_PRICE_MATCH_TOL=10;
 function _livePriceInfo(s,c){
   const lp=LIVE_PRICES[String(s.styleId||'').trim()];
   if(!lp)return {state:'none'};
+  const stale=Date.now()-(lp.ts||0)>LIVE_PRICE_STALE_MS;
+  if(lp.oos)return {state:'oos',mrp:lp.mrp,ts:lp.ts,stale};
   if(lp.price==null)return {state:'error',err:lp.err||'fetch failed',ts:lp.ts};
+  // Myntra selling price == MRP ⇒ no discount is set on Myntra for this style
+  // (Myntra shows only the MRP). Flag it so the user knows to add a discount.
+  if(lp.mrp!=null&&lp.price>=lp.mrp)return {state:'nodisc',price:lp.price,mrp:lp.mrp,ts:lp.ts,stale};
   const diff=lp.price-Math.round(c.custPaid);
   return {state:'ok',price:lp.price,mrp:lp.mrp,ts:lp.ts,diff,match:Math.abs(diff)<=LIVE_PRICE_MATCH_TOL,
     stale:Date.now()-(lp.ts||0)>LIVE_PRICE_STALE_MS};
@@ -5208,6 +5213,8 @@ function _livePriceCell(s,brand,c){
   if(!isMyntra||!s.styleId)return '<td class="mono" style="color:var(--tx3)">—</td>';
   const i=_livePriceInfo(s,c);
   if(i.state==='none')return '<td class="mono" style="color:var(--tx3)">—</td>';
+  if(i.state==='oos')return `<td class="mono"><span title="Out of stock on Myntra${i.mrp?` · MRP ₹${i.mrp.toLocaleString('en-IN')}`:''} · updated ${_liveAgo(i.ts)}" style="color:var(--ac);font-size:11px;font-weight:600;cursor:help${i.stale?';opacity:.55':''}">Out of stock</span></td>`;
+  if(i.state==='nodisc')return `<td class="mono" style="background:rgba(255,180,0,.10)"><span title="Myntra is showing only the MRP (₹${i.mrp.toLocaleString('en-IN')}) — no discount is set for this style on Myntra. Add a discount on the Myntra seller portal. · updated ${_liveAgo(i.ts)}" style="color:var(--ac);font-size:11px;font-weight:600;cursor:help${i.stale?';opacity:.55':''}">${icon('alert',{size:11})} Set discount</span></td>`;
   if(i.state==='error')return `<td class="mono"><span title="${esc(i.err)}${i.ts?' · '+_liveAgo(i.ts):''}" style="color:var(--re);font-size:11px;cursor:help">✕ n/a</span></td>`;
   const col=i.match?'var(--gr)':(i.diff<0?'var(--re)':'var(--ac)');
   const bg=i.match?'rgba(45,212,160,.10)':(i.diff<0?'rgba(245,87,92,.10)':'rgba(255,180,0,.10)');
@@ -5222,6 +5229,8 @@ function _livePriceCardCell(s,c){
   if(!s.styleId)return '';
   const i=_livePriceInfo(s,c);
   if(i.state==='none')return `<div class="skc-cell"><span>Myntra ₹</span><b style="color:var(--tx3);font-weight:400">—</b></div>`;
+  if(i.state==='oos')return `<div class="skc-cell"><span>Myntra ₹</span><b style="color:var(--ac)" title="Out of stock on Myntra${i.mrp?` · MRP ₹${i.mrp.toLocaleString('en-IN')}`:''}">Out of stock</b></div>`;
+  if(i.state==='nodisc')return `<div class="skc-cell"><span>Myntra ₹</span><b style="color:var(--ac)" title="Myntra shows only MRP ₹${i.mrp.toLocaleString('en-IN')} — no discount set. Add one on Myntra.">Set discount</b></div>`;
   if(i.state==='error')return `<div class="skc-cell"><span>Myntra ₹</span><b style="color:var(--re)" title="${esc(i.err)}">✕ n/a</b></div>`;
   const col=i.match?'var(--gr)':(i.diff<0?'var(--re)':'var(--ac)');
   const delta=i.match?'✓':`${i.diff>0?'▲':'▼'}₹${Math.abs(i.diff).toLocaleString('en-IN')}`;

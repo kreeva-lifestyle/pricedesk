@@ -169,6 +169,20 @@ export function parseMyntraPrice(html) {
   return null;
 }
 
+// A sold-out Myntra PDP has no selling price — only the MRP — so parsing would
+// wrongly report the MRP as a huge "price". Detect out-of-stock so the app can
+// show "Out of stock" instead. Signals (all in the raw HTML):
+//  • schema.org / state availability = OutOfStock / SoldOut
+//  • Myntra's out-of-stock system attribute (SA_XT_OOS) in the __myx state
+//  • rendered sold-out markers when the page is server-rendered
+export function isOutOfStock(html) {
+  if (!html || typeof html !== "string") return false;
+  if (/"availability"\s*:\s*"[^"]*(out[_\s]?of[_\s]?stock|sold[_\s]?out)"/i.test(html)) return true;
+  if (/"attributeCode"\s*:\s*"SA_XT_OOS"/.test(html)) return true;
+  if (/this product is currently sold out|size-buttons-out-of-stock|pdp-out-of-stock/i.test(html)) return true;
+  return false;
+}
+
 // Non-destructive summary of a page we FAILED to parse — tells "blocked by a
 // bot-wall" from "real page, new markup".
 export function fingerprintHtml(html) {

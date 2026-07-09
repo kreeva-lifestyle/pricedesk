@@ -4,6 +4,7 @@ import {
   deepFindPrice,
   fingerprintHtml,
   fingerprintSummary,
+  isOutOfStock,
 } from '../../tools/myntra-fetch/parse.mjs';
 
 // Unit tests for the laptop fetcher's price parser (tools/myntra-fetch/parse.mjs)
@@ -64,6 +65,26 @@ describe('parseMyntraPrice — regex, meta, DOM fallbacks', () => {
     expect(parseMyntraPrice(null)).toBeNull();
     expect(parseMyntraPrice('<script>var x={"discounted":0}</script>')).toBeNull();
     expect(parseMyntraPrice('<script>var x={"discounted":99999999999}</script>')).toBeNull();
+  });
+});
+
+describe('isOutOfStock', () => {
+  it('detects the SA_XT_OOS system attribute in embedded state', () => {
+    expect(isOutOfStock(`<script>window.__myx={"pdpData":{"systemAttributeEntry":{"attributeCode":"SA_XT_OOS"}}}</script>`)).toBe(true);
+  });
+  it('detects schema.org / state OutOfStock availability', () => {
+    expect(isOutOfStock(`<script type="application/ld+json">{"offers":{"availability":"https://schema.org/OutOfStock"}}</script>`)).toBe(true);
+    expect(isOutOfStock(`{"availability":"SOLD_OUT"}`)).toBe(true);
+  });
+  it('detects rendered sold-out markers', () => {
+    expect(isOutOfStock('<div class="size-buttons-out-of-stock">This product is currently sold out</div>')).toBe(true);
+    expect(isOutOfStock('<div class="pdp-add-to-bag pdp-out-of-stock">OUT OF STOCK</div>')).toBe(true);
+  });
+  it('is false for an in-stock page (InStock availability, real price)', () => {
+    const inStock = `<script type="application/ld+json">{"@type":"Product","offers":{"price":"2449","availability":"http://schema.org/InStock"}}</script>`;
+    expect(isOutOfStock(inStock)).toBe(false);
+    expect(isOutOfStock('')).toBe(false);
+    expect(isOutOfStock(null)).toBe(false);
   });
 });
 
