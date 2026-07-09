@@ -41,7 +41,7 @@
 ## Edge Functions
 - `login` — server-side password verification + rate limiting; client uses with anon JWT
 - `reset-password` — token request + reset (server-stored tokens)
-- `webauthn` — passkey (Face ID / fingerprint) registration + sign-in via `@simplewebauthn/server@11`; credentials in `app_data` key `pd_passkeys`, pending challenges in `pd_webauthn_challenges` (5-min TTL); only this function writes either; rpId derived per allowed origin (per-domain). Passkeys are **per-user**: `list`/`remove`/`status` are scoped to the reauthed user's own credentials (`passkeysForUser`); `status` (no password) powers the profile's enabled indicator; managed in the per-user Profile modal (sidebar user chip), not global settings
+- `webauthn` — passkey (Face ID / fingerprint) registration + sign-in via `@simplewebauthn/server@11`; credentials in `app_data` key `pd_passkeys`, pending challenges in `pd_webauthn_challenges` (5-min TTL); only this function writes credential *content* (client `deleteUser` may remove a deleted user's rows from `pd_passkeys` — pure deletion, never creation/mutation); rpId derived per allowed origin (per-domain). Passkeys are **per-user**: `list`/`remove`/`status` are scoped to the reauthed user's own credentials (`passkeysForUser`); `status` (no password) powers the profile's enabled indicator; managed in the per-user Profile modal (sidebar user chip), not global settings
 - Note: EmailJS was removed entirely — no welcome/reset/alert emails. Password resets mint a shareable link (copy modal); new-user temp passwords shown in a copy modal
 - `claude-chat` — proxies to Anthropic API (needs `ANTHROPIC_API_KEY` env)
 - `batch-import` — atomic bulk SKU upsert; called by `confirmImport` with fallback to legacy `_doSaveSKUs`

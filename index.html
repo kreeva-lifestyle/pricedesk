@@ -4080,6 +4080,7 @@ async function _doDeleteCategory(cat,target){
   // Stash for reinstate — including the moved SKU ids and the category's
   // custom slab config, so Undo restores BOTH the config and the SKUs
   _deletedCategories.push({name:cat,level:CAT_LEVEL[cat],threshold:THRESHOLDS[cat],commMyntra:COMM_MYNTRA[cat],commAmazon:COMM_AMAZON[cat],
+    commPPMP:COMM_AJIO_PPMP[cat],commCC:COMM_AJIO_CC[cat],
     commCatSlabs:COMM_CAT_SLABS[cat],commSlabCat:COMM_SLAB_CAT[cat],collCatSlabs:COLL_CAT_SLABS[cat],
     skuIds:affected.map(s=>s.id)});
   CATS=CATS.filter(c=>c!==cat);
@@ -4087,7 +4088,7 @@ async function _doDeleteCategory(cat,target){
     affected.forEach(s=>{s.category=target;s.level=CAT_LEVEL[target]||'Level 2';});
     await dbSaveSKU(...affected);
   }
-  delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];delete COLL_FEE_DATA[cat];delete GT_CAT_DATA[cat];delete REV_CAT_DATA[cat];
+  delete CAT_LEVEL[cat];delete THRESHOLDS[cat];delete COMM_MYNTRA[cat];delete COMM_AMAZON[cat];delete COMM_AJIO_PPMP[cat];delete COMM_AJIO_CC[cat];delete COLL_FEE_DATA[cat];delete GT_CAT_DATA[cat];delete REV_CAT_DATA[cat];
   // Custom commission bands (both modes) + custom collection slabs live in
   // the logistics blob — drop the deleted category's entries so they can't
   // resurrect as stale config
@@ -4112,7 +4113,7 @@ async function _doDeleteCategory(cat,target){
       catch(e){console.warn('Threshold row delete failed for',cat,e.message);}
     }
   }
-  for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds','logistics'])await save(t);
+  for(const t of['categories','cat_levels','comm_myntra','comm_ppmp','comm_cc','comm_amazon','thresholds','logistics'])await save(t);
   invalidateCalcCache();buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
   audit('category_delete',`Category "${cat}" deleted${usedCount?` (${usedCount} SKU${usedCount>1?'s':''} moved to ${target})`:''}`);
   toast(`"${cat}" removed${usedCount?` — ${usedCount} SKU${usedCount>1?'s':''} → ${target}`:''} — `,`red`);
@@ -4133,6 +4134,8 @@ async function _reinstateCategory(name){
   THRESHOLDS[name]=stashed.threshold||0;
   COMM_MYNTRA[name]=stashed.commMyntra||[0,0,18.88,18.88,18.88];
   COMM_AMAZON[name]=stashed.commAmazon||17;
+  if(stashed.commPPMP!=null)COMM_AJIO_PPMP[name]=stashed.commPPMP;
+  if(stashed.commCC!=null)COMM_AJIO_CC[name]=stashed.commCC;
   // Restore the category's custom slab config (both commission modes +
   // collection fee) so Undo really returns the previous calculations
   if(stashed.commCatSlabs){COMM_CAT_SLABS[name]=stashed.commCatSlabs;LOGISTICS_SETTINGS.comm_cat_slabs=COMM_CAT_SLABS;}
@@ -4150,7 +4153,7 @@ async function _reinstateCategory(name){
     if(backers.length) await dbSaveSKU(...backers);
   }
   _deletedCategories=_deletedCategories.filter(d=>d.name!==name);
-  for(const t of['categories','cat_levels','comm_myntra','comm_amazon','thresholds','logistics'])await save(t);
+  for(const t of['categories','cat_levels','comm_myntra','comm_ppmp','comm_cc','comm_amazon','thresholds','logistics'])await save(t);
   invalidateCalcCache();buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
   audit('category_reinstate',`Category "${name}" reinstated${movedBack?` (${movedBack} SKU${movedBack>1?'s':''} moved back)`:''}`);
   toast(`"${name}" reinstated${movedBack?` — ${movedBack} SKU${movedBack>1?'s':''} moved back`:''}`,'green');
@@ -5722,8 +5725,30 @@ function showTempPasswordModal(user, tempPass){
 
 async function deleteUser(id){
   if(id==='u0'){toast('Cannot remove default admin accounts','red');return false;}
-  const u=users.find(x=>x.id===id);if(!u||!confirm(`Remove "${u.name}"?`))return false;
-  users=users.filter(x=>x.id!==id);renderUsers();await save('users');toast(`${u.name} removed`,'red');return true;
+  const u=users.find(x=>x.id===id);if(!u)return false;
+  // Count what gets revoked alongside the account so the confirm is honest
+  let passkeys=null,tokens=null,pkCount=0,tokCount=0;
+  try{
+    [passkeys,tokens]=await Promise.all([dbGet('pd_passkeys'),dbGet(DB_KEYS.reset_tokens)]);
+    pkCount=Array.isArray(passkeys)?passkeys.filter(p=>p.userId===id).length:0;
+    tokCount=tokens?Object.values(tokens).filter(t=>t&&t.userId===id).length:0;
+  }catch(e){/* counts are best-effort; user removal below still proceeds */}
+  const extras=[];
+  if(pkCount)extras.push(`${pkCount} passkey${pkCount>1?'s':''}`);
+  if(tokCount)extras.push(`${tokCount} pending reset link${tokCount>1?'s':''}`);
+  if(!confirm(`Remove "${u.name}"?${extras.length?` ${extras.join(' and ')} will also be revoked.`:''}`))return false;
+  users=users.filter(x=>x.id!==id);renderUsers();await save('users');
+  // Purge orphaned credentials + reset tokens — a deleted user's passkey
+  // would otherwise still be offered at sign-in (then rejected with a
+  // confusing error), and their reset link would stay live until TTL
+  try{
+    if(pkCount)await dbSet('pd_passkeys',passkeys.filter(p=>p.userId!==id));
+    if(tokCount){
+      for(const k of Object.keys(tokens))if(tokens[k]&&tokens[k].userId===id)delete tokens[k];
+      await dbSet(DB_KEYS.reset_tokens,tokens);
+    }
+  }catch(e){console.warn('Credential cleanup after user delete failed:',e.message);}
+  toast(`${u.name} removed`,'red');return true;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -9979,6 +10004,20 @@ async function handleRealtimeUpdate(key, newValue){
     populateFilters();
   }
   if(type==='categories'||type==='cat_levels') populateFilters();
+  if(type==='users'&&currentUser){
+    // A user deleted or revoked on another device must not keep working in a
+    // tab that's already open — checkSession only runs on load, so enforce
+    // the same rule on the live update
+    const me=(users||[]).find(u=>u.id===currentUser.id);
+    if(!me||me.revoked){
+      doLogout();
+      toast(me?'Your access was revoked. Contact your admin.':'Your account was removed. Contact your admin.','red');
+      return;
+    }
+    // Still valid — refresh identity so name/role edits show without re-login
+    currentUser=me;
+    updateSidebarUser(me);
+  }
   if(type==='users'&&activePage==='users') renderUsers();
   if(type==='thresholds'&&activePage==='thresholds') renderThresholds?.();
   if(key===DB_TASK_KEY||key===DB_COMPLETED_TASK_KEY){
