@@ -17,6 +17,24 @@
 
 export const MAX_STYLE_IDS = 10;
 
+// Build a scraping-API URL from a provider-agnostic template. Myntra blocks
+// datacenter IPs (serves a "Site Maintenance" stub), so live fetches must go
+// through a residential-IP scraping API. The template carries `{key}` and
+// `{url}` placeholders, e.g.
+//   https://api.scraperapi.com/?api_key={key}&url={url}&country_code=in
+// `{url}` is URL-encoded; `{key}` is substituted raw (it's the caller's own
+// API key). Returns null if the template lacks the `{url}` placeholder.
+export function buildScraperUrl(
+  template: string,
+  key: string,
+  targetUrl: string,
+): string | null {
+  if (!template || !template.includes("{url}")) return null;
+  return template
+    .replaceAll("{key}", key || "")
+    .replaceAll("{url}", encodeURIComponent(targetUrl));
+}
+
 export interface ParsedPrice {
   price: number;
   mrp: number | null;

@@ -7,6 +7,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
+  buildScraperUrl,
   debugSnippet,
   fingerprintHtml,
   fingerprintSummary,
@@ -17,6 +18,15 @@ import {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+// Optional residential-IP scraping API. Myntra serves datacenter IPs (like
+// Supabase's) a "Site Maintenance" stub, so a direct fetch never sees the
+// price. When SCRAPER_TEMPLATE is set (with `{url}`/`{key}` placeholders) the
+// PDP is fetched through it instead. Unset ⇒ direct fetch (works for
+// unblocked targets / local testing).
+const SCRAPER_TEMPLATE = Deno.env.get("SCRAPER_TEMPLATE") || "";
+const SCRAPER_KEY = Deno.env.get("SCRAPER_KEY") || "";
+const USING_SCRAPER = SCRAPER_TEMPLATE.includes("{url}");
 
 // Per-IP rate limit. This function makes outbound requests to myntra.com;
 // without a cap it is an open proxy anyone with the anon key could abuse.
@@ -103,13 +113,19 @@ function jsonResponse(data: unknown, status: number, cors: Record<string, string
 // regular browsers; a bare Deno fetch UA tends to get challenged instead.
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
-const FETCH_TIMEOUT_MS = 12_000;
+// Scraping APIs proxy + sometimes render, so they're slower than a direct hit.
+const FETCH_TIMEOUT_MS = USING_SCRAPER ? 40_000 : 12_000;
 // Cap how much of a response we ingest — a redirect to a hostile host (or a
 // broken CDN page) must not balloon function memory.
 const MAX_BODY_BYTES = 5_000_000;
 
-// redirect:"follow" can land anywhere; only trust bodies served by Myntra.
+// redirect:"follow" can land anywhere; only trust bodies served by Myntra —
+// EXCEPT in scraper mode, where the response legitimately comes from the
+// scraping API's host (it fetched Myntra for us). The target URL we asked the
+// scraper for is always built from a validated numeric styleId, so there's no
+// SSRF surface to guard here.
 function isMyntraHost(finalUrl: string): boolean {
+  if (USING_SCRAPER) return true;
   try {
     const h = new URL(finalUrl).hostname;
     return h === "myntra.com" || h.endsWith(".myntra.com");
@@ -141,9 +157,15 @@ async function readCapped(resp: Response): Promise<string> {
   return new TextDecoder().decode(buf);
 }
 
-function fetchWithTimeout(url: string, accept: string): Promise<Response> {
+// Fetch a Myntra URL, transparently routing through the scraping API when one
+// is configured. `targetUrl` is always the real myntra.com URL; the scraper
+// wrapper (if any) is applied here.
+function fetchWithTimeout(targetUrl: string, accept: string): Promise<Response> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
+  const url = USING_SCRAPER
+    ? (buildScraperUrl(SCRAPER_TEMPLATE, SCRAPER_KEY, targetUrl) || targetUrl)
+    : targetUrl;
   return fetch(url, {
     headers: {
       "User-Agent": UA,
@@ -199,7 +221,13 @@ async function fetchStylePrice(styleId: string, debug = false): Promise<StyleRes
         return out;
       }
       // Fingerprint the page we couldn't parse so the error is actionable
-      lastError = fingerprintSummary(fingerprintHtml(pdpHtml));
+      const fp = fingerprintHtml(pdpHtml);
+      lastError = fingerprintSummary(fp);
+      // The single most common cause: Myntra blocks the datacenter IP. If no
+      // scraper is configured, say so explicitly — that's the fix.
+      if (fp.looksBlocked && !USING_SCRAPER) {
+        lastError += " — direct datacenter fetch blocked by Myntra; configure SCRAPER_TEMPLATE (residential proxy)";
+      }
     } else {
       lastError = `product page HTTP ${resp.status}`;
     }
