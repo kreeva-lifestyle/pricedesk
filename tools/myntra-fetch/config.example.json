@@ -1,0 +1,7 @@
+{
+  "SUPABASE_URL": "https://fcmesdnagvrdmjzzuwue.supabase.co",
+  "SUPABASE_ANON": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbWVzZG5hZ3ZyZG1qenp1d3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxNjM4NTgsImV4cCI6MjA4OTczOTg1OH0.fS1ecV898Dmrka6hr3R0RE6gcKlneWUPbDyDPv30_qU",
+  "PACING_MS": 1500,
+  "MAX_CONCURRENCY": 2,
+  "LIMIT": 0
+}
