@@ -4834,13 +4834,15 @@ function applySKUSort(list){
   return sorted;
 }
 
-function filteredSKUs(){
+function filteredSKUs(opts){
   const q=(el('f-search')?.value||'').toLowerCase();
   const fBrand=el('f-brand')?.value||'';
   const fCat=el('f-cat')?.value||'';
   const fStatus=el('f-status')?.value||'';
   const fTag=el('f-tag')?.value||'';
-  const fLive=el('f-live')?.value||'';
+  // skipLive: used by updateLiveFilterCounts to count what each Myntra ₹
+  // option WOULD show (all other filters applied, this one ignored)
+  const fLive=(opts&&opts.skipLive)?'':(el('f-live')?.value||'');
   const fProfitMin=el('f-profit-min')?.value;
   const fProfitMax=el('f-profit-max')?.value;
   const hasProfitFilter=fProfitMin!==''||fProfitMax!=='';
@@ -5086,6 +5088,7 @@ function renderSKUs(){
     cardsEl.innerHTML=cardsHtml||cardEmpty;
   }
   updateFilterCount();
+  updateLiveFilterCounts();
   t.querySelectorAll('[data-lc]').forEach(e=>e.addEventListener('input',()=>liveCalcRow(e.closest('tr'))));
   // Update archive nav badge
   const navCount=el('nav-archive-count');
@@ -5359,6 +5362,35 @@ function updateFilterCount(){
     .reduce((a,id)=>a+((el(id)?.value||'')!==''?1:0),0);
   badge.textContent=n; badge.style.display=n?'inline-flex':'none';
   if(btn) btn.classList.toggle('has-filters',n>0);
+}
+
+// Live counts on each Myntra ₹ filter option — "Out of stock (12)" tells the
+// user what selecting it will show. Counts respect every OTHER active filter
+// (search/brand/category/status/tags/profit/marketplace tab) but not the
+// Myntra ₹ selection itself.
+const _LIVE_FILTER_LABELS={
+  '':'Myntra ₹: All','match':'✓ Price match','above':'▲ Above Cust. Paid',
+  'below':'▼ Below Cust. Paid','oos':'Out of stock','nodisc':'⚠ Set discount',
+  'error':'✕ Fetch error','none':'— Not fetched',
+};
+function updateLiveFilterCounts(){
+  const sel=el('f-live');
+  if(!sel)return;
+  const counts={match:0,above:0,below:0,oos:0,nodisc:0,error:0,none:0};
+  let total=0;
+  filteredSKUs({skipLive:true}).forEach(s=>{
+    const brand=brands.find(b=>b.id===s.brandId);
+    if(!brand||brand.model!=='myntra')return;
+    total++;
+    const i=_livePriceInfo(s,calcSKU(s));
+    if(i.state==='ok')counts[i.match?'match':(i.diff>0?'above':'below')]++;
+    else counts[i.state]++;
+  });
+  [...sel.options].forEach(o=>{
+    const base=_LIVE_FILTER_LABELS[o.value];
+    if(base===undefined)return;
+    o.textContent=o.value===''?`${base} (${total})`:`${base} (${counts[o.value]||0})`;
+  });
 }
 
 // ── Category change triggers recalc (level auto-derived from CAT_LEVEL) ──
