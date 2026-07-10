@@ -49,3 +49,23 @@ export function validateCredentials(rawUrl, rawAnon) {
   }
   return { url, anon };
 }
+
+// Decide whether a watcher should start a fetch for a webapp-requested run.
+// Pure (no I/O) so it's unit-testable and shared by the watch loop.
+//   command = pd_live_command  { requestedAt: ISO }
+//   status  = pd_live_status   { running, finishedAt, ts }
+//   lastProcessedAt = ms of the newest request this watcher already started
+//   nowMs, stallMs = clock + heartbeat freshness window
+// Runs iff there is a request that is newer than both what we've already
+// handled and the last completed run, AND no run is currently in progress
+// (a fresh heartbeat means another watcher already claimed it).
+export function shouldRunCommand(command, status, lastProcessedAt, nowMs, stallMs = 15 * 60 * 1000) {
+  const req = command && command.requestedAt ? Date.parse(command.requestedAt) : NaN;
+  if (!Number.isFinite(req)) return false;
+  if (req <= (lastProcessedAt || 0)) return false;
+  const finished = status && status.finishedAt ? Date.parse(status.finishedAt) : 0;
+  if (req <= (finished || 0)) return false; // already served by a completed run
+  const runningFresh = !!(status && status.running && status.ts && nowMs - status.ts < stallMs);
+  if (runningFresh) return false; // someone is actively running it
+  return true;
+}

@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import { fingerprintHtml, fingerprintSummary, isOutOfStock, parseMyntraPrice } from "./parse.mjs";
-import { validateCredentials } from "./config.mjs";
+import { shouldRunCommand, validateCredentials } from "./config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -151,10 +151,7 @@ async function writeStatus(db, status) {
   } catch { /* ignore — status is cosmetic */ }
 }
 
-async function main() {
-  const cfg = loadConfig();
-  const db = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON, { auth: { persistSession: false } });
-
+async function runFetch(db, cfg) {
   console.log("Loading Myntra SKUs from Supabase…");
   let ids = await loadMyntraStyleIds(db);
   if (cfg.LIMIT > 0) ids = ids.slice(0, cfg.LIMIT);
@@ -238,6 +235,55 @@ async function main() {
     }
   }
   console.log("Prices written to Supabase; the app's Myntra ₹ column updates live.");
+}
+
+const COMMAND_KEY = "pd_live_command";
+const WATCH_POLL_MS = 20000;
+
+async function readKey(db, key) {
+  const { data } = await db.from("app_data").select("value").eq("key", key).single();
+  return (data && data.value && typeof data.value === "object") ? data.value : {};
+}
+
+// Watch mode: poll for a webapp "Update Myntra ₹" request (pd_live_command)
+// and run the fetch when one arrives. Runs forever; set to auto-start on boot.
+async function watch(db, cfg) {
+  let lastProcessedAt = 0;
+  console.log(`Watching for update requests from the app (every ${WATCH_POLL_MS / 1000}s). Press Ctrl+C to stop.`);
+  // Don't run a request that predates the watcher starting up.
+  try {
+    const cmd0 = await readKey(db, COMMAND_KEY);
+    if (cmd0.requestedAt) lastProcessedAt = Date.parse(cmd0.requestedAt) || 0;
+  } catch { /* ignore */ }
+  for (;;) {
+    try {
+      const [command, status] = await Promise.all([readKey(db, COMMAND_KEY), readKey(db, STATUS_KEY)]);
+      if (shouldRunCommand(command, status, lastProcessedAt, Date.now())) {
+        lastProcessedAt = Date.parse(command.requestedAt) || Date.now();
+        // Soft claim: small random wait, then re-check nobody else started.
+        await sleep(500 + Math.floor(Math.random() * 3000));
+        const s2 = await readKey(db, STATUS_KEY);
+        if (shouldRunCommand(command, s2, 0, Date.now())) {
+          console.log(`\n[${new Date().toLocaleTimeString()}] Update requested by ${command.requestedBy || "the app"} — running…`);
+          try { await runFetch(db, cfg); } catch (e) { console.error("Run failed:", e.message); }
+          console.log("Back to watching…");
+        }
+      }
+    } catch (e) {
+      console.error("Watch poll error (will retry):", e.message);
+    }
+    await sleep(WATCH_POLL_MS);
+  }
+}
+
+async function main() {
+  const cfg = loadConfig();
+  const db = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON, { auth: { persistSession: false } });
+  if (process.argv.includes("--watch")) {
+    await watch(db, cfg);
+  } else {
+    await runFetch(db, cfg);
+  }
 }
 
 main().catch((e) => {
