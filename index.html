@@ -42,7 +42,7 @@
 .sku-card:nth-child(7),.shub-card:nth-child(7),.sc:nth-child(7),.brand-card:nth-child(7){animation-delay:.2s}
 .sku-card:nth-child(n+8),.shub-card:nth-child(n+8),.sc:nth-child(n+8),.brand-card:nth-child(n+8){animation-delay:.22s}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh;display:flex;-webkit-text-size-adjust:100%;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+body{background:radial-gradient(1100px 700px at 12% -8%,rgba(78,142,247,.07),transparent 60%),radial-gradient(900px 600px at 96% 108%,rgba(245,166,35,.035),transparent 55%),var(--bg);background-attachment:fixed;color:var(--tx);font-family:var(--sans);min-height:100vh;display:flex;-webkit-text-size-adjust:100%;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear */
 .sidebar{width:230px;height:100vh;background:var(--s);border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;position:fixed;top:0;left:0;z-index:100;overflow-y:auto}
 .logo{padding:18px;border-bottom:1px solid var(--bd)}
@@ -91,14 +91,14 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .btn{padding:7px 15px;border-radius:4px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--sans);transition:all .12s;display:inline-flex;align-items:center;gap:5px;letter-spacing:.2px}
 .btn[disabled]{opacity:.6;cursor:not-allowed}
 .btn:focus-visible,.sse:focus-visible,.nav-item:focus-visible{outline:2px solid var(--ac);outline-offset:2px;border-radius:var(--r)}
-.sku-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:500;background:rgba(155,109,255,.12);color:var(--pu);border:1px solid rgba(155,109,255,.25);margin:1px 2px}
+.sku-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 8px;border-radius:999px;font-size:9px;font-weight:500;background:rgba(155,109,255,.12);color:var(--pu);border:1px solid rgba(155,109,255,.25);margin:1px 2px}
 .sku-tag .tag-x{cursor:pointer;opacity:.6;font-size:10px;margin-left:1px}.sku-tag .tag-x:hover{opacity:1;color:var(--re)}
 .tag-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;font-size:12px;background:rgba(155,109,255,.15);color:var(--pu);border:1px solid rgba(155,109,255,.3)}
 .tag-chip .tc-x{cursor:pointer;font-size:14px;line-height:1;opacity:.7}.tag-chip .tc-x:hover{opacity:1;color:var(--re)}
 .tag-input-wrap{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:6px 8px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);min-height:38px}
 .tag-input-wrap input{background:transparent;border:none;outline:none;color:var(--tx);font-size:13px;flex:1;min-width:100px;font-family:var(--sans)}
-.bp{background:var(--ac);color:#000}.bp:hover{background:#e8941a}
-.bg{background:transparent;color:var(--tx2);border:1px solid var(--bd2)}.bg:hover{background:var(--s2);color:var(--tx)}
+.bp{background:var(--ac);color:#000;border-radius:9px;box-shadow:0 2px 12px rgba(245,166,35,.25)}.bp:hover{background:#e8941a}
+.bg{background:rgba(255,255,255,.04);color:var(--tx2);border:1px solid rgba(255,255,255,.09);border-radius:9px}.bg:hover{background:rgba(255,255,255,.08);color:var(--tx);border-color:rgba(255,255,255,.16)}
 .br{background:rgba(245,87,92,.15);color:var(--re);border:1px solid rgba(245,87,92,.3)}.br:hover{background:rgba(245,87,92,.25)}
 .bsm{padding:5px 10px;font-size:12px}.bxs{padding:4px 8px;font-size:11px}
 /* CARDS */
@@ -123,7 +123,7 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .sv{font-family:var(--mono);font-size:22px;font-weight:600}
 .ss{font-size:11px;color:var(--tx3);margin-top:3px}
 /* TAGS */
-.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+.tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:500}
 .tm{background:rgba(255,63,108,.15);color:var(--mn)}.taj{background:rgba(233,69,96,.15);color:var(--aj)}
 .tamz{background:rgba(255,153,0,.15);color:var(--amz)}.tg{background:rgba(45,212,160,.15);color:var(--gr)}
 .tr{background:rgba(245,87,92,.15);color:var(--re)}.tb{background:rgba(78,142,247,.15);color:var(--bl)}
@@ -204,13 +204,29 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .ci{width:68px;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-family:var(--mono);font-size:12px;padding:4px 6px;text-align:right}
 .ci:focus{outline:none;border-color:var(--ac)}
 /* SKU SHEET */
-.ss-wrap{overflow-x:auto;border:1px solid var(--bd);border-radius:var(--r);-webkit-overflow-scrolling:touch}
+/* ── Glass table (Nexora-style): glass container, dark inset header strip,
+   each data row its own rounded translucent "pill" with hover. Scoped to the
+   SKU + Archive pages via #page-skus/#page-archive where it changes geometry
+   so other .ss tables (if any) and the .ss subtext class stay unaffected. */
+.ss-wrap{overflow-x:auto;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:8px 10px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));box-shadow:0 8px 32px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.06);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);-webkit-overflow-scrolling:touch}
+@supports not (backdrop-filter:blur(1px)){.ss-wrap{background:var(--s)}}
 .ss{width:100%;border-collapse:collapse;font-size:12px}
 .ss th{background:var(--s2);color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding:9px 10px;border-bottom:2px solid var(--bd);white-space:nowrap;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis}
 .ss th.auto-h{color:var(--gr);background:rgba(45,212,160,.05)}
 .ss td{padding:7px 10px;border-bottom:1px solid var(--bd);vertical-align:middle;overflow:hidden;text-overflow:ellipsis}
 .ss tr:last-child td{border-bottom:none}
 .ss .er td{background:rgba(245,166,35,.04);border-bottom:2px solid var(--ac)}
+#page-skus .ss,#page-archive .ss{border-collapse:separate;border-spacing:0 6px}
+#page-skus .ss th,#page-archive .ss th{background:rgba(0,0,0,.28);border-bottom:none;padding:10px}
+#page-skus .ss th:first-child,#page-archive .ss th:first-child{border-radius:10px 0 0 10px}
+#page-skus .ss th:last-child,#page-archive .ss th:last-child{border-radius:0 10px 10px 0}
+#page-skus .ss td,#page-archive .ss td{background:rgba(255,255,255,.025);border-bottom:none;padding:10px;transition:background .12s var(--ease-out)}
+#page-skus .ss td:first-child,#page-archive .ss td:first-child{border-radius:10px 0 0 10px}
+#page-skus .ss td:last-child,#page-archive .ss td:last-child{border-radius:0 10px 10px 0}
+#page-skus .ss tbody tr:hover td,#page-archive .ss tbody tr:hover td{background:rgba(255,255,255,.055)}
+#page-skus .ss .er td{background:rgba(245,166,35,.06);border-bottom:none;box-shadow:inset 0 1px 0 rgba(245,166,35,.35),inset 0 -1px 0 rgba(245,166,35,.35)}
+#page-skus .ss .er td:first-child{box-shadow:inset 1px 1px 0 rgba(245,166,35,.35),inset 0 -1px 0 rgba(245,166,35,.35)}
+#page-skus .ss .er td:last-child{box-shadow:inset -1px 1px 0 rgba(245,166,35,.35),inset 0 -1px 0 rgba(245,166,35,.35)}
 .si{background:var(--s2);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:12px;padding:5px 7px;width:100%;transition:border .1s}
 .si:focus{outline:none;border-color:var(--ac)}
 .sse{background:var(--s2);border:1px solid var(--bd2);border-radius:4px;color:var(--tx);font-size:12px;padding:5px 7px;cursor:pointer}
@@ -286,11 +302,13 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .shub-card{min-height:66px;transition:border-color .15s,background .15s,transform .12s,box-shadow .15s}
 .shub-card:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.25)}
 /* FILTER BAR */
-.sku-mp-tab{padding:8px 18px;font-size:12px;font-weight:600;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
-.sku-mp-tab:hover{color:var(--tx)}
-.sku-mp-tab.active{color:var(--ac);border-bottom-color:var(--ac)}
-.filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:var(--s);border:1px solid rgba(255,255,255,.05);border-radius:var(--r)}
-.filter-select{background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:12px;padding:5px 9px;cursor:pointer;min-width:120px}
+.mp-tabs{border-bottom-color:transparent!important;gap:2px!important}
+.sku-mp-tab{padding:7px 16px;font-size:12px;font-weight:600;color:var(--tx3);cursor:pointer;border:1px solid transparent;border-radius:999px;margin:0 2px 6px 0;transition:all .15s var(--ease-out)}
+.sku-mp-tab:hover{color:var(--tx);background:rgba(255,255,255,.05)}
+.sku-mp-tab.active{color:var(--ac);background:rgba(245,166,35,.12);border-color:rgba(245,166,35,.3)}
+.filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.06);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%)}
+@supports not (backdrop-filter:blur(1px)){.filter-bar{background:var(--s)}}
+.filter-select{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:10px;color:var(--tx);font-size:12px;padding:5px 9px;cursor:pointer;min-width:120px}
 .filter-select:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 2px rgba(245,166,35,.15)}
 .filter-sep{width:1px;height:20px;background:var(--bd2);margin:0 2px}
 .filter-label{font-size:11px;color:var(--tx3);white-space:nowrap}
@@ -301,12 +319,12 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 /* Collapsible filters: on desktop the advanced group flows inline (display:contents)
    and the toggle button is hidden; the mobile media query overrides both. */
 .filter-advanced{display:contents}
-.filter-toggle{display:none;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.filter-toggle{display:none;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:10px;color:var(--tx);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;white-space:nowrap}
 .filter-toggle.open{border-color:var(--ac);color:var(--ac)}
 .filter-count-badge{background:var(--ac);color:#0f1117;font-size:10px;font-weight:700;border-radius:9px;min-width:16px;height:16px;padding:0 4px;display:inline-flex;align-items:center;justify-content:center}
 /* Mobile SKU cards — hidden on desktop, shown by the mobile media query */
 #sku-cards{display:none}
-.sku-card{background:var(--s);border:1px solid var(--bd2);border-radius:12px;padding:12px 13px;display:flex;flex-direction:column;gap:11px;position:relative}
+.sku-card{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.09);border-radius:16px;box-shadow:0 6px 24px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06);padding:13px 14px;display:flex;flex-direction:column;gap:11px;position:relative}
 .sku-card.breach{border-color:rgba(245,166,35,.45)}
 .sku-card.breach::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--ac)}
 .skc-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
@@ -320,7 +338,7 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 .skc-plabel{font-size:8px;letter-spacing:.6px;color:var(--tx3);text-transform:uppercase;font-weight:600}
 .skc-pval{font-family:var(--mono);font-size:20px;font-weight:700;line-height:1.15;margin-top:1px}
 .skc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
-.skc-cell{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;padding-bottom:4px;border-bottom:1px dashed var(--bd)}
+.skc-cell{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,.06)}
 .skc-cell span{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.3px;flex-shrink:0}
 .skc-cell b{font-family:var(--mono);font-weight:600;color:var(--tx);text-align:right}
 .skc-tags{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
@@ -337,7 +355,7 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 /* ALERT ITEM */
 .aitem{display:flex;align-items:flex-start;gap:11px;background:rgba(245,87,92,.08);border:1px solid rgba(245,87,92,.25);border-radius:var(--r);padding:11px 14px;margin-bottom:8px}
 /* MISC */
-.info{background:rgba(78,142,247,.07);border:1px solid rgba(78,142,247,.2);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--tx2);margin-bottom:14px}
+.info{background:rgba(78,142,247,.07);border:1px solid rgba(78,142,247,.2);border-radius:12px;padding:9px 13px;font-size:12px;color:var(--tx2);margin-bottom:14px}
 .success{background:rgba(45,212,160,.07);border:1px solid rgba(45,212,160,.2);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--gr);margin-bottom:14px}
 .warn{background:rgba(245,87,92,.07);border:1px solid rgba(245,87,92,.2);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--re)}
 .mono{font-family:var(--mono)}.st{font-size:11px;color:var(--tx3)}
@@ -524,9 +542,9 @@ body:has(#login-screen.active){overflow:hidden}
   #page-skus.editing #sku-cards{display:none}
 
   /* SKU sheet: horizontal scroll */
-  .ss-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:0 12px;scrollbar-width:thin}
+  .ss-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:6px 12px;scrollbar-width:thin}
   .ss{min-width:1100px}
-  .ss th,.ss td{padding:5px 6px;font-size:11px}
+  .ss th,.ss td{padding:7px 6px;font-size:11px}
 
   /* Hide Style ID (col 2), Brand (col 4), Tags (col 5) on mobile — SKU table
      only; the Archive table has different columns and scrolls to show them all */
@@ -5047,7 +5065,7 @@ function renderSKUs(){
           <button class="btn bg bxs sku-act" onclick="openTagsModal('${escAttr(s.id)}')" title="Tags & notes"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg><span class="act-label"> Tags</span></button>
           <button class="btn bg bxs sku-act" onclick="toggleSkuMenu(event,'${escAttr(s.id)}')" title="More actions">${icon('dots',{size:16})}</button>
         </div>
-        <div class="sku-menu" id="sku-menu-${escAttr(s.id)}" style="display:none;position:absolute;right:10px;margin-top:-2px;background:var(--s);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:50;min-width:140px;overflow:hidden">
+        <div class="sku-menu" id="sku-menu-${escAttr(s.id)}" style="display:none;position:absolute;right:10px;margin-top:-2px;background:rgba(24,28,38,.92);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);border:1px solid rgba(255,255,255,.1);border-radius:12px;box-shadow:0 10px 32px rgba(0,0,0,.45);z-index:50;min-width:140px;overflow:hidden">
           <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${escAttr(s.id)}')">${icon('edit',{style:'margin-right:8px'})}Edit SKU</div>
           <div class="sku-menu-item" onclick="hideSkuMenus();archiveSKU('${escAttr(s.id)}')">${icon('archive',{style:'margin-right:8px'})}Archive</div>
           <div class="sku-menu-item" style="color:var(--re);border-top:1px solid var(--bd)" onclick="hideSkuMenus();delSKU('${escAttr(s.id)}')">${icon('trash',{style:'margin-right:8px'})}Delete</div>
@@ -5119,7 +5137,7 @@ function renderSKUCard(s,c,brand,statusIcon,profColor,ifDelColor){
       <button class="btn bg bsm" onclick="showCalcModal('${id}')">${icon('calc')}Calc</button>
       <button class="btn bg bsm" onclick="showSkuHistoryModal('${id}')">History</button>
       <button class="btn bg bsm skc-more" onclick="toggleSkuMenuCard(event,'${id}')" title="More actions">${icon('dots',{size:16})}</button>
-      <div class="sku-menu" id="scm-${id}" style="display:none;position:fixed;background:var(--s);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:50;min-width:160px;overflow:hidden">
+      <div class="sku-menu" id="scm-${id}" style="display:none;position:fixed;background:rgba(24,28,38,.92);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);border:1px solid rgba(255,255,255,.1);border-radius:12px;box-shadow:0 10px 32px rgba(0,0,0,.45);z-index:50;min-width:160px;overflow:hidden">
         <div class="sku-menu-item" onclick="hideSkuMenus();openTagsModal('${id}')">${icon('tag',{style:'margin-right:8px'})}Tags &amp; Notes</div>
         <div class="sku-menu-item" onclick="hideSkuMenus();startEdit('${id}')">${icon('edit',{style:'margin-right:8px'})}Edit SKU</div>
         <div class="sku-menu-item" onclick="hideSkuMenus();archiveSKU('${id}')">${icon('archive',{style:'margin-right:8px'})}Archive</div>
@@ -5176,7 +5194,7 @@ function renderLiveStatusBanner(){
   if(runningFresh){
     const total=s.total||0, done=s.done||0;
     const pct=total?Math.min(100,Math.round(done/total*100)):0;
-    el.innerHTML=`<div style="background:rgba(78,142,247,.10);border:1px solid rgba(78,142,247,.30);border-radius:8px;padding:8px 12px">
+    el.innerHTML=`<div style="background:rgba(78,142,247,.10);border:1px solid rgba(78,142,247,.30);border-radius:12px;padding:9px 13px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)">
       <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--bl);font-weight:600">
         <span style="animation:pulse 1.2s infinite;display:inline-flex">${icon('refresh',{size:14})}</span>
         <span>Updating Myntra prices… ${done.toLocaleString('en-IN')}/${total.toLocaleString('en-IN')}${s.fail?` · ${s.fail} failed`:''}${src}</span>
@@ -5192,12 +5210,12 @@ function renderLiveStatusBanner(){
     const waited=Date.now()-reqAt;
     const who=cmd.requestedBy?` by ${esc(String(cmd.requestedBy))}`:'';
     if(waited<=LIVE_CMD_WAIT_MS){
-      el.innerHTML=`<div style="background:rgba(78,142,247,.10);border:1px solid rgba(78,142,247,.30);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--bl);display:flex;align-items:center;gap:8px">
+      el.innerHTML=`<div style="background:rgba(78,142,247,.10);border:1px solid rgba(78,142,247,.30);border-radius:12px;padding:9px 13px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:12px;color:var(--bl);display:flex;align-items:center;gap:8px">
         <span style="animation:pulse 1.2s infinite;display:inline-flex">${icon('refresh',{size:14})}</span>
         <span>Update requested${who} — waiting for a laptop to pick it up…</span>
       </div>`;
     }else{
-      el.innerHTML=`<div style="background:rgba(255,180,0,.10);border:1px solid rgba(255,180,0,.30);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--ac);display:flex;align-items:center;gap:8px">
+      el.innerHTML=`<div style="background:rgba(255,180,0,.10);border:1px solid rgba(255,180,0,.30);border-radius:12px;padding:9px 13px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:12px;color:var(--ac);display:flex;align-items:center;gap:8px">
         ${icon('alert',{size:14})}
         <span>Update requested ${esc(_liveAgo(reqAt))} but no laptop has run it — open (or auto-start) the price fetcher on a laptop.</span>
       </div>`;
@@ -5209,7 +5227,7 @@ function renderLiveStatusBanner(){
   if(stalled){
     // The laptop stopped mid-run (turned off / slept). Show what got done.
     const done=s.done||0, total=s.total||0;
-    el.innerHTML=`<div style="background:rgba(255,180,0,.10);border:1px solid rgba(255,180,0,.30);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--ac);display:flex;align-items:center;gap:8px">
+    el.innerHTML=`<div style="background:rgba(255,180,0,.10);border:1px solid rgba(255,180,0,.30);border-radius:12px;padding:9px 13px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:12px;color:var(--ac);display:flex;align-items:center;gap:8px">
       ${icon('alert',{size:14})}
       <span>Myntra price update didn't finish — the laptop may have turned off (${done.toLocaleString('en-IN')}/${total.toLocaleString('en-IN')} done, ${esc(_liveAgo(heartbeat))}). Run the fetcher again on a laptop to complete it.</span>
     </div>`;
@@ -5224,7 +5242,7 @@ function renderLiveStatusBanner(){
   const failTxt=s.fail?` · ${s.fail} failed`:'';
   if(Date.now()-when>LIVE_STATUS_OLD_MS){
     // Prices are old and nothing is running → the laptop hasn't refreshed lately
-    el.innerHTML=`<div style="background:rgba(255,180,0,.08);border:1px solid rgba(255,180,0,.25);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--ac);display:flex;align-items:center;gap:8px">
+    el.innerHTML=`<div style="background:rgba(255,180,0,.08);border:1px solid rgba(255,180,0,.25);border-radius:12px;padding:8px 13px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:12px;color:var(--ac);display:flex;align-items:center;gap:8px">
       ${icon('alert',{size:13})}
       <span>Myntra prices may be outdated — last updated ${esc(_liveAgo(when))}. Run the price fetcher on a laptop to refresh.</span>
     </div>`;
