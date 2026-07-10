@@ -301,7 +301,12 @@ async function fetchStyle(styleId) {
   }
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Scriptable has no setTimeout — its timer API is Timer.schedule. Keep a
+// setTimeout fallback so the Node test harness can drive this file too.
+const sleep = (ms) => new Promise((r) => {
+  if (typeof Timer !== "undefined" && Timer.schedule) Timer.schedule(ms, false, r);
+  else setTimeout(r, ms);
+});
 
 function sourceName() {
   try { return "iPhone (" + Device.name() + ")"; } catch (e) { return "iPhone"; }
