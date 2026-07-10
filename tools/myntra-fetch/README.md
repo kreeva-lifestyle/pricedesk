@@ -54,6 +54,33 @@ products, confirm the column fills, then set it back to `0` for all.
 
 ---
 
+## Trigger it from the app (watch mode)
+
+Instead of running `npm start` by hand, you can leave a small "watcher" running
+and press **Update Myntra ₹** in PriceDesk (works from your phone too). Whichever
+laptop is on and watching picks up the request and runs the fetch.
+
+Start the watcher:
+```
+npm run watch
+```
+It stays running and checks for requests every 20 seconds. Press **Update
+Myntra ₹** in the app → within a minute the watcher runs and the app's banner
+shows the live progress.
+
+**Make it start automatically when the laptop boots** (so it's always ready):
+- **Windows (Task Scheduler):** Create Task → Trigger: **At log on** → Action:
+  Start a program → Program: `npm`, Arguments: `run watch`, "Start in": this
+  folder. Tick "Run whether user is logged on or not". (Or put a shortcut to
+  `npm run watch` in the Startup folder.)
+- **Mac/Linux:** add `npm run watch` to a login item / `@reboot` cron entry in
+  this folder.
+
+Run it on several laptops if you like — whichever is on responds; they avoid
+double-running, and any overlap is harmless. The laptop still has to be powered
+on and awake for a request to be picked up; the app warns "no laptop online" if
+a request goes unanswered for ~2 minutes.
+
 ## Keeping prices fresh automatically (optional)
 
 Run it on a schedule so prices refresh without you thinking about it:

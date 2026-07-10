@@ -34,7 +34,7 @@
 - `pd_brands`, `pd_categories`, `pd_commissions`, `pd_thresholds`: normalized per-row config (replaces same-named keys in `app_data`)
 - `pd_audit_log`: append-only audit trail (RLS restricts to INSERT+SELECT for anon)
 - `pd_sku_history`: per-change SKU history
-- `app_data`: Key-value config (remaining keys: `pd_logistics`, `pd_wireframe`, `pd_users`, `pd_sessions`, `pd_passkeys`, `pd_webauthn_challenges`, `pd_live_prices`, `pd_live_status`, etc.)
+- `app_data`: Key-value config (remaining keys: `pd_logistics`, `pd_wireframe`, `pd_users`, `pd_sessions`, `pd_passkeys`, `pd_webauthn_challenges`, `pd_live_prices`, `pd_live_status`, `pd_live_command`, etc.)
 - `pd_sync`: Realtime notifications for `app_data` key changes (not used for normalized tables)
 - `pd_backups`: 7-day rolling daily backups
 
@@ -50,6 +50,7 @@
 ## Live Myntra prices (laptop fetcher, no Edge Function)
 - **Myntra bot-blocks datacenter IPs** (serves a 483-byte "Site Maintenance" stub to any cloud/Supabase request, real page to residential browsers), so prices are fetched by `tools/myntra-fetch/` — a standalone Node CLI the user runs on their own laptop (residential IP Myntra trusts). It reads active Myntra SKUs from `pd_skus_v2`/`pd_brands`, fetches each PDP paced ~1/1.5s, parses with `parse.mjs` (JSON-LD → `__myx`/`__INITIAL_STATE__`/`pdpData` state deep-walk → regex → `og:price` meta → `pdp-price` DOM; unit-tested in `tests/edge-functions/myntra-fetch-parse.test.js`), and writes `app_data` key `pd_live_prices` + pings `pd_sync` exactly like the app. Config is validated by `config.mjs` (`validateCredentials`, tested) to catch paste-corrupted keys.
 - The app is **display + status only**: `pd_live_prices` (`LIVE_PRICES` global, `{[styleId]:{price,mrp,ts,err,oos}}`) → "Myntra ₹" column beside Cust. Paid + mobile card cell. Cell states (`_livePriceInfo`): green ✓ match (within ±₹10 of Cust. Paid, `LIVE_PRICE_MATCH_TOL`), red/amber ▲▼ drift, **"Out of stock"** (fetcher set `oos:true` via `isOutOfStock` — sold-out PDPs show only MRP), **"⚠ Set discount"** (Myntra price == MRP ⇒ no discount set on Myntra), ✕ error, — none/unfetched. **Display-only, never feeds `calcSKU`** (keep `live_prices` OUT of `CALC_INPUT_TYPES`). No in-app fetch button — the laptop is the only fetcher.
+- Trigger from the app: the **Update Myntra ₹** button (`requestLivePriceFetch`) writes `pd_live_command` (`LIVE_COMMAND`, `{requestedAt,requestedBy}`); the laptop tool's **watch mode** (`node fetch-prices.mjs --watch`, npm `watch`) polls it and runs when `shouldRunCommand` (pure, in `config.mjs`, unit-tested) says so (soft-claim via `pd_live_status` avoids double-runs). The banner shows "waiting for a laptop" then "no laptop online" after `LIVE_CMD_WAIT_MS`. Also out of `CALC_INPUT_TYPES`.
 - Progress banner: the fetcher also writes `pd_live_status` (`LIVE_STATUS`, `{running,total,done,ok,fail,startedAt,finishedAt,source,ts}`); `renderLiveStatusBanner()` on the SKUs page shows live progress while running, "last updated N ago" when idle, an **"update didn't finish — laptop may have turned off"** warning when a run's heartbeat (`ts`) goes stale mid-run (`LIVE_STALL_MS`), and a "prices may be outdated" nudge when the last run is >2 days old. Also display-only (out of `CALC_INPUT_TYPES`).
 
 ## Critical Code Patterns

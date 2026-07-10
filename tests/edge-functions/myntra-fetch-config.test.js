@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateCredentials } from '../../tools/myntra-fetch/config.mjs';
+import { validateCredentials, shouldRunCommand } from '../../tools/myntra-fetch/config.mjs';
 
 // Guards the laptop fetcher's config validation — turns the cryptic
 // "Cannot convert argument to a ByteString" (a non-ASCII char pasted into the
@@ -37,5 +37,44 @@ describe('validateCredentials', () => {
 
   it('rejects a token that is not a JWT shape', () => {
     expect(() => validateCredentials(GOOD_URL, 'not-a-real-key')).toThrow(/does not look like a valid key/);
+  });
+});
+
+describe('shouldRunCommand — watcher decision', () => {
+  const now = 1_000_000_000_000;
+  const iso = (ms) => new Date(ms).toISOString();
+
+  it('runs a fresh request the watcher has not processed', () => {
+    const cmd = { requestedAt: iso(now - 5000) };
+    expect(shouldRunCommand(cmd, {}, 0, now)).toBe(true);
+  });
+  it('does not run a request already processed by this watcher', () => {
+    const cmd = { requestedAt: iso(now - 5000) };
+    expect(shouldRunCommand(cmd, {}, now - 5000, now)).toBe(false);
+  });
+  it('does not run a request older than the last completed run', () => {
+    const cmd = { requestedAt: iso(now - 10000) };
+    const status = { finishedAt: iso(now - 5000) };
+    expect(shouldRunCommand(cmd, status, 0, now)).toBe(false);
+  });
+  it('skips while another watcher is actively running it (fresh heartbeat)', () => {
+    const cmd = { requestedAt: iso(now - 5000) };
+    const status = { running: true, ts: now - 2000 };
+    expect(shouldRunCommand(cmd, status, 0, now)).toBe(false);
+  });
+  it('runs again once that run finished before the request', () => {
+    // request came AFTER the last finish, nothing running now
+    const cmd = { requestedAt: iso(now - 1000) };
+    const status = { running: false, finishedAt: iso(now - 5000), ts: now - 5000 };
+    expect(shouldRunCommand(cmd, status, 0, now)).toBe(true);
+  });
+  it('treats a stale "running" heartbeat as claimable (laptop died mid-run)', () => {
+    const cmd = { requestedAt: iso(now - 1000) };
+    const status = { running: true, ts: now - 20 * 60 * 1000 }; // 20 min stale
+    expect(shouldRunCommand(cmd, status, 0, now)).toBe(true);
+  });
+  it('is false with no request', () => {
+    expect(shouldRunCommand({}, {}, 0, now)).toBe(false);
+    expect(shouldRunCommand(null, null, 0, now)).toBe(false);
   });
 });

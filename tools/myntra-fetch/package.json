@@ -8,7 +8,8 @@
     "myntra-fetch": "fetch-prices.mjs"
   },
   "scripts": {
-    "start": "node fetch-prices.mjs"
+    "start": "node fetch-prices.mjs",
+    "watch": "node fetch-prices.mjs --watch"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.3"

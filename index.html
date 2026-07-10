@@ -1447,6 +1447,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
       <div class="sku-mp-tab" data-mp="amazon" onclick="switchSKUTab(this,'amazon')">Amazon</div>
     </div>
     <div class="sku-actions-wrap" style="display:flex;gap:6px;align-items:center">
+      <div class="btn bg bsm" onclick="requestLivePriceFetch()" title="Ask a laptop running the fetcher to refresh live Myntra prices"><span class="ic-h" data-icon="refresh" data-size="12"></span> Update Myntra ₹</div>
       <div class="btn bp bsm" onclick="addRow()">+ Add SKU</div>
       <div style="position:relative;display:inline-block" id="import-dropdown">
         <button class="btn bg bsm" onclick="toggleImportMenu()" style="min-width:80px">Import <span class="ic-h" data-icon="chevronDown" data-size="12"></span> </button>
@@ -2004,6 +2005,7 @@ const DB_KEYS = {
   user_prefs:     'pd_user_preferences',
   live_prices:    'pd_live_prices',
   live_status:    'pd_live_status',
+  live_command:   'pd_live_command',
 };
 
 // Fire-and-forget pd_sync ping so OTHER devices learn that a per-row table
@@ -3091,6 +3093,7 @@ async function save(type, opts){
     alert:       ALERT_SETTINGS,
     live_prices: LIVE_PRICES,
     live_status: LIVE_STATUS,
+    live_command: LIVE_COMMAND,
   };
   // Never let a users-save erase a stored password hash. Merge any missing
   // hashes back from the current DB copy first (defense-in-depth against the
@@ -3128,7 +3131,7 @@ async function loadFromStorage(){
     const loaded = {};
     const [skusResult, brandsResult, catResult, threshResult, usersResult,
            levelsResult, alertResult, commResult, logisticsResult,
-           wireframeResult, livePricesResult, liveStatusResult] = await Promise.all([
+           wireframeResult, livePricesResult, liveStatusResult, liveCommandResult] = await Promise.all([
       dbLoadAllSKUs(),
       dbLoadAllBrands(),
       dbLoadAllCategories(),
@@ -3140,7 +3143,8 @@ async function loadFromStorage(){
       dbGet(DB_KEYS.logistics).catch(()=>null),
       dbGet(DB_KEYS.wireframe).catch(()=>null),
       dbGet(DB_KEYS.live_prices).catch(()=>null),
-      dbGet(DB_KEYS.live_status).catch(()=>null)
+      dbGet(DB_KEYS.live_status).catch(()=>null),
+      dbGet(DB_KEYS.live_command).catch(()=>null)
     ]);
     loaded.skus = skusResult;
     loaded.brands = brandsResult;
@@ -3151,6 +3155,7 @@ async function loadFromStorage(){
     loaded.wireframe = wireframeResult;
     loaded.live_prices = livePricesResult;
     loaded.live_status = liveStatusResult;
+    loaded.live_command = liveCommandResult;
     if(catResult){ loaded.categories=catResult.cats; loaded.cat_levels=catResult.catLevel; }
     else {
       const [bc, bl] = await Promise.all([
@@ -3178,6 +3183,7 @@ async function loadFromStorage(){
     if(loaded.alert)       ALERT_SETTINGS  = loaded.alert;
     if(loaded.live_prices) LIVE_PRICES     = loaded.live_prices;
     if(loaded.live_status) LIVE_STATUS     = loaded.live_status;
+    if(loaded.live_command) LIVE_COMMAND   = loaded.live_command;
     if(loaded.categories)  CATS            = loaded.categories;
     if(loaded.levels)      LEVELS          = loaded.levels;
     if(loaded.cat_levels)  CAT_LEVEL       = loaded.cat_levels;
@@ -3397,6 +3403,8 @@ let LIVE_PRICES={};
 // the laptop fetcher (tools/myntra-fetch). Display-only. Shape:
 // { running, total, done, ok, fail, startedAt, finishedAt, source }
 let LIVE_STATUS={};
+// A webapp "run now" request the laptop watcher picks up. { requestedAt, requestedBy }
+let LIVE_COMMAND={};
 
 // ═══════════════════════════════════════════════════════
 // BRANDS
@@ -5146,19 +5154,26 @@ function _liveAgo(ts){
 // Display-only.
 const LIVE_STALL_MS=15*60*1000;        // no heartbeat this long ⇒ run died
 const LIVE_STATUS_OLD_MS=2*24*60*60*1000; // prices older than this ⇒ warn
+const LIVE_CMD_WAIT_MS=2*60*1000;      // request unclaimed this long ⇒ no laptop online
 let _liveStatusTimer=null;
 function renderLiveStatusBanner(){
   const el=document.getElementById('live-status-banner');
   if(!el)return;
   const s=LIVE_STATUS||{};
-  const hasAny=s.running||s.finishedAt||s.startedAt;
-  if(!hasAny){el.style.display='none';el.innerHTML='';_stopLiveStatusTick();return;}
+  const cmd=LIVE_COMMAND||{};
   const src=s.source?` · ${esc(String(s.source))}`:'';
   const heartbeat=s.ts||(s.startedAt?Date.parse(s.startedAt):0);
   const stalled=s.running&&heartbeat&&(Date.now()-heartbeat>LIVE_STALL_MS);
+  const runningFresh=s.running&&!stalled;
+  const finished=s.finishedAt?Date.parse(s.finishedAt):0;
+  const reqAt=cmd.requestedAt?Date.parse(cmd.requestedAt):0;
+  // A webapp request is "pending" until a run for it starts or completes.
+  const pendingReq=reqAt&&reqAt>finished&&!runningFresh;
+  const hasAny=s.running||s.finishedAt||s.startedAt||pendingReq;
+  if(!hasAny){el.style.display='none';el.innerHTML='';_stopLiveStatusTick();return;}
   el.style.display='';
 
-  if(s.running&&!stalled){
+  if(runningFresh){
     const total=s.total||0, done=s.done||0;
     const pct=total?Math.min(100,Math.round(done/total*100)):0;
     el.innerHTML=`<div style="background:rgba(78,142,247,.10);border:1px solid rgba(78,142,247,.30);border-radius:8px;padding:8px 12px">
@@ -5168,6 +5183,25 @@ function renderLiveStatusBanner(){
       </div>
       <div style="height:4px;background:rgba(78,142,247,.15);border-radius:3px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--bl);transition:width .4s"></div></div>
     </div>`;
+    _startLiveStatusTick();
+    return;
+  }
+
+  // A webapp "Update Myntra ₹" request that no running laptop has claimed yet.
+  if(pendingReq){
+    const waited=Date.now()-reqAt;
+    const who=cmd.requestedBy?` by ${esc(String(cmd.requestedBy))}`:'';
+    if(waited<=LIVE_CMD_WAIT_MS){
+      el.innerHTML=`<div style="background:rgba(78,142,247,.10);border:1px solid rgba(78,142,247,.30);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--bl);display:flex;align-items:center;gap:8px">
+        <span style="animation:pulse 1.2s infinite;display:inline-flex">${icon('refresh',{size:14})}</span>
+        <span>Update requested${who} — waiting for a laptop to pick it up…</span>
+      </div>`;
+    }else{
+      el.innerHTML=`<div style="background:rgba(255,180,0,.10);border:1px solid rgba(255,180,0,.30);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--ac);display:flex;align-items:center;gap:8px">
+        ${icon('alert',{size:14})}
+        <span>Update requested ${esc(_liveAgo(reqAt))} but no laptop has run it — open (or auto-start) the price fetcher on a laptop.</span>
+      </div>`;
+    }
     _startLiveStatusTick();
     return;
   }
@@ -5210,6 +5244,21 @@ function _startLiveStatusTick(){
   },30000);
 }
 function _stopLiveStatusTick(){ if(_liveStatusTimer){clearInterval(_liveStatusTimer);_liveStatusTimer=null;} }
+
+// Ask a laptop watcher to run the Myntra fetch. Writes a request record the
+// laptop tool (tools/myntra-fetch --watch) polls for; the banner then shows
+// "waiting for a laptop" until one picks it up. Needs a laptop powered on with
+// the watcher running.
+async function requestLivePriceFetch(){
+  const s=LIVE_STATUS||{};
+  if(s.running&&s.ts&&Date.now()-s.ts<LIVE_STALL_MS){toast('A Myntra price update is already running','blue');return;}
+  LIVE_COMMAND={requestedAt:new Date().toISOString(),requestedBy:currentUser?.name||''};
+  try{
+    await save('live_command');
+    toast('Update requested — a laptop with the fetcher running will pick it up shortly','blue');
+    renderLiveStatusBanner();
+  }catch(e){toast('Could not send the request: '+esc(e.message),'red');}
+}
 
 // A Myntra price within ±₹10 of Customer Paid is treated as a match (green ✓)
 // — small rounding/fee differences are expected and considered safe.
@@ -10230,7 +10279,7 @@ async function handleRealtimeUpdate(key, newValue){
   // Display-only: repaint the SKU list so the Myntra ₹ column updates, but do
   // NOT add 'live_prices' to CALC_INPUT_TYPES — it never feeds calcSKU
   if(type==='live_prices'&&activePage==='skus'&&!editId) renderSKUs();
-  if(type==='live_status'&&activePage==='skus') renderLiveStatusBanner();
+  if((type==='live_status'||type==='live_command')&&activePage==='skus') renderLiveStatusBanner();
   if(key===DB_TASK_KEY||key===DB_COMPLETED_TASK_KEY){
     if(activePage==='dashboard') renderDashTasks();
   }
@@ -10261,6 +10310,7 @@ function applyRealtimeData(type, value){
       case 'thresholds': THRESHOLDS=value; return true;
       case 'live_prices': if(value&&typeof value==='object'){LIVE_PRICES=value; return true;} return false;
       case 'live_status': if(value&&typeof value==='object'){LIVE_STATUS=value; return true;} return false;
+      case 'live_command': if(value&&typeof value==='object'){LIVE_COMMAND=value; return true;} return false;
       case 'categories': CATS=value; return true;
       case 'levels': LEVELS=value; return true;
       case 'cat_levels': CAT_LEVEL=value; return true;
