@@ -81,6 +81,32 @@ double-running, and any overlap is harmless. The laptop still has to be powered
 on and awake for a request to be picked up; the app warns "no laptop online" if
 a request goes unanswered for ~2 minutes.
 
+## Run from your iPhone (no laptop needed)
+
+When no laptop is available, your iPhone can do the whole fetch itself — its
+mobile/Wi-Fi connection is exactly the kind Myntra trusts.
+
+**One-time setup (~2 minutes):**
+1. Install **Scriptable** from the App Store (free).
+2. Open `scriptable-myntra-fetch.js` (this folder) on your phone — easiest is
+   opening the file on GitHub in Safari — then Select All → Copy.
+3. In Scriptable: tap **+** (new script) → paste → rename it **Myntra Fetch**.
+
+**To run:** open Scriptable → tap **Myntra Fetch** → ▶. Keep Scriptable open
+with the screen on until it says **Done** (~25 minutes for ~1,000 styles —
+plug the phone in, and consider Settings → Display & Brightness → Auto-Lock →
+Never while it runs). Progress also shows live in PriceDesk's banner, with
+your iPhone's name as the source.
+
+Tips:
+- For a quick first test, edit the `LIMIT = 0` line near the top to
+  `LIMIT = 20`, run once, then set it back to `0`.
+- If the phone locks or you leave the app, iOS stops the run — just run it
+  again; everything fetched so far is already saved (it checkpoints every 100
+  styles), and the app will show the "didn't finish" notice until you do.
+- The iPhone runs one product at a time (a bit slower than the laptop) and
+  cannot "watch" for the app button — it's a run-it-when-you-need-it backup.
+
 ## Keeping prices fresh automatically (optional)
 
 Run it on a schedule so prices refresh without you thinking about it:
