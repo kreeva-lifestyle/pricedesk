@@ -127,6 +127,24 @@ describe('scriptable fetcher — offline end-to-end', () => {
   });
 });
 
+describe('scriptable fetcher — Scriptable Timer branch (no setTimeout on iOS)', () => {
+  it('runs main() with ONLY Timer available (as on the real device)', async () => {
+    const AsyncFunction = (async function () {}).constructor;
+    const TimerShim = { schedule: (ms, repeats, cb) => cb() };
+    // No setTimeout param at all — a bare setTimeout reference would throw,
+    // reproducing the on-device crash if the guard ever regresses.
+    const factory = new AsyncFunction('Request', 'Timer', SRC + '\nreturn __exports;');
+    const S2 = await factory(RequestShim, TimerShim);
+    const result = await S2.main();
+    expect(result).toMatchObject({ total: 3, ok: 2, fail: 1, oos: 1 });
+  });
+  it('source guard: sleep prefers Timer.schedule; setTimeout only as guarded fallback', () => {
+    expect(SRC).toContain('Timer.schedule(ms, false, r)');
+    const bare = SRC.split('\n').filter(l => l.includes('setTimeout(') && !l.trim().startsWith('//'));
+    expect(bare).toEqual(['  else setTimeout(r, ms);']);
+  });
+});
+
 describe('scriptable fetcher — parser drift guard vs parse.mjs', () => {
   const SHARED = [
     'const PRICE_KEYS = ["discounted", "discountedPrice", "sellingPrice", "finalPrice", "salePrice"];',
