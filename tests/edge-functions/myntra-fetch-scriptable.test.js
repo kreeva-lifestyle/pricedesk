@@ -128,20 +128,37 @@ describe('scriptable fetcher — offline end-to-end', () => {
 });
 
 describe('scriptable fetcher — Scriptable Timer branch (no setTimeout on iOS)', () => {
-  it('runs main() with ONLY Timer available (as on the real device)', async () => {
+  // Scriptable's canonical instance Timer: new Timer(); t.timeInterval; t.schedule(cb)
+  class TimerShim {
+    constructor() { this.timeInterval = 0; this.repeats = false; }
+    schedule(cb) { cb(); }        // fire immediately in the harness
+    invalidate() {}
+  }
+  it('runs main() with ONLY the instance Timer available (as on the device)', async () => {
     const AsyncFunction = (async function () {}).constructor;
-    const TimerShim = { schedule: (ms, repeats, cb) => cb() };
-    // No setTimeout param at all — a bare setTimeout reference would throw,
-    // reproducing the on-device crash if the guard ever regresses.
+    // No setTimeout in scope at all — a bare setTimeout would throw, so this
+    // proves the run drives entirely off the instance Timer (and never hangs).
     const factory = new AsyncFunction('Request', 'Timer', SRC + '\nreturn __exports;');
     const S2 = await factory(RequestShim, TimerShim);
     const result = await S2.main();
     expect(result).toMatchObject({ total: 3, ok: 2, fail: 1, oos: 1 });
   });
-  it('source guard: sleep prefers Timer.schedule; setTimeout only as guarded fallback', () => {
-    expect(SRC).toContain('Timer.schedule(ms, false, r)');
+  it('run() surfaces a thrown error instead of hanging', async () => {
+    const AsyncFunction = (async function () {}).constructor;
+    let alerted = false;
+    class AlertShim { addAction() {} async present() { alerted = true; } }
+    // Request that throws on any Supabase read → loadMyntraStyleIds fails.
+    class BadRequest { constructor(u){this.url=u;this.method='GET';this.headers={};this.response={statusCode:500};} async loadString(){ return 'x'.repeat(0), 'boom-not-json{'; } }
+    const factory = new AsyncFunction('Request', 'Timer', 'Alert', SRC + '\nreturn __exports;');
+    const S3 = await factory(BadRequest, TimerShim, AlertShim);
+    const res = await S3.run();
+    expect(res).toHaveProperty('total', 0); // returned cleanly, did not throw
+  });
+  it('source guard: sleep uses instance Timer; setTimeout only as guarded fallback', () => {
+    expect(SRC).toContain('const t = new Timer();');
+    expect(SRC).toContain('t.schedule(() => resolve());');
     const bare = SRC.split('\n').filter(l => l.includes('setTimeout(') && !l.trim().startsWith('//'));
-    expect(bare).toEqual(['  else setTimeout(r, ms);']);
+    expect(bare).toEqual(['  if (typeof setTimeout === "function") setTimeout(resolve, ms);']);
   });
 });
 
