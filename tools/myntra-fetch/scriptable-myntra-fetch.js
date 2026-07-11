@@ -21,7 +21,12 @@
 // ── Config (already filled in — nothing to change) ─────────────────────────
 const SUPABASE_URL = "https://fcmesdnagvrdmjzzuwue.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbWVzZG5hZ3ZyZG1qenp1d3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxNjM4NTgsImV4cCI6MjA4OTczOTg1OH0.fS1ecV898Dmrka6hr3R0RE6gcKlneWUPbDyDPv30_qU";
-const PACING_MS = 1200;   // gap between product pages (gentle on Myntra)
+// Speed knobs. CONCURRENCY fetches this many product pages at once (the big
+// speed win); PACING_MS is the min gap between a worker's own requests. If you
+// ever see lots of "blocked" results, lower CONCURRENCY (e.g. 3) or raise
+// PACING_MS — Myntra may be rate-limiting your connection.
+const CONCURRENCY = 8;    // pages fetched in parallel
+const PACING_MS = 150;    // per-worker gap between its requests
 const LIMIT = 0;          // 0 = all styles; set 20 for a quick test run
 
 const LIVE_KEY = "pd_live_prices";
@@ -354,43 +359,55 @@ async function main() {
   if (LIMIT > 0) ids = ids.slice(0, LIMIT);
   if (!ids.length) { console.log("No active Myntra SKUs found."); return { ok: 0, fail: 0, total: 0 }; }
   const live = await readBlob(LIVE_KEY); // merge — don't clobber other styles
-  const mins = Math.max(1, Math.round((ids.length * PACING_MS) / 60000));
-  console.log(`Fetching ${ids.length} styles from this iPhone (~${mins} min). Keep Scriptable open.`);
+  // Rough estimate: ~0.7s network per page, CONCURRENCY in parallel.
+  const mins = Math.max(1, Math.round((ids.length * 700) / Math.max(1, CONCURRENCY) / 60000));
+  console.log(`Fetching ${ids.length} styles ${CONCURRENCY} at a time from this iPhone (~${mins} min). Keep Scriptable open.`);
 
   let ok = 0, fail = 0, oos = 0, done = 0;
   const startedAt = new Date().toISOString();
   const src = sourceName();
   await writeStatus({ running: true, total: ids.length, done: 0, ok: 0, fail: 0, startedAt, source: src });
-  let lastStatusAt = Date.now();
+  let lastStatusAt = Date.now(), lastCheckpoint = 0;
 
-  for (const sid of ids) {
-    const started = Date.now();
-    const r = await fetchStyle(sid);
-    if (r.ok && r.oos) {
-      live[sid] = { oos: true, mrp: r.mrp != null ? r.mrp : null, ts: Date.now() };
-      ok++; oos++;
-    } else if (r.ok && typeof r.price === "number") {
-      live[sid] = { price: r.price, mrp: r.mrp != null ? r.mrp : null, ts: Date.now() };
-      ok++;
-    } else {
-      fail++;
-      // Keep any previously-good price; only stamp an error if we have none.
-      if (!live[sid] || live[sid].price == null) {
-        live[sid] = { price: null, mrp: null, ts: Date.now(), err: r.error || "fetch failed" };
+  // Worker pool — CONCURRENCY pages in flight at once (the speed win). JS is
+  // single-threaded, so the shared counters/`live` mutate atomically between
+  // awaits. Progress + checkpoints are time/count-throttled and safe to run
+  // from whichever worker crosses the threshold.
+  const queue = ids.slice();
+  const worker = async () => {
+    while (queue.length) {
+      const sid = queue.shift();
+      if (sid === undefined) return;
+      const started = Date.now();
+      const r = await fetchStyle(sid);
+      if (r.ok && r.oos) {
+        live[sid] = { oos: true, mrp: r.mrp != null ? r.mrp : null, ts: Date.now() };
+        ok++; oos++;
+      } else if (r.ok && typeof r.price === "number") {
+        live[sid] = { price: r.price, mrp: r.mrp != null ? r.mrp : null, ts: Date.now() };
+        ok++;
+      } else {
+        fail++;
+        // Keep any previously-good price; only stamp an error if we have none.
+        if (!live[sid] || live[sid].price == null) {
+          live[sid] = { price: null, mrp: null, ts: Date.now(), err: r.error || "fetch failed" };
+        }
       }
+      done++;
+      if (done % 25 === 0 || done === ids.length) console.log(`  ${done}/${ids.length}  (${ok} ok, ${fail} failed)`);
+      // Push progress to the app frequently (time-throttled) so the banner
+      // ticks up within seconds. Stamp lastStatusAt before the await so
+      // concurrent workers don't all fire a write at once.
+      if (Date.now() - lastStatusAt >= 2500 || done === ids.length) {
+        lastStatusAt = Date.now();
+        await writeStatus({ running: true, total: ids.length, done, ok, fail, startedAt, source: src });
+      }
+      if (done - lastCheckpoint >= 100) { lastCheckpoint = done; await writeLivePrices(live); } // iOS kill loses little
+      const elapsed = Date.now() - started;
+      if (elapsed < PACING_MS) await sleep(PACING_MS - elapsed);
     }
-    done++;
-    if (done % 10 === 0 || done === ids.length) console.log(`  ${done}/${ids.length}  (${ok} ok, ${fail} failed)`);
-    // Push progress to the app frequently (time-throttled) so the banner ticks
-    // up within seconds and a stall shows the exact count it froze at.
-    if (Date.now() - lastStatusAt >= 2500 || done === ids.length) {
-      await writeStatus({ running: true, total: ids.length, done, ok, fail, startedAt, source: src });
-      lastStatusAt = Date.now();
-    }
-    if (done % 100 === 0) await writeLivePrices(live); // checkpoint — an iOS kill loses little
-    const elapsed = Date.now() - started;
-    if (elapsed < PACING_MS) await sleep(PACING_MS - elapsed);
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, CONCURRENCY), ids.length) }, worker));
 
   await writeLivePrices(live);
   await writeStatus({ running: false, total: ids.length, done, ok, fail, startedAt, finishedAt: new Date().toISOString(), source: src });

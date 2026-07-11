@@ -93,14 +93,17 @@ mobile/Wi-Fi connection is exactly the kind Myntra trusts.
 3. In Scriptable: tap **+** (new script) → paste → rename it **Myntra Fetch**.
 
 **To run:** open Scriptable → tap **Myntra Fetch** → ▶. Keep Scriptable open
-with the screen on until it says **Done** (~25 minutes for ~1,000 styles —
-plug the phone in, and consider Settings → Display & Brightness → Auto-Lock →
-Never while it runs). Progress also shows live in PriceDesk's banner, with
-your iPhone's name as the source.
+with the screen on until it says **Done** (a few minutes for ~1,000 styles — it
+fetches several pages in parallel; plug the phone in, and consider Settings →
+Display & Brightness → Auto-Lock → Never while it runs). Progress also shows
+live in PriceDesk's banner, with your iPhone's name as the source.
 
 Tips:
 - For a quick first test, edit the `LIMIT = 0` line near the top to
   `LIMIT = 20`, run once, then set it back to `0`.
+- Speed knobs near the top: `CONCURRENCY` (pages fetched at once, default 8)
+  and `PACING_MS`. If you ever see lots of "blocked" results, lower
+  `CONCURRENCY` (e.g. 3) or raise `PACING_MS` — Myntra may be rate-limiting.
 - If the phone locks or you leave the app, iOS stops the run — just run it
   again; everything fetched so far is already saved (it checkpoints every 100
   styles), and the app will show the "didn't finish" notice until you do.
