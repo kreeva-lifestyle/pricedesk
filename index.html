@@ -43,7 +43,7 @@
 .sku-card:nth-child(n+8),.shub-card:nth-child(n+8),.sc:nth-child(n+8),.brand-card:nth-child(n+8){animation-delay:.22s}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:radial-gradient(1100px 700px at 12% -8%,rgba(78,142,247,.07),transparent 60%),radial-gradient(900px 600px at 96% 108%,rgba(245,166,35,.035),transparent 55%),var(--bg);background-attachment:fixed;color:var(--tx);font-family:var(--sans);min-height:100vh;display:flex;-webkit-text-size-adjust:100%;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear */
+html{overflow-y:scroll;color-scheme:dark}/* Prevent layout shift + render native controls (select popups, scrollbars) in dark to match the app */
 .sidebar{width:230px;height:100vh;background:var(--s);border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;position:fixed;top:0;left:0;z-index:100;overflow-y:auto}
 .logo{padding:18px;border-bottom:1px solid var(--bd)}
 .logo-text{font-size:17px;font-weight:700;color:var(--ac);font-family:var(--mono)}
@@ -314,6 +314,10 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
 @supports not (backdrop-filter:blur(1px)){.filter-bar{background:var(--s)}}
 .filter-select{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:10px;color:var(--tx);font-size:12px;padding:5px 9px;cursor:pointer;min-width:120px}
 .filter-select:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 2px rgba(245,166,35,.15)}
+/* Native <select> popups are OS-rendered — force dark, readable options so
+   they match the app instead of showing a white list */
+.filter-select option,.sse option,select option{background:#181c26;color:var(--tx)}
+.filter-select option:checked,.sse option:checked{background:#262d42;color:#fff}
 .filter-sep{width:1px;height:20px;background:var(--bd2);margin:0 2px}
 .filter-label{font-size:11px;color:var(--tx3);white-space:nowrap}
 .filter-clear{font-size:11px;color:var(--ac);cursor:pointer;padding:4px 8px;border:1px solid rgba(245,166,35,.3);border-radius:4px;background:transparent;white-space:nowrap}
