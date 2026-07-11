@@ -208,8 +208,12 @@ html{overflow-y:scroll}/* Prevent layout shift from scrollbar appear/disappear *
    each data row its own rounded translucent "pill" with hover. Scoped to the
    SKU + Archive pages via #page-skus/#page-archive where it changes geometry
    so other .ss tables (if any) and the .ss subtext class stay unaffected. */
-.ss-wrap{overflow-x:auto;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:8px 10px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));box-shadow:0 8px 32px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.06);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);-webkit-overflow-scrolling:touch}
-@supports not (backdrop-filter:blur(1px)){.ss-wrap{background:var(--s)}}
+/* NOTE: no backdrop-filter here on purpose — this is a scroll container
+   (overflow-x:auto) and backdrop-filter would make it the containing block
+   for the row's position:fixed 3-dot menu / add-row brand picker, anchoring
+   them to this box and clipping them. The translucent gradient below already
+   reads as glass over the dark page. */
+.ss-wrap{overflow-x:auto;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:8px 10px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));box-shadow:0 8px 32px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.06);-webkit-overflow-scrolling:touch}
 .ss{width:100%;border-collapse:collapse;font-size:12px}
 .ss th{background:var(--s2);color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding:9px 10px;border-bottom:2px solid var(--bd);white-space:nowrap;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis}
 .ss th.auto-h{color:var(--gr);background:rgba(45,212,160,.05)}
