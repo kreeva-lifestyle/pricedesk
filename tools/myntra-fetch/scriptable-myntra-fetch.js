@@ -288,7 +288,12 @@ async function fetchStyle(styleId) {
       "Accept-Language": "en-IN,en;q=0.9",
     };
     r.timeoutInterval = 20;
-    const html = await r.loadString();
+    // Hard timeout in JS too — if r.timeoutInterval is ever not honoured, one
+    // hung page must not freeze the whole run.
+    const html = await Promise.race([
+      r.loadString(),
+      sleep(25000).then(() => { throw new Error("timed out"); }),
+    ]);
     if (isOutOfStock(html)) {
       const p = parseMyntraPrice(html);
       return { ok: true, oos: true, mrp: p ? (p.mrp != null ? p.mrp : p.price) : null };
@@ -301,15 +306,45 @@ async function fetchStyle(styleId) {
   }
 }
 
-// Scriptable has no setTimeout — its timer API is Timer.schedule. Keep a
-// setTimeout fallback so the Node test harness can drive this file too.
-const sleep = (ms) => new Promise((r) => {
-  if (typeof Timer !== "undefined" && Timer.schedule) Timer.schedule(ms, false, r);
-  else setTimeout(r, ms);
+// Scriptable has no setTimeout — its timer API is a Timer instance. Use the
+// canonical instance form (new Timer(); t.timeInterval; t.schedule(cb)), with
+// a setTimeout fallback for the Node test harness, and a last-resort resolve()
+// so a missing/broken timer degrades to "no pause" instead of a frozen run.
+const sleep = (ms) => new Promise((resolve) => {
+  try {
+    if (typeof Timer !== "undefined") {
+      const t = new Timer();
+      t.timeInterval = ms;
+      t.repeats = false;
+      t.schedule(() => resolve());
+      return;
+    }
+  } catch (e) { /* fall through to the fallbacks */ }
+  if (typeof setTimeout === "function") setTimeout(resolve, ms);
+  else resolve();
 });
 
 function sourceName() {
   try { return "iPhone (" + Device.name() + ")"; } catch (e) { return "iPhone"; }
+}
+
+// Run wrapper — any thrown error is surfaced (Alert + a final not-running
+// status) instead of leaving the app's banner stuck on "running" forever.
+async function run() {
+  try {
+    return await main();
+  } catch (e) {
+    console.error("Fatal:", e && e.message);
+    try { await writeStatus({ running: false, finishedAt: new Date().toISOString(), source: sourceName(), error: String(e && e.message).slice(0, 160) }); } catch (_) { /* ignore */ }
+    try {
+      const a = new Alert();
+      a.title = "Myntra Fetch — error";
+      a.message = "The run stopped: " + (e && e.message ? e.message : "unknown error");
+      a.addAction("OK");
+      await a.present();
+    } catch (_) { /* Alert only in Scriptable */ }
+    return { ok: 0, fail: 0, total: 0, error: e && e.message };
+  }
 }
 
 // ── Main run — mirrors the laptop tool's runFetch ───────────────────────────
@@ -326,6 +361,7 @@ async function main() {
   const startedAt = new Date().toISOString();
   const src = sourceName();
   await writeStatus({ running: true, total: ids.length, done: 0, ok: 0, fail: 0, startedAt, source: src });
+  let lastStatusAt = Date.now();
 
   for (const sid of ids) {
     const started = Date.now();
@@ -345,7 +381,12 @@ async function main() {
     }
     done++;
     if (done % 10 === 0 || done === ids.length) console.log(`  ${done}/${ids.length}  (${ok} ok, ${fail} failed)`);
-    if (done % 50 === 0) await writeStatus({ running: true, total: ids.length, done, ok, fail, startedAt, source: src });
+    // Push progress to the app frequently (time-throttled) so the banner ticks
+    // up within seconds and a stall shows the exact count it froze at.
+    if (Date.now() - lastStatusAt >= 2500 || done === ids.length) {
+      await writeStatus({ running: true, total: ids.length, done, ok, fail, startedAt, source: src });
+      lastStatusAt = Date.now();
+    }
     if (done % 100 === 0) await writeLivePrices(live); // checkpoint — an iOS kill loses little
     const elapsed = Date.now() - started;
     if (elapsed < PACING_MS) await sleep(PACING_MS - elapsed);
@@ -372,9 +413,9 @@ async function main() {
 // harness (it appends a `return __exports` when evaluating this file).
 const __exports = {
   parseMyntraPrice, isOutOfStock, deepFindPrice, fingerprintHtml, fingerprintSummary,
-  loadMyntraStyleIds, fetchStyle, main,
+  loadMyntraStyleIds, fetchStyle, main, run,
 };
 if (typeof config !== "undefined") {
-  await main();
+  await run();
   try { Script.complete(); } catch (e) { /* Scriptable only */ }
 }
