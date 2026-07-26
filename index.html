@@ -2576,6 +2576,9 @@ function _rowToBrand(r){
 // True once we've seen the database reject `config`, so we stop retrying it
 // on every save. Reset only by a reload (i.e. after the migration is run).
 let _brandConfigColumnMissing=false;
+// Set when a brand save had to fall back to the legacy blob, so callers can
+// report "saved, but not where it should be" instead of a clean success.
+let _lastBrandSaveDegraded=null;
 
 async function dbSaveBrands(brandsArr){
   const db=getDB();if(!db)throw new Error('No DB');
@@ -2591,13 +2594,14 @@ async function dbSaveBrands(brandsArr){
     _brandConfigColumnMissing=true;
     console.warn('pd_brands.config is missing — saving without per-brand settings. Run the database update in Settings.');
     ({error}=await db.from('pd_brands').upsert(rows.map(strip),{onConflict:'id'}));
-    if(!error&&brandsArr.some(b=>b.config&&Object.keys(b.config).length)){
-      toast('Brand saved, but per-brand settings need a database update — see Settings → Database Setup','red');
-    }
   }
   if(error)throw new Error(`Brand save failed: ${error.message}`);
   _useBrandTable=true;
   console.log(`✓ Saved ${rows.length} brand(s) to pd_brands`);
+  // Report on EVERY save, not just the first. Reporting once meant later saves
+  // toasted green while silently discarding the brand's settings.
+  const configDropped=_brandConfigColumnMissing&&brandsArr.some(b=>b.config&&Object.keys(b.config).length);
+  return {configDropped};
 }
 
 async function dbDeleteBrand(id){
@@ -3135,17 +3139,20 @@ async function save(type, opts){
   // Brands: use per-row table if available
   if(type==='brands'){
     _lastWriteTs=Date.now();
+    _lastBrandSaveDegraded=null;
     try{
       if(_useBrandTable){
-        await dbSaveBrands(brands);
+        const res=await dbSaveBrands(brands);
         updateSyncBadge(true);
-        return;
+        // Tells the caller the per-brand `config` was dropped because the
+        // column is missing, so it can warn instead of reporting success.
+        return res;
       }
     }catch(e){
       console.warn('Brand table save failed, falling back to blob:',e.message);
       updateSyncBadge(false, `Brand save failed: ${e.message}`);
-      toast(`Brand save failed (saved locally): ${e.message}`,'red');
-      /* fall through to blob save */
+      _lastBrandSaveDegraded=e.message;
+      /* fall through to blob save — the caller reports the degradation */
     }
   }
   // Categories + cat_levels: use per-row table if available
@@ -3956,6 +3963,8 @@ async function saveBrandScope(what){
     audit('brand_settings',`${name}: ${sections.length?sections.join(', ')+' customised':'settings reset to default'}`);
     if(res&&res.configDropped){
       toast(`${name} saved, but per-brand settings need a database update — see Settings → Database Setup`,'red');
+    } else if(_lastBrandSaveDegraded){
+      toast(`${name} saved locally only — the database rejected it: ${_lastBrandSaveDegraded}`,'red');
     } else {
       toast(sections.length?`${what} saved for ${name}`:`${name} now uses the default settings`,'green');
     }
@@ -5117,7 +5126,7 @@ function renderBrands(){
         </div>
         <div class="flex gap8">
           <button class="btn bg bxs" onclick="openBrandModal('${escAttr(b.id)}')" aria-label="Edit brand">${icon('edit',{size:13})}</button>
-          <button class="row-del" style="padding:6px 8px" onclick="deleteBrand('${escAttr(b.id)}')" aria-label="Delete brand">${icon('x',{size:13})}</button>
+          <button class="row-del" style="padding:6px 8px" onclick="deleteBrand('${escAttr(b.id)}').catch(e=>toast('Delete failed: '+e.message,'red'))" aria-label="Delete brand">${icon('x',{size:13})}</button>
         </div>
       </div>
       ${b.commOverride!=null?`<div class="st mb8">${icon('lock',{size:12})} Commission override: <span class="mono" style="color:var(--ac)">${b.commOverride}%</span></div>`:'<div class="st mb8">Auto commission from settings</div>'}
@@ -5511,7 +5520,7 @@ function openBrandModal(id){
       </div>
     </div>
     <div class="mfoot">
-      ${isEdit?`<button class="btn br bsm" onclick="deleteBrand('${escAttr(b.id)}').then(ok=>{if(ok)closeModal()})" style="margin-right:auto">Delete</button>`:''}
+      ${isEdit?`<button class="btn br bsm" onclick="deleteBrand('${escAttr(b.id)}').then(ok=>{if(ok)closeModal()}).catch(e=>toast('Delete failed: '+e.message,'red'))" style="margin-right:auto">Delete</button>`:''}
       <button class="btn bg" onclick="closeModal()">Cancel</button>
       <button class="btn bp" onclick="saveBrand('${isEdit?escAttr(b.id):''}')" id="bn-save">Save Brand</button>
     </div>`);
@@ -5643,6 +5652,12 @@ async function deleteBrand(id){
   const b=brands.find(x=>x.id===id);
   const local=skuDB.filter(s=>s.brandId===id);
   const remote=await dbCountSKUsForBrand(id);
+  // null means we could not check. Treating that as zero would delete a brand
+  // whose SKUs simply aren't loaded in this tab.
+  if(remote==null&&!local.length){
+    toast(`Couldn't check with the database whether "${b?.name||id}" still has SKUs — try again when you're back online.`,'red');
+    return false;
+  }
   // Trust whichever source says there are MORE references — deleting a brand
   // that still has SKUs strands them with a dangling brandId, and calcSKU
   // then silently reprices them as Myntra-with-no-override. That shows a
@@ -5733,6 +5748,7 @@ async function convertMyntraOverride(id){
   comm.COMM_MODE='slab';
   comm.COMM_SLAB_ONLY=new Array((comm.COMM_SLABS||CFG_REG.COMM_SLABS.get()).length+1).fill(rate);
   comm.COMM_SLAB_CAT={};
+  const prevConfig=b.config, prevOverride=b.commOverride;
   cfg.comm=comm;
   b.config=cfg;
   b.commOverride=null;
@@ -5742,8 +5758,15 @@ async function convertMyntraOverride(id){
   try{
     await save('brands');
     audit('brand_settings',`${b.name}: Myntra commission override ${rate}% converted to per-brand commission`);
-    toast(`${b.name} now charges ${rate}% through the calculation — ${moved} SKU${moved===1?'':'s'} changed profit`,'green');
-  }catch(e){ toast('Save failed: '+e.message,'red'); }
+    if(_lastBrandSaveDegraded) toast(`${b.name} converted, but saved locally only — the database rejected it: ${_lastBrandSaveDegraded}`,'red');
+    else toast(`${b.name} now charges ${rate}% through the calculation — ${moved} SKU${moved===1?'':'s'} changed profit`,'green');
+  }catch(e){
+    // Without this the brand no longer matches findMyntraOverrideBrands(), so
+    // it vanishes from the list and can never be converted again.
+    b.config=prevConfig; b.commOverride=prevOverride;
+    invalidateCalcCache();
+    toast('Conversion failed — nothing was changed, try again: '+e.message,'red');
+  }
   _repaintForCalcChange();
   runDataHealthCheck();
 }
@@ -5813,6 +5836,11 @@ async function repairOrphanSKUs(){
   if(!target||!brands.find(b=>b.id===target)){toast('Pick a brand to reassign to','red');return;}
   const orphans=findOrphanSKUs();
   if(!orphans.length){toast('Nothing to repair','blue');return;}
+  // Reassign in memory first so the write has something to send, but keep the
+  // previous ids: without a rollback a failed save leaves no local orphans, so
+  // the health check reports "nothing to repair" while the database is still
+  // broken — and the user has no way to retry.
+  const prev=orphans.map(s=>[s,s.brandId]);
   orphans.forEach(s=>{s.brandId=target;});
   try{
     await dbSaveSKU(...orphans);
@@ -5820,7 +5848,11 @@ async function repairOrphanSKUs(){
     const name=brands.find(b=>b.id===target)?.name||target;
     audit('sku_repair',`${orphans.length} orphaned SKU(s) reassigned to ${name}`);
     toast(`${orphans.length} SKU${orphans.length>1?'s':''} reassigned to ${name}`,'green');
-  }catch(e){ toast('Repair failed: '+e.message,'red'); }
+  }catch(e){
+    prev.forEach(([s,id])=>{s.brandId=id;});
+    invalidateCalcCache();renderSKUs();
+    toast('Repair failed — nothing was changed, try again: '+e.message,'red');
+  }
   runDataHealthCheck();
 }
 
@@ -5840,9 +5872,21 @@ async function _doDeleteBrand(id,target){
     invalidateCalcCache();renderSKUs();
     return false;
   }
+  // Delete first, then drop it locally. The reverse order meant a failure —
+  // now genuinely possible with the ON DELETE RESTRICT foreign key — left the
+  // brand gone from the UI but present in the database.
+  try{
+    if(_useBrandTable){await dbDeleteBrand(id);}else{
+      brands=brands.filter(x=>x.id!==id);
+      await save('brands');
+    }
+  }catch(e){
+    toast(`Couldn't delete "${b?.name||id}": ${e.message}`,'red');
+    invalidateCalcCache();renderBrands();populateFilters();renderSKUs();
+    return false;
+  }
   brands=brands.filter(x=>x.id!==id);
   invalidateCalcCache();renderBrands();populateFilters();renderSKUs();
-  if(_useBrandTable){await dbDeleteBrand(id);}else{await save('brands');}
   const tName=target?brands.find(x=>x.id===target)?.name:null;
   audit('brand_delete',`${b?.name||id} deleted${affected.length&&target?` (${affected.length} SKU${affected.length>1?'s':''} moved to ${tName||target})`:''}`);
   toast(`Brand deleted${affected.length&&target?` — ${affected.length} SKU${affected.length>1?'s':''} → ${esc(tName||target)}`:''}`,'red');
