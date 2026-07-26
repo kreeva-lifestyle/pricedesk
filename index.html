@@ -1838,6 +1838,19 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
       </div>
     </div>
     <div>
+      <!-- Data health: finds SKUs pointing at a brand that no longer exists.
+           These don't error — calcSKU prices them as Myntra with no override,
+           so they quietly show a WRONG profit. -->
+      <div class="card mb16" id="data-health-card">
+        <div class="ch">
+          <div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="alert" data-size="15"></span> Data health</div>
+          <button class="btn bg bsm" onclick="runDataHealthCheck()"><span class="ic-h" data-icon="refresh" data-size="13"></span> Check now</button>
+        </div>
+        <div class="cb" style="font-size:12px">
+          <div class="st">Looks for SKUs assigned to a brand that no longer exists. Those are priced with default Myntra settings, so their profit is wrong until they're reassigned.</div>
+          <div id="data-health-result" style="margin-top:12px"></div>
+        </div>
+      </div>
       <div class="card">
         <div class="ch"><div style="font-size:13px;font-weight:600"><span class="ic-h" data-icon="database" data-size="15"></span> App Info & Data</div></div>
         <div class="cb" style="font-size:12px">
@@ -2205,6 +2218,25 @@ CREATE TABLE IF NOT EXISTS pd_brands (
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE pd_brands ADD COLUMN IF NOT EXISTS config JSONB;
+
+-- Referential integrity for SKU → brand. Without it a stale tab or a
+-- concurrent delete can strand a SKU with a dangling brand_id, which calcSKU
+-- then prices as Myntra-with-no-override — a wrong profit, not an error.
+-- RESTRICT, never CASCADE: deleting a brand must not delete the products.
+UPDATE pd_skus_v2 SET brand_id = NULL WHERE brand_id = '';
+DO $$
+DECLARE orphans INT;
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'pd_skus_v2_brand_id_fkey') THEN RETURN; END IF;
+  SELECT count(*) INTO orphans FROM pd_skus_v2 s
+   WHERE s.brand_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pd_brands b WHERE b.id = s.brand_id);
+  IF orphans > 0 THEN
+    RAISE NOTICE 'Skipping brand_id foreign key: % SKU row(s) reference a missing brand. Repair in Settings → Data health, then re-run.', orphans;
+    RETURN;
+  END IF;
+  ALTER TABLE pd_skus_v2 ADD CONSTRAINT pd_skus_v2_brand_id_fkey
+    FOREIGN KEY (brand_id) REFERENCES pd_brands(id) ON DELETE RESTRICT;
+END $$;
 ALTER TABLE pd_brands ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all_brands" ON pd_brands FOR ALL USING (true) WITH CHECK (true);
 ALTER PUBLICATION supabase_realtime ADD TABLE pd_brands;
@@ -5040,20 +5072,178 @@ function saveBrand(eid){
   else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});audit('brand_add',`${name} added (${model})`);toast(`${name} added`,'green');}
   closeModal();renderBrands();populateFilters();renderSKUs();save('brands').catch(e=>toast('Brand save failed: '+e.message,'red'));
 }
+// Count SKUs referencing a brand IN THE DATABASE, not just in memory.
+// skuDB is this tab's snapshot: another device may have added SKUs to the
+// brand since we loaded, and trusting the local array would let us delete a
+// brand that still has products. Returns null if the count can't be checked.
+async function dbCountSKUsForBrand(id){
+  const db=getDB();if(!db||!_useSkuTable)return null;
+  try{
+    const{count,error}=await db.from('pd_skus_v2').select('id',{count:'exact',head:true}).eq('brand_id',id);
+    if(error)throw error;
+    return typeof count==='number'?count:null;
+  }catch(e){ console.warn('Brand SKU count check failed:',e.message); return null; }
+}
+
 async function deleteBrand(id){
   const b=brands.find(x=>x.id===id);
-  // Block deletion while SKUs reference this brand — otherwise those SKUs
-  // keep a dangling brandId and calcSKU silently reprices them as Myntra
-  // (wrong model/commission). Mirrors the deleteLevel guard.
-  const refCount=skuDB.filter(s=>s.brandId===id).length;
-  if(refCount){
-    toast(`Cannot delete "${b?.name||id}" — ${refCount} SKU${refCount>1?'s':''} still assigned. Reassign or delete them first.`,'red');
+  const local=skuDB.filter(s=>s.brandId===id);
+  const remote=await dbCountSKUsForBrand(id);
+  // Trust whichever source says there are MORE references — deleting a brand
+  // that still has SKUs strands them with a dangling brandId, and calcSKU
+  // then silently reprices them as Myntra-with-no-override. That shows a
+  // wrong profit rather than an error, so err heavily on the side of blocking.
+  const refCount=Math.max(local.length, remote==null?0:remote);
+  if(remote!=null&&remote!==local.length){
+    console.warn(`Brand ${id}: ${local.length} SKUs loaded locally but ${remote} in the database`);
+  }
+  if(!refCount){
+    if(!confirm(`Delete brand "${b?.name||id}"?`))return false;
+    return _doDeleteBrand(id,null);
+  }
+
+  const others=brands.filter(x=>x.id!==id);
+  if(!others.length){
+    toast(`Cannot delete "${b?.name||id}" — ${refCount} SKU${refCount>1?'s':''} still assigned and there is no other brand to move them to. Create another brand first.`,'red');
     return false;
   }
-  if(!confirm(`Delete brand "${b?.name||id}"?`))return false;
-  brands=brands.filter(x=>x.id!==id);renderBrands();populateFilters();renderSKUs();
+  // Only some of the referencing SKUs may be loaded (filters, another device).
+  const unloaded=remote!=null?Math.max(0,remote-local.length):0;
+  const act=local.filter(s=>!s.archived).length, arc=local.length-act;
+  const LIST_CAP=60;
+  const list=local.slice(0,LIST_CAP).map(s=>`
+      <div class="flex gap8" style="justify-content:space-between;padding:5px 9px;border-bottom:1px solid var(--bd);font-size:11px">
+        <span style="font-family:var(--mono)">${esc(s.sku||s.id)}</span>
+        <span class="st">${esc(s.category||'—')}${s.archived?' · <span style="color:var(--re)">archived</span>':''}</span></div>`).join('')
+    +(local.length>LIST_CAP?`<div class="st" style="padding:6px 9px">…and ${local.length-LIST_CAP} more</div>`:'')
+    +(unloaded?`<div class="st" style="padding:6px 9px">…and ${unloaded} not loaded in this tab</div>`:'');
+  // Same-model brands first: moving a SKU to a different marketplace model
+  // changes how it is priced entirely, so make the safe choice the default.
+  const sameModel=others.filter(x=>x.model===b?.model);
+  const diffModel=others.filter(x=>x.model!==b?.model);
+  const opt=x=>`<option value="${escAttr(x.id)}"${x.model!==b?.model?' data-diff="1"':''}>${esc(x.name)} — ${esc(_MP_LABELS[x.model]||x.model)}${x.model!==b?.model?'  ⚠ different marketplace':''}</option>`;
+  setModal(`<div class="mhdr"><div class="mtl">${icon('trash',{size:15})} Delete "${esc(b?.name||id)}"</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
+    <div class="mbody">
+      <div class="warn mb12">⚠ <strong>${refCount} SKU${refCount>1?'s':''}</strong> ${refCount>1?'are':'is'} still assigned to this brand${arc?` (${act} active, ${arc} archived)`:''}. They must be moved to another brand first.</div>
+      <div style="max-height:180px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;margin-bottom:12px">${list}</div>
+      <div class="fg"><label class="fl">Move ${refCount>1?'these SKUs':'this SKU'} to *</label>
+        <select class="fi" id="delbrand-target">${sameModel.map(opt).join('')}${diffModel.length?`<optgroup label="Different marketplace — prices will change">${diffModel.map(opt).join('')}</optgroup>`:''}</select>
+        <div class="st" style="margin-top:5px;color:var(--re)">Moved SKUs are priced with the new brand's commission, shipping and fees — their profits will be recalculated.</div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn bg" onclick="closeModal()">Cancel</button>
+      <button class="btn br" onclick="_confirmDeleteBrand('${escAttr(id)}')">${icon('trash',{size:13})} Move SKUs &amp; Delete</button>
+    </div>`);
+  return false;
+}
+
+function _confirmDeleteBrand(id){
+  const target=el('delbrand-target')?.value;
+  closeModal();
+  if(!target||target===id||!brands.find(x=>x.id===target)){toast('Pick a valid target brand','red');return;}
+  _doDeleteBrand(id,target).catch(e=>toast('Brand delete failed: '+e.message,'red'));
+}
+
+// ── Data health: orphaned brand references ──────────────────
+// A SKU whose brandId points at a deleted brand does not error — calcSKU
+// prices it as Myntra-with-no-override and logs one console warning nobody
+// sees. Surface those and offer to reassign them.
+function findOrphanSKUs(){
+  const ids=new Set(brands.map(b=>b.id));
+  return skuDB.filter(s=>s.brandId&&!ids.has(s.brandId));
+}
+
+async function runDataHealthCheck(){
+  const box=el('data-health-result');if(!box)return;
+  box.innerHTML='<div class="st">Checking…</div>';
+  const orphans=findOrphanSKUs();
+  const unassigned=skuDB.filter(s=>!s.brandId);
+  // Also ask the database directly — this tab may not have every SKU loaded.
+  let dbOrphans=null;
+  const db=getDB();
+  // The `in` filter is built as a string, so an id containing a quote or comma
+  // would silently change which rows match — and a false "all clear" is worse
+  // than no remote check at all. Skip the remote pass if any id is unusual.
+  const idsSafe=brands.every(b=>/^[A-Za-z0-9_-]+$/.test(b.id));
+  if(db&&_useSkuTable&&brands.length&&idsSafe){
+    try{
+      const{data,error}=await db.from('pd_skus_v2').select('id,sku,brand_id')
+        .not('brand_id','is',null).not('brand_id','in',`(${brands.map(b=>`"${b.id}"`).join(',')})`).limit(500);
+      if(error)throw error;
+      dbOrphans=data||[];
+    }catch(e){ console.warn('Orphan check via database failed:',e.message); }
+  } else if(!idsSafe){
+    console.warn('Skipping the database orphan check — a brand id contains characters that are unsafe in a filter.');
+  }
+  const total=dbOrphans?Math.max(orphans.length,dbOrphans.length):orphans.length;
+  if(!total&&!unassigned.length){
+    box.innerHTML=`<div class="success">✓ No problems found — every SKU points at a brand that exists.</div>`;
+    return;
+  }
+  let h='';
+  if(total){
+    const names=[...new Set((dbOrphans||[]).map(r=>r.brand_id).concat(orphans.map(s=>s.brandId)))];
+    h+=`<div class="warn mb12">⚠ <strong>${total} SKU${total>1?'s':''}</strong> reference ${names.length>1?'brands':'a brand'} that no longer exist${names.length>1?'':'s'} (<span class="mono">${names.slice(0,4).map(esc).join(', ')}${names.length>4?'…':''}</span>).
+      Their profit figures are wrong until they're reassigned.</div>`;
+    if(brands.length){
+      h+=`<div class="fg"><label class="fl">Reassign them to</label>
+        <select class="fi" id="orphan-target">${brands.map(b=>`<option value="${escAttr(b.id)}">${esc(b.name)} — ${esc(_MP_LABELS[b.model]||b.model)}</option>`).join('')}</select></div>
+        <button class="btn bp bsm" style="margin-top:9px" onclick="repairOrphanSKUs()">Reassign ${total} SKU${total>1?'s':''}</button>`;
+      if(dbOrphans&&dbOrphans.length>orphans.length){
+        h+=`<div class="st" style="margin-top:7px">${dbOrphans.length-orphans.length} of these aren't loaded in this tab — reload to repair them all.</div>`;
+      }
+    } else {
+      h+=`<div class="st">Create a brand first, then come back to reassign them.</div>`;
+    }
+  }
+  if(unassigned.length){
+    h+=`<div class="info" style="margin-top:12px">${unassigned.length} SKU${unassigned.length>1?'s have':' has'} no brand at all. ${total?'':'These are priced with default Myntra settings.'}</div>`;
+  }
+  box.innerHTML=h;
+  hydrateIcons(box);
+}
+
+async function repairOrphanSKUs(){
+  const target=el('orphan-target')?.value;
+  if(!target||!brands.find(b=>b.id===target)){toast('Pick a brand to reassign to','red');return;}
+  const orphans=findOrphanSKUs();
+  if(!orphans.length){toast('Nothing to repair','blue');return;}
+  orphans.forEach(s=>{s.brandId=target;});
+  try{
+    await dbSaveSKU(...orphans);
+    invalidateCalcCache();renderSKUs();populateFilters();
+    const name=brands.find(b=>b.id===target)?.name||target;
+    audit('sku_repair',`${orphans.length} orphaned SKU(s) reassigned to ${name}`);
+    toast(`${orphans.length} SKU${orphans.length>1?'s':''} reassigned to ${name}`,'green');
+  }catch(e){ toast('Repair failed: '+e.message,'red'); }
+  runDataHealthCheck();
+}
+
+async function _doDeleteBrand(id,target){
+  const b=brands.find(x=>x.id===id);
+  const affected=skuDB.filter(s=>s.brandId===id);
+  if(target&&affected.length){
+    affected.forEach(s=>{s.brandId=target;});
+    await dbSaveSKU(...affected);
+  }
+  // Re-check just before deleting: if another device added SKUs while this
+  // modal was open, moving only what we had loaded would still strand them.
+  const stillThere=await dbCountSKUsForBrand(id);
+  if(stillThere){
+    if(target&&affected.length){ toast(`Moved ${affected.length} SKU${affected.length>1?'s':''}, but ${stillThere} more appeared — brand kept. Reload and try again.`,'red'); }
+    else { toast(`Cannot delete — ${stillThere} SKU${stillThere>1?'s':''} are assigned to this brand in the database.`,'red'); }
+    invalidateCalcCache();renderSKUs();
+    return false;
+  }
+  brands=brands.filter(x=>x.id!==id);
+  invalidateCalcCache();renderBrands();populateFilters();renderSKUs();
   if(_useBrandTable){await dbDeleteBrand(id);}else{await save('brands');}
-  audit('brand_delete',`${b?.name||id} deleted`);toast('Brand deleted','red');return true;}
+  const tName=target?brands.find(x=>x.id===target)?.name:null;
+  audit('brand_delete',`${b?.name||id} deleted${affected.length&&target?` (${affected.length} SKU${affected.length>1?'s':''} moved to ${tName||target})`:''}`);
+  toast(`Brand deleted${affected.length&&target?` — ${affected.length} SKU${affected.length>1?'s':''} → ${esc(tName||target)}`:''}`,'red');
+  return true;
+}
 
 // ═══════════════════════════════════════════════════════
 // SKU SHEET
