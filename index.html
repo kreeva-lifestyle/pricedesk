@@ -312,6 +312,12 @@ html{overflow-y:scroll;color-scheme:dark}/* Prevent layout shift + render native
 .sku-mp-tab.active{color:var(--ac);background:rgba(245,166,35,.12);border-color:rgba(245,166,35,.3)}
 .filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.06);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%)}
 @supports not (backdrop-filter:blur(1px)){.filter-bar{background:var(--s)}}
+/* Brand settings scope bar. No backdrop-filter: the select popup and any
+   fixed-position editor opened from here must not be trapped by it. */
+.scope-bar{margin-bottom:12px;padding:11px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));box-shadow:0 8px 32px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.06)}
+.scope-bar.scoped{border-color:rgba(224,168,74,.45);background:linear-gradient(180deg,rgba(224,168,74,.12),rgba(224,168,74,.03));box-shadow:0 8px 32px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.06),0 0 0 1px rgba(224,168,74,.15)}
+.scope-bar .bdg{white-space:nowrap}
+@media(max-width:768px){.scope-bar{padding:10px 12px}.scope-bar select{width:100%}}
 .filter-select{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:10px;color:var(--tx);font-size:12px;padding:5px 9px;cursor:pointer;min-width:120px}
 .filter-select:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 2px rgba(245,166,35,.15)}
 /* Native <select> popups are OS-rendered — force dark, readable options so
@@ -1328,6 +1334,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
 
 <!-- ═══ COMMISSION SETTINGS ═══ -->
 <div class="page" id="page-commission">
+  <div id="scope-bar-commission"></div>
   <div class="tabs">
     <div class="tab tm-t active" onclick="switchCommTab('myntra',this)"><span class="tdot" style="background:var(--mn)"></span>Myntra (Category + Slab)</div>
     <div class="tab taj-t" onclick="switchCommTab('ajio',this)"><span class="tdot" style="background:var(--aj)"></span>Ajio (PPMP &amp; CC)</div>
@@ -1357,6 +1364,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
 
 <!-- ═══ LOGISTICS ═══ -->
 <div class="page" id="page-logistics">
+  <div id="scope-bar-logistics"></div>
   <div class="tabs">
     <div class="tab tm-t active" onclick="switchLogTab('myntra',this)"><span class="tdot" style="background:var(--mn)"></span>Myntra</div>
     <div class="tab taj-t" onclick="switchLogTab('ajio',this)"><span class="tdot" style="background:var(--aj)"></span>Ajio (PPMP only)</div>
@@ -3799,6 +3807,265 @@ function _sanitizeBrandCfg(out,brandId){
   return out;
 }
 
+// ═══════════════════════════════════════════════════════
+// BRAND SETTINGS SCOPE (editing)
+// ═══════════════════════════════════════════════════════
+// Editing one brand's settings reuses the SAME Commission and Shipping & Fees
+// screens as the global defaults. Rather than teaching ~30 renderers and
+// inline oninput handlers to write somewhere else (and getting one wrong),
+// beginScope swaps that brand's EFFECTIVE settings into the globals; every
+// existing renderer and handler then edits that copy, untouched.
+// saveBrandScope diffs it against the untouched baseline and stores only the
+// sections that differ.
+//
+// The failure mode to fear is leaving the globals hijacked: the next ordinary
+// save would write one brand's settings over everybody's. Defences:
+//   - endScope() runs from nav() and closeModal()
+//   - the four savers route to saveBrandScope while scoped
+//   - _syncMynLogisticsSettings THROWS if called while scoped, because its
+//     whole job is to write these values into the shared logistics blob
+//   - renderSKUs/triggerRecalc no-op while scoped, since the globals then
+//     describe one brand rather than the defaults
+let _editScope=null;   // {brandId, name, baseline:{key:value}, custom:Set<section>}
+
+function isBrandScoped(){ return !!_editScope; }
+function scopedBrandName(){ return _editScope?_editScope.name:null; }
+function _cloneCfgVal(v){ return (v&&typeof v==='object')?JSON.parse(JSON.stringify(v)):v; }
+
+// The category-wise logistics tables are seeded from the level tables the
+// first time they render. That seeding is a side effect of painting, so a
+// brand scope entered BEFORE the page painted would see the seed as a user
+// edit and flag the section "Custom". Do it up-front instead, symmetrically
+// for the baseline and the buffer. Seeding the globals is exactly what
+// happens today whenever anyone opens Shipping & Fees.
+function _seedCatLogisticsDefaults(){
+  for(const cat of CATS){
+    const lvl=CAT_LEVEL[cat]||'Level 2';
+    if(!GT_CAT_DATA[cat]) GT_CAT_DATA[cat]=[...(GT_DATA[lvl]||[0,1,83,83,118,195,230])];
+    GT_CAT_DATA[cat]=_normSlabArr(GT_CAT_DATA[cat],GT_SLABS.length+1,0);
+    if(REV_CAT_DATA[cat]==null) REV_CAT_DATA[cat]=REVERSE_FEES[lvl]??218;
+  }
+}
+
+function beginScope(brandId){
+  if(_editScope) endScope();
+  const b=brands.find(x=>x.id===brandId);
+  if(!b){ toast('That brand no longer exists','red'); return false; }
+  _seedCatLogisticsDefaults();
+  const eff=resolveBrandCfg(brandId)||{};
+  const baseline={};
+  for(const keys of Object.values(CFG_SECTIONS)) for(const k of keys){
+    const slot=CFG_REG[k]; if(!slot) continue;
+    baseline[k]=slot.get();
+    // Deep-clone so edits can never reach through into the global objects.
+    slot.set(_cloneCfgVal(k in eff?eff[k]:slot.get()));
+  }
+  _editScope={brandId,name:b.name,baseline,custom:new Set(Object.keys(b.config||{}))};
+  invalidateCalcCache();
+  return true;
+}
+
+// Restore the untouched globals. Safe to call when not scoped.
+function endScope(){
+  if(!_editScope) return;
+  const baseline=_editScope.baseline;
+  _editScope=null;
+  for(const k in baseline) CFG_REG[k].set(baseline[k]);
+  invalidateCalcCache();
+}
+
+async function saveBrandScope(what){
+  if(!_editScope) throw new Error('saveBrandScope called with no brand scope active');
+  const {brandId,name,baseline,custom}=_editScope;
+  const b=brands.find(x=>x.id===brandId);
+  if(!b){ endScope(); toast('That brand was deleted — nothing saved','red'); return; }
+  const cfg={};
+  for(const[section,keys]of Object.entries(CFG_SECTIONS)){
+    let differs=false;
+    const sec={};
+    for(const k of keys){
+      const cur=CFG_REG[k].get();
+      sec[k]=_cloneCfgVal(cur);
+      if(JSON.stringify(cur)!==JSON.stringify(baseline[k])) differs=true;
+    }
+    // Keep a section the user explicitly marked Custom even when it currently
+    // equals the default — otherwise a later change to the default would
+    // silently move this brand too, which is the opposite of "custom".
+    if(differs||custom.has(section)) cfg[section]=sec;
+  }
+  b.config=Object.keys(cfg).length?cfg:null;
+  const sections=Object.keys(cfg);
+  endScope();
+  try{
+    await save('brands');
+    audit('brand_settings',`${name}: ${sections.length?sections.join(', ')+' customised':'settings reset to default'}`);
+    toast(sections.length?`${what} saved for ${name}`:`${name} now uses the default settings`,'green');
+  }catch(e){ toast('Save failed: '+e.message,'red'); }
+  _repaintForCalcChange();
+}
+
+// Read the logistics DOM inputs into the buffer while scoped. Only
+// registry-backed keys — the *_data / *_slabs mirror keys inside
+// LOGISTICS_SETTINGS belong to the global blob and must not be touched here.
+function _readScopedLogisticsInputs(){
+  const L=LOGISTICS_SETTINGS;
+  const n=(id,fb)=>el(id)?(+el(id).value||fb):fb;
+  L.myn_pg_fee=n('myn-pg',L.myn_pg_fee);
+  L.myn_fwd_fixed=n('mfwd-fix',L.myn_fwd_fixed);
+  L.myn_ret_fixed=n('mret-fix',L.myn_ret_fixed);
+  L.ajio_fwd=n('ajfwd-fix',L.ajio_fwd);
+  L.ajio_ret=n('ajret-fix',L.ajio_ret);
+  L.ajio_platform_fee=n('ajio-platform-fee',L.ajio_platform_fee);
+  L.amz_fba=n('amz-fba',L.amz_fba);
+  L.amz_close=n('amz-close',L.amz_close);
+  L.amz_ret=n('amz-ret',L.amz_ret);
+}
+
+// Mark a whole section as inheriting the default again.
+function scopeResetSection(section){
+  if(!_editScope||!CFG_SECTIONS[section]) return;
+  _editScope.custom.delete(section);
+  for(const k of CFG_SECTIONS[section]) CFG_REG[k].set(_cloneCfgVal(_editScope.baseline[k]));
+  invalidateCalcCache();
+  _rerenderScopedPage();
+}
+function scopeMarkCustom(section){
+  if(!_editScope||!CFG_SECTIONS[section]) return;
+  _editScope.custom.add(section);
+  _rerenderScopedPage();
+}
+
+// Does the buffer differ from what the brand already had stored?
+function _scopeHasChanges(){
+  if(!_editScope) return false;
+  const b=brands.find(x=>x.id===_editScope.brandId);
+  const stored=(b&&b.config)||{};
+  for(const[section,keys]of Object.entries(CFG_SECTIONS)){
+    const wasCustom=!!stored[section], isCustom=_editScope.custom.has(section);
+    let differs=false;
+    for(const k of keys){
+      if(JSON.stringify(CFG_REG[k].get())!==JSON.stringify(_editScope.baseline[k])){ differs=true; break; }
+    }
+    if(differs||wasCustom!==isCustom) return true;
+  }
+  return false;
+}
+
+// Repaint whichever settings page is open, so Inherit/Custom toggles and the
+// grids reflect the buffer.
+function _rerenderScopedPage(){
+  const page=document.querySelector('.page.active')?.id?.replace('page-','');
+  if(page==='commission'){ buildCommMyntra();buildCommAjioBrands();buildCommAmazon();renderScopeBar('commission'); }
+  else if(page==='logistics'){ renderGTTable?.();renderRetTable?.();renderGTCatTable?.();renderRetCatTable?.();renderCollTable?.();renderCollCustom?.();populateLogisticsInputs?.();renderScopeBar('logistics'); }
+}
+
+// Which sections each settings page owns — used for its Inherit/Custom chips.
+const SCOPE_PAGE_SECTIONS={commission:['comm'],logistics:['fwd','ret','coll','fees']};
+const SCOPE_SECTION_LABEL={comm:'Commission',fwd:'Forward shipping',ret:'Returns',coll:'Collection fee',fees:'Fixed fees'};
+
+// The brand switcher + "editing X only" banner shown on both settings pages.
+// "Fusionic — Myntra" already says Myntra; don't append it again.
+function _brandLabel(b){
+  const mp=_MP_LABELS[b.model]||b.model||'';
+  return mp&&!(b.name||'').toLowerCase().includes(mp.toLowerCase())?`${b.name} — ${mp}`:b.name;
+}
+
+function renderScopeBar(page){
+  const host=el('scope-bar-'+page); if(!host) return;
+  const sections=SCOPE_PAGE_SECTIONS[page]||[];
+  const opts=brands.map(b=>`<option value="${escAttr(b.id)}"${_editScope&&_editScope.brandId===b.id?' selected':''}>${esc(_brandLabel(b))}</option>`).join('');
+  const chips=_editScope?sections.map(sec=>{
+    const on=_editScope.custom.has(sec)||_sectionDiffersFromBaseline(sec);
+    return `<button class="btn ${on?'bp':'bg'} bxs" onclick="${on?`scopeResetSection('${sec}')`:`scopeMarkCustom('${sec}')`}"
+      title="${on?'Go back to the default for this brand':'Give this brand its own '+SCOPE_SECTION_LABEL[sec].toLowerCase()}">
+      ${esc(SCOPE_SECTION_LABEL[sec])}: ${on?'Custom ✓':'Default'}</button>`;
+  }).join(''):'';
+  host.innerHTML=`
+    <div class="scope-bar${_editScope?' scoped':''}">
+      <div class="flex gap8" style="align-items:center;flex-wrap:wrap">
+        <span class="st" style="white-space:nowrap">Settings for</span>
+        <select class="filter-select" id="scope-select-${page}" onchange="switchScope(this.value)" style="min-width:190px">
+          <option value="">Default — all brands</option>${opts}
+        </select>
+        ${_editScope?`<span class="bdg bi">editing ${esc(_editScope.name)} only</span>`:''}
+      </div>
+      ${_editScope?`<div class="flex gap8" style="flex-wrap:wrap;margin-top:8px">${chips}</div>
+        <div class="st" style="margin-top:7px">Changes here apply to <strong>${esc(_editScope.name)}</strong> only — the default settings and every other brand are untouched. Formula Builder rules stay shared across brands.</div>`
+      :`<div class="st" style="margin-top:6px">Editing the defaults. Every brand that hasn't been customised uses these.</div>`}
+    </div>`;
+  hydrateIcons(host);
+}
+
+function _sectionDiffersFromBaseline(sec){
+  if(!_editScope) return false;
+  return (CFG_SECTIONS[sec]||[]).some(k=>JSON.stringify(CFG_REG[k].get())!==JSON.stringify(_editScope.baseline[k]));
+}
+
+function switchScope(brandId){
+  if(_editScope&&_scopeHasChanges()&&!confirm(`Discard unsaved settings for "${_editScope.name}"?`)){
+    const page=document.querySelector('.page.active')?.id?.replace('page-','');
+    renderScopeBar(page); // put the select back where it was
+    return;
+  }
+  endScope();
+  if(brandId&&!beginScope(brandId)) return;
+  const page=document.querySelector('.page.active')?.id?.replace('page-','');
+  if(page==='commission'){ buildCommMyntra();buildCommAjioBrands();buildCommAmazon(); }
+  else if(page==='logistics'){ renderGTTable?.();renderRetTable?.();renderGTCatTable?.();renderRetCatTable?.();renderCollTable?.();renderCollCustom?.();populateLogisticsInputs?.(); }
+  renderScopeBar(page);
+  if(!brandId) _repaintForCalcChange();
+}
+
+// Structural (taxonomy) actions are global, not per-brand: categories and
+// levels exist for every brand. Blocking them while scoped stops "deleting a
+// category for one brand" from removing it for everyone.
+function _blockIfScoped(what){
+  if(!_editScope) return false;
+  toast(`${what} applies to every brand — switch back to "Default — all brands" first`,'red');
+  return true;
+}
+
+// Walk every brand's stored category-keyed maps. Used to keep them in step
+// with the global category list.
+function _eachBrandCatMap(fn){
+  let touched=false;
+  for(const b of brands){
+    if(!b.config) continue;
+    for(const[section,keys]of Object.entries(CFG_SECTIONS)){
+      const sec=b.config[section]; if(!sec||typeof sec!=='object') continue;
+      for(const k of keys){
+        if(!CFG_CAT_KEYED.has(k)) continue;
+        const map=sec[k];
+        if(!map||typeof map!=='object'||Array.isArray(map)) continue;
+        if(fn(map,k,b)) touched=true;
+      }
+    }
+  }
+  return touched;
+}
+
+// A new category must reach brands that overrode a category-keyed map, or for
+// those brands it would silently fall through to the hardcoded defaults buried
+// in the fee helpers (18.88% commission, [15,17,27,…] collection fee) instead
+// of the value just seeded into the global.
+function _fanOutCategoryToBrands(name){
+  return _eachBrandCatMap((map,k)=>{
+    if(name in map) return false;
+    const g=CFG_REG[k].get();
+    if(g&&typeof g==='object'&&name in g){ map[name]=_cloneCfgVal(g[name]); return true; }
+    return false;
+  });
+}
+
+// Mirror for delete, so a removed category can't linger as stale per-brand
+// config and resurrect on the next load.
+function _purgeCategoryFromBrands(name){
+  return _eachBrandCatMap(map=>{
+    if(!(name in map)) return false;
+    delete map[name]; return true;
+  });
+}
+
 function withBrandCfg(brandId, fn){
   const ov=resolveBrandCfg(brandId);
   if(!ov) return fn();
@@ -4111,7 +4378,14 @@ function onCatChange(mp){
   renderDynamicCalc(mp);
 }
 // Level is now auto-derived from category via CAT_LEVEL mapping
-function triggerRecalc(){invalidateCalcCache();['myntra','ajio-ppmp','ajio-cc','amazon'].forEach(mp=>renderDynamicCalc(mp));}
+function triggerRecalc(){
+  invalidateCalcCache();
+  // While a brand's settings are being edited the globals hold that brand's
+  // copy, so repainting the marketplace calculators would present its numbers
+  // as if they were the defaults.
+  if(_editScope) return;
+  ['myntra','ajio-ppmp','ajio-cc','amazon'].forEach(mp=>renderDynamicCalc(mp));
+}
 
 // ═══════════════════════════════════════════════════════
 // COMMISSION TABLES
@@ -4357,6 +4631,9 @@ function buildCommAmazon(){
   t.innerHTML=h+'</tbody>';
 }
 async function saveComm(){
+  // While scoped these values belong to one brand — writing them into the
+  // shared logistics blob would reprice every brand.
+  if(_editScope) return saveBrandScope('Commission');
   LOGISTICS_SETTINGS.comm_slabs=COMM_SLABS;
   LOGISTICS_SETTINGS.comm_mode=COMM_MODE;
   LOGISTICS_SETTINGS.comm_slab_only=COMM_SLAB_ONLY;
@@ -4370,6 +4647,7 @@ async function saveComm(){
 
 // ── Category Management ──────────────────────────────
 function openAddCategoryModal(){
+  if(_blockIfScoped('Adding a category')) return;
   const lvlOpts=LEVELS.map(l=>`<option>${l}</option>`).join('');
   setModal(`<div class="mhdr"><div class="mtl">+ Add Category</div><span class="mclose" onclick="closeModal()">×</span></div>
     <div class="mbody">
@@ -4395,7 +4673,9 @@ async function addCategory(){
   THRESHOLDS[name]=THRESHOLDS[name]||0;
   COMM_MYNTRA[name]=COMM_MYNTRA[name]||_normSlabArr([0,0,18.88,18.88,18.88],SLABS.length,18.88);
   COMM_AMAZON[name]=COMM_AMAZON[name]||17;
+  const fanned=_fanOutCategoryToBrands(name);
   for(const t of['categories','cat_levels','comm_myntra','comm_amazon'])await save(t);
+  if(fanned) await save('brands');
   buildCommMyntra();buildCommAmazon();populateFilters();
   audit('category_add',`Category "${name}" added (${level})`);
   toast(`"${name}" added`,'green');
@@ -4407,6 +4687,7 @@ let _deletedCategories=[];
 // collection fees and threshold. So the user must SEE the affected SKUs and
 // explicitly pick where they go — never a silent "first available" move.
 async function deleteCategory(cat){
+  if(_blockIfScoped('Deleting a category')) return;
   const affected=skuDB.filter(s=>s.category===cat);
   const usedCount=affected.length;
   if(!usedCount){
@@ -4465,6 +4746,9 @@ async function _doDeleteCategory(cat,target){
   // the logistics blob — drop the deleted category's entries so they can't
   // resurrect as stale config
   delete COMM_CAT_SLABS[cat];delete COMM_SLAB_CAT[cat];delete COLL_CAT_SLABS[cat];
+  // Brands with their own settings keep their own copy of the category-keyed
+  // maps — purge there too, or the category resurrects as stale per-brand config.
+  const _brandsTouched=_purgeCategoryFromBrands(cat);
   LOGISTICS_SETTINGS.comm_cat_slabs=COMM_CAT_SLABS;
   LOGISTICS_SETTINGS.comm_slab_cat=COMM_SLAB_CAT;
   LOGISTICS_SETTINGS.coll_cat_slabs=COLL_CAT_SLABS;
@@ -4486,6 +4770,7 @@ async function _doDeleteCategory(cat,target){
     }
   }
   for(const t of['categories','cat_levels','comm_myntra','comm_ppmp','comm_cc','comm_amazon','thresholds','logistics'])await save(t);
+  if(_brandsTouched) await save('brands');
   invalidateCalcCache();buildCommMyntra();buildCommAmazon();populateFilters();renderSKUs();
   audit('category_delete',`Category "${cat}" deleted${usedCount?` (${usedCount} SKU${usedCount>1?'s':''} moved to ${target})`:''}`);
   toast(`"${cat}" removed${usedCount?` — ${usedCount} SKU${usedCount>1?'s':''} → ${target}`:''} — `,`red`);
@@ -5121,7 +5406,7 @@ async function deleteBrand(id){
   // changes how it is priced entirely, so make the safe choice the default.
   const sameModel=others.filter(x=>x.model===b?.model);
   const diffModel=others.filter(x=>x.model!==b?.model);
-  const opt=x=>`<option value="${escAttr(x.id)}"${x.model!==b?.model?' data-diff="1"':''}>${esc(x.name)} — ${esc(_MP_LABELS[x.model]||x.model)}${x.model!==b?.model?'  ⚠ different marketplace':''}</option>`;
+  const opt=x=>`<option value="${escAttr(x.id)}"${x.model!==b?.model?' data-diff="1"':''}>${esc(_brandLabel(x))}${x.model!==b?.model?'  ⚠ different marketplace':''}</option>`;
   setModal(`<div class="mhdr"><div class="mtl">${icon('trash',{size:15})} Delete "${esc(b?.name||id)}"</div><span class="mclose" onclick="closeModal()" role="button" aria-label="Close">×</span></div>
     <div class="mbody">
       <div class="warn mb12">⚠ <strong>${refCount} SKU${refCount>1?'s':''}</strong> ${refCount>1?'are':'is'} still assigned to this brand${arc?` (${act} active, ${arc} archived)`:''}. They must be moved to another brand first.</div>
@@ -5188,7 +5473,7 @@ async function runDataHealthCheck(){
       Their profit figures are wrong until they're reassigned.</div>`;
     if(brands.length){
       h+=`<div class="fg"><label class="fl">Reassign them to</label>
-        <select class="fi" id="orphan-target">${brands.map(b=>`<option value="${escAttr(b.id)}">${esc(b.name)} — ${esc(_MP_LABELS[b.model]||b.model)}</option>`).join('')}</select></div>
+        <select class="fi" id="orphan-target">${brands.map(b=>`<option value="${escAttr(b.id)}">${esc(_brandLabel(b))}</option>`).join('')}</select></div>
         <button class="btn bp bsm" style="margin-top:9px" onclick="repairOrphanSKUs()">Reassign ${total} SKU${total>1?'s':''}</button>`;
       if(dbOrphans&&dbOrphans.length>orphans.length){
         h+=`<div class="st" style="margin-top:7px">${dbOrphans.length-orphans.length} of these aren't loaded in this tab — reload to repair them all.</div>`;
@@ -5470,6 +5755,10 @@ function debouncedRenderSKUs(){
   _skuSearchTimer=setTimeout(renderSKUs,160);
 }
 function renderSKUs(){
+  // The globals currently hold one brand's settings, not the defaults —
+  // pricing every SKU with them would show wrong numbers for every other
+  // brand. The list repaints when the scope ends.
+  if(_editScope) return;
   if(!_dataReady){
     const t=el('sku-body');if(t)t.innerHTML=`<tr><td colspan="16" style="text-align:center;padding:28px;color:var(--tx3)"><div style="animation:pulse 1.5s infinite">Loading SKUs...</div></td></tr>`;
     el('sku-count')&&(el('sku-count').textContent='');
@@ -6876,6 +7165,15 @@ const TITLES={dashboard:'Dashboard',pricing:'Price Calculator',thresholds:'Profi
 // When one is open, the Settings sidebar entry is highlighted.
 const SETTINGS_GROUP=new Set(['brands','commission','logistics','thresholds','wireframe','activity','users']);
 function nav(p){
+  // Leaving a settings page must always drop the brand scope, or the globals
+  // stay hijacked and the next ordinary save writes one brand's settings over
+  // everyone's. Warn first if there is unsaved work, but end the scope either
+  // way — a leaked scope is far worse than a lost edit.
+  if(_editScope&&p!=='commission'&&p!=='logistics'){
+    if(_scopeHasChanges()&&!confirm(`Discard unsaved settings for "${_editScope.name}"?`)) return;
+    endScope();
+    _repaintForCalcChange();
+  }
   document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
   const navKey=SETTINGS_GROUP.has(p)?'settings':p;
@@ -6899,7 +7197,7 @@ function nav(p){
     renderWFPreviews();
   }
   if(p==='dashboard'){renderDashTasks();renderBrandSummary();renderDashboardWidgets();updateAlerts();}
-  if(p==='commission'){buildCommMyntra();buildCommAjioBrands();buildCommAmazon();}
+  if(p==='commission'){renderScopeBar('commission');buildCommMyntra();buildCommAjioBrands();buildCommAmazon();}
   if(p==='wireframe')renderWFBuilder();
   if(p==='brands')renderBrands();
   if(p==='skus'){populateFilters();populateTagFilter();renderSKUs();}
@@ -6908,7 +7206,7 @@ function nav(p){
   if(p==='users')renderUsers();
   if(p==='activity'){ renderAuditLog(); renderImportLog(); populateAuditFilters(); populateSkuHistorySelect(); }
   if(p==='settings'){ loadConfig(); populateSettingsPage(); loadBackupList(); applyRoleVisibility(); }
-  if(p==='logistics'){ renderGTTable(); renderRetTable(); renderCollTable(); populateLogisticsInputs(); }
+  if(p==='logistics'){ renderScopeBar('logistics'); renderGTTable(); renderRetTable(); renderCollTable(); populateLogisticsInputs(); }
 }
 // Browser back/forward button support
 window.addEventListener('popstate',()=>{
@@ -8635,11 +8933,8 @@ function renderGTCatTable(){
   const labels=gtSlabLabels(), n=labels.length;
   const thead=el('gt-cat-table-head');
   if(thead) thead.innerHTML=_slabHeadHTML('Category',labels,true);
+  _seedCatLogisticsDefaults();
   tbody.innerHTML=CATS.map(cat=>{
-    if(!GT_CAT_DATA[cat]){
-      const lvl=CAT_LEVEL[cat]||'Level 2';
-      GT_CAT_DATA[cat]=[...(GT_DATA[lvl]||[0,1,83,83,118,195,230])];
-    }
     const vals=GT_CAT_DATA[cat]=_normSlabArr(GT_CAT_DATA[cat],n,0);
     return`<tr><td style="white-space:nowrap"><strong style="font-size:11px">${esc(cat)}</strong></td>${
       vals.map((v,i)=>`<td><input class="ci" style="width:58px;${i===n-1?'border-color:var(--ac)':''}" value="${v}" oninput="GT_CAT_DATA['${escAttr(cat)}'][${i}]=+this.value||0;invalidateCalcCache()"></td>`).join('')
@@ -8655,11 +8950,8 @@ function renderRetCatTable(){
   if(thead) thead.innerHTML=REV_SLABS.length
     ? _slabHeadHTML('Category',labels,true)
     : `<tr><th>Category</th><th>Return Fee (₹)</th><th></th></tr>`;
+  _seedCatLogisticsDefaults();
   tbody.innerHTML=CATS.map(cat=>{
-    if(REV_CAT_DATA[cat]==null){
-      const lvl=CAT_LEVEL[cat]||'Level 2';
-      REV_CAT_DATA[cat]=REVERSE_FEES[lvl]??218;
-    }
     return`<tr><td><strong style="font-size:11px">${esc(cat)}</strong></td>${_retRowCells('REV_CAT_DATA',cat,REV_CAT_DATA[cat],n)}</tr>`;
   }).join('');
 }
@@ -8775,6 +9067,7 @@ function collEditCatSlabs(cat){
 }
 
 function saveCollFees(){
+  if(_editScope){ saveBrandScope('Collection fee'); return; }
   LOGISTICS_SETTINGS.coll_fee_data=COLL_FEE_DATA;
   LOGISTICS_SETTINGS.coll_slabs=COLL_SLABS;
   LOGISTICS_SETTINGS.coll_cat_slabs=COLL_CAT_SLABS;
@@ -9021,6 +9314,10 @@ async function _reinstateLevel(name){
 
 // Sync Myntra logistics fields (modes, fixed rates, category-wise data) into settings
 function _syncMynLogisticsSettings(){
+  // Hard stop: this function's entire job is to copy the current settings into
+  // the shared logistics blob. Doing that while the globals hold one brand's
+  // values would overwrite the defaults for everyone. Throw rather than guess.
+  if(_editScope) throw new Error('_syncMynLogisticsSettings called while editing brand settings');
   LOGISTICS_SETTINGS.myn_fwd_fixed = +el('mfwd-fix')?.value || LOGISTICS_SETTINGS.myn_fwd_fixed || 230;
   LOGISTICS_SETTINGS.myn_ret_fixed = +el('mret-fix')?.value || LOGISTICS_SETTINGS.myn_ret_fixed || 218;
   LOGISTICS_SETTINGS.gt_cat_data   = GT_CAT_DATA;
@@ -9037,6 +9334,7 @@ function _syncMynLogisticsSettings(){
 }
 
 function saveGTCharges(){
+  if(_editScope){ _readScopedLogisticsInputs(); saveBrandScope('Shipping & fees'); return; }
   LOGISTICS_SETTINGS.myn_pg_fee         = +el('myn-pg')?.value  || 50.22;
   LOGISTICS_SETTINGS.coll_fee_data      = COLL_FEE_DATA;
   _syncMynLogisticsSettings();
@@ -9048,6 +9346,7 @@ function saveGTCharges(){
 }
 
 function saveLogisticsAll(){
+  if(_editScope){ _readScopedLogisticsInputs(); saveBrandScope('Shipping & fees'); return; }
   LOGISTICS_SETTINGS.myn_pg_fee          = +el('myn-pg')?.value    || 50.22;
   LOGISTICS_SETTINGS.coll_fee_data       = COLL_FEE_DATA;
   _syncMynLogisticsSettings();

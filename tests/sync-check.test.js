@@ -212,6 +212,37 @@ describe('source drift detection — production strings must match test copies',
       expect(HTML).toContain("    config:(r.config&&typeof r.config==='object')?r.config:null");
     });
 
+    it('brand scope cannot leak into the global settings', () => {
+      // If any of these guards is removed, editing one brand's settings and
+      // then saving normally would overwrite the defaults for EVERY brand.
+      // That is the single most destructive bug this feature could have.
+      expect(HTML).toContain("  if(_editScope) return saveBrandScope('Commission');");
+      expect(HTML).toContain("  if(_editScope){ _readScopedLogisticsInputs(); saveBrandScope('Shipping & fees'); return; }");
+      expect(HTML).toContain("  if(_editScope){ saveBrandScope('Collection fee'); return; }");
+      expect(HTML).toContain(
+        "  if(_editScope) throw new Error('_syncMynLogisticsSettings called while editing brand settings');"
+      );
+      // nav() must end the scope, and endScope must restore every key.
+      expect(HTML).toContain("  if(_editScope&&p!=='commission'&&p!=='logistics'){");
+      expect(HTML).toContain('  for(const k in baseline) CFG_REG[k].set(baseline[k]);');
+      // Renders that would present one brand's settings as the defaults.
+      expect(HTML).toContain('  if(_editScope) return;\n  if(!_dataReady){');
+    });
+
+    it('taxonomy actions are blocked while a brand scope is active', () => {
+      // Categories and levels are global structure; "deleting a category for
+      // one brand" must not remove it for everyone.
+      expect(HTML).toContain("  if(_blockIfScoped('Adding a category')) return;");
+      expect(HTML).toContain("  if(_blockIfScoped('Deleting a category')) return;");
+    });
+
+    it('category changes fan out to brands that overrode category maps', () => {
+      // Without this a new category silently falls back to the hardcoded
+      // defaults inside the fee helpers for every customised brand.
+      expect(HTML).toContain('  const fanned=_fanOutCategoryToBrands(name);');
+      expect(HTML).toContain('  const _brandsTouched=_purgeCategoryFromBrands(cat);');
+    });
+
     it('calcSKU marketplace dispatch is unchanged (tests/calc/calc-sku.test.js)', () => {
       expect(HTML).toContain("if(mp==='myntra'){");
       expect(HTML).toContain("} else if(mp==='ajio-ppmp'||mp==='ajio-cc'){");
