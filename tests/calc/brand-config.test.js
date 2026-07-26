@@ -163,34 +163,69 @@ function _sanitizeBrandCfg(out, brandId) {
   for (const k of ['myn_fwd_mode', 'myn_ret_mode']) {
     if (k in out && !['level', 'fixed', 'cat'].includes(out[k])) { warn(`${k} is not level/fixed/cat — using the global instead`); out[k] = CFG_REG[k].get(); }
   }
-  const fit = (row, n) => {
-    if (!Array.isArray(row)) return row;
-    const r = row.slice(0, n);
-    while (r.length < n) r.push(r.length ? r[r.length - 1] : 0);
+  // Rate rows must line up with the bounds that index them, or the Math.min
+  // clamps in getMyntraComm / getMynColl / slabPick silently return a WRONG
+  // band instead of failing. This runs last, after the bound fallbacks above,
+  // so a row is always fitted to the bounds actually in force.
+  const fit=(row,n)=>{
+    if(!Array.isArray(row)) return row;   // scalars are legitimate flat fees
+    const r=row.slice(0,n);
+    while(r.length<n) r.push(r.length?r[r.length-1]:0);
     return r;
   };
-  if (out.COMM_MYNTRA && typeof out.COMM_MYNTRA === 'object') {
-    const gBounds = out.COMM_SLABS || CFG_REG.COMM_SLABS.get();
-    const fixed = {};
-    for (const [cat, row] of Object.entries(out.COMM_MYNTRA)) {
-      const bounds = (out.COMM_CAT_SLABS && out.COMM_CAT_SLABS[cat]) || gBounds;
-      const want = bounds.length + 1;
-      if (Array.isArray(row) && row.length !== want) warn(`COMM_MYNTRA["${cat}"] has ${row.length} rates for ${want} bands — resized to fit`);
-      fixed[cat] = fit(row, want);
+  // Per-category bounds win over the global ones — but only when non-empty.
+  // An empty array means "one fixed fee" for collection fees; for commission
+  // getMyntraComm ignores it (`cb && cb.length`), so treating it as bounds
+  // would truncate the row to a single rate and return the FIRST band's rate,
+  // usually 0%, at every price.
+  const boundsFor=(perCat,cat,gBounds)=>{
+    const cb=perCat&&perCat[cat];
+    return Array.isArray(cb)&&cb.length?cb:gBounds;
+  };
+  const fitMap=(key,gBounds,perCat,allowEmptyPerCat)=>{
+    const map=out[key];
+    if(!map||typeof map!=='object'||Array.isArray(map)) return;
+    const fixed={};
+    for(const[k,row]of Object.entries(map)){
+      let want;
+      if(allowEmptyPerCat&&perCat&&Array.isArray(perCat[k])) want=perCat[k].length+1; // [] ⇒ 1 fixed fee
+      else want=boundsFor(perCat,k,gBounds).length+1;
+      if(Array.isArray(row)&&row.length!==want) warn(`${key}["${k}"] has ${row.length} entries for ${want} bands — resized to fit`);
+      fixed[k]=fit(row,want);
     }
-    out.COMM_MYNTRA = fixed;
-  }
-  if (out.COLL_FEE_DATA && typeof out.COLL_FEE_DATA === 'object') {
-    const gBounds = out.COLL_SLABS || CFG_REG.COLL_SLABS.get();
-    const fixed = {};
-    for (const [cat, row] of Object.entries(out.COLL_FEE_DATA)) {
-      const cb = out.COLL_CAT_SLABS && out.COLL_CAT_SLABS[cat];
-      const want = Array.isArray(cb) ? cb.length + 1 : gBounds.length + 1;
-      if (Array.isArray(row) && row.length !== want) warn(`COLL_FEE_DATA["${cat}"] has ${row.length} fees for ${want} bands — resized to fit`);
-      fixed[cat] = fit(row, want);
+    out[key]=fixed;
+  };
+
+  const commBounds=out.COMM_SLABS||CFG_REG.COMM_SLABS.get();
+  fitMap('COMM_MYNTRA',commBounds,out.COMM_CAT_SLABS,false);
+  if('COMM_SLAB_ONLY'in out) out.COMM_SLAB_ONLY=fit(out.COMM_SLAB_ONLY,commBounds.length+1);
+  // COMM_SLAB_CAT carries its own bounds alongside its rates; drop the entry
+  // rather than guess if the pair is malformed.
+  if(out.COMM_SLAB_CAT&&typeof out.COMM_SLAB_CAT==='object'){
+    const clean={};
+    for(const[cat,o]of Object.entries(out.COMM_SLAB_CAT)){
+      if(o&&Array.isArray(o.bounds)&&o.bounds.length&&Array.isArray(o.rates)&&o.rates.length){
+        clean[cat]={bounds:o.bounds,rates:fit(o.rates,o.bounds.length+1)};
+      } else warn(`COMM_SLAB_CAT["${cat}"] is malformed — that category falls back to the standard bands`);
     }
-    out.COLL_FEE_DATA = fixed;
+    out.COMM_SLAB_CAT=clean;
   }
+
+  const gtBounds=out.GT_SLABS||CFG_REG.GT_SLABS.get();
+  fitMap('GT_DATA',gtBounds,null,false);
+  fitMap('GT_CAT_DATA',gtBounds,null,false);
+
+  // Reverse fees are per-slab arrays only when REV_SLABS has bounds; with an
+  // empty REV_SLABS they are flat scalars, which fit() passes through.
+  const revBounds=out.REV_SLABS!==undefined?out.REV_SLABS:CFG_REG.REV_SLABS.get();
+  if(Array.isArray(revBounds)&&revBounds.length){
+    fitMap('REVERSE_FEES',revBounds,null,false);
+    fitMap('REV_CAT_DATA',revBounds,null,false);
+  }
+
+  const collBounds=out.COLL_SLABS||CFG_REG.COLL_SLABS.get();
+  fitMap('COLL_FEE_DATA',collBounds,out.COLL_CAT_SLABS,true);
+
   return out;
 }
 
@@ -357,6 +392,60 @@ describe('resolveBrandCfg — a corrupt config must never break pricing', () => 
     _brandCfgCache = new Map();
     resolveBrandCfg('b1');
     expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('resolveBrandCfg — every rate array is fitted to its bounds', () => {
+  beforeEach(() => { vi.spyOn(console, 'warn').mockImplementation(() => {}); });
+
+  it('an EMPTY per-category commission bound list does not truncate the row', () => {
+    // getMyntraComm ignores an empty COMM_CAT_SLABS entry (`cb && cb.length`),
+    // so treating [] as bounds would size the row to 1 and then return the
+    // first band's rate — usually 0% — at every price.
+    brands = [{ id: 'b1', config: { comm: { COMM_CAT_SLABS: { 'Sarees': [] }, COMM_MYNTRA: { 'Sarees': [1, 2, 3, 4, 5] } } } }];
+    const r = resolveBrandCfg('b1');
+    expect(r.COMM_MYNTRA['Sarees']).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('forward-shipping rows are fitted to the brand\'s own GT_SLABS', () => {
+    // The gap that let a fanned-in category row keep the GLOBAL length and
+    // return the wrong shipping band through slabPick's clamp.
+    brands = [{ id: 'b1', config: { fwd: { GT_SLABS: [100, 500], GT_CAT_DATA: { 'Sarees': [1, 2, 3, 4, 5, 6, 7] } } } }];
+    const r = resolveBrandCfg('b1');
+    expect(r.GT_CAT_DATA['Sarees']).toEqual([1, 2, 3]);   // 2 bounds ⇒ 3 bands
+    expect(r.GT_DATA['Level 2']).toHaveLength(3);          // inherited row fitted too
+  });
+
+  it('slab-only commission rates are fitted to the commission bounds', () => {
+    brands = [{ id: 'b1', config: { comm: { COMM_SLABS: [400], COMM_SLAB_ONLY: [5, 6, 7, 8, 9] } } }];
+    expect(resolveBrandCfg('b1').COMM_SLAB_ONLY).toEqual([5, 6]);
+  });
+
+  it('reverse fees stay flat scalars when REV_SLABS is empty', () => {
+    brands = [{ id: 'b1', config: { ret: { REV_SLABS: [], REVERSE_FEES: { 'Level 2': 300 } } } }];
+    expect(resolveBrandCfg('b1').REVERSE_FEES['Level 2']).toBe(300);
+  });
+
+  it('reverse fees become banded arrays when REV_SLABS has bounds', () => {
+    brands = [{ id: 'b1', config: { ret: { REV_SLABS: [500, 1500], REVERSE_FEES: { 'Level 2': [10, 20, 30, 40] } } } }];
+    expect(resolveBrandCfg('b1').REVERSE_FEES['Level 2']).toEqual([10, 20, 30]);
+  });
+
+  it('a malformed COMM_SLAB_CAT entry is dropped, not half-applied', () => {
+    brands = [{ id: 'b1', config: { comm: { COMM_SLAB_CAT: {
+      good: { bounds: [500], rates: [1, 2, 3, 4] }, bad: { bounds: [500] } } } } }];
+    const r = resolveBrandCfg('b1');
+    expect(r.COMM_SLAB_CAT.good).toEqual({ bounds: [500], rates: [1, 2] });
+    expect(r.COMM_SLAB_CAT.bad).toBeUndefined();
+  });
+
+  it('rows are fitted to the bounds actually in force after a bad-bounds fallback', () => {
+    // The fallback replaces bad bounds with the global; the rates must then be
+    // re-fitted to THOSE, or the invariant the check exists to protect breaks.
+    brands = [{ id: 'b1', config: { comm: { COMM_SLABS: [900, 100], COMM_MYNTRA: { 'Sarees': [1, 2] } } } }];
+    const r = resolveBrandCfg('b1');
+    expect(r.COMM_SLABS).toEqual([300, 500, 1000, 2000]);
+    expect(r.COMM_MYNTRA['Sarees']).toHaveLength(5);
   });
 });
 
