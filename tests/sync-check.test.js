@@ -115,6 +115,199 @@ describe('source drift detection — production strings must match test copies',
     });
   });
 
+  // The three biggest calc functions are copied wholesale into tests/calc/,
+  // but until now nothing asserted those copies stayed in sync — which is
+  // exactly how calc-sku.test.js drifted from the dangling-brand warning
+  // without a single test going red. Whole-body literals for functions this
+  // size would be unmaintainable, so assert the load-bearing slices: the
+  // branch dispatch, the money arithmetic, and the fallbacks that read
+  // globals directly.
+  describe('large calc functions (slice assertions)', () => {
+    it('calcSKU brand resolution + fallback is unchanged (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain('const realBrand=brands.find(b=>b.id===s.brandId);');
+      expect(HTML).toContain("const brand=realBrand||{model:'myntra',commOverride:null};");
+      expect(HTML).toContain("const mp = brand.model || 'myntra';");
+      expect(HTML).toContain("const level = CAT_LEVEL[s.category] || s.level || 'Level 2';");
+    });
+
+    it('withBrandCfg swap/restore is unchanged (tests/calc/calc-sku.test.js)', () => {
+      // The zero-diff guarantee depends on the inherit path being a plain
+      // call through, and on the finally-block restore being unconditional.
+      expect(HTML).toContain('function withBrandCfg(brandId, fn){');
+      expect(HTML).toContain('  const ov=resolveBrandCfg(brandId);');
+      expect(HTML).toContain('  if(!ov) return fn();');
+      expect(HTML).toContain(
+        "  if(_cfgDepth) throw new Error('withBrandCfg: nested config scope — calculations must not nest');"
+      );
+      expect(HTML).toContain('  try{ return fn(); }');
+      expect(HTML).toContain('    for(const k in saved) CFG_REG[k].set(saved[k]);');
+    });
+
+    it('calcSKU prices inside the brand config scope (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain('withBrandCfg(brand.id, ()=>{');
+    });
+
+    it('CFG_REG covers every swappable config global (tests/calc/calc-sku.test.js)', () => {
+      // Getters must be closures — these globals are reassigned wholesale on
+      // load/realtime/import, so a captured snapshot would go stale.
+      expect(HTML).toContain(
+        '  COMM_SLABS:     {get:()=>COMM_SLABS,     set:v=>{COMM_SLABS=v;SLABS=_slabsFromBounds(v);}},'
+      );
+      expect(HTML).toContain(
+        "const _lsKey=k=>({get:()=>LOGISTICS_SETTINGS[k],set:v=>{LOGISTICS_SETTINGS[k]=v;}});"
+      );
+      for (const k of ['COMM_MODE','COMM_SLAB_ONLY','COMM_MYNTRA','COMM_CAT_SLABS','COMM_SLAB_CAT',
+                       'COMM_AMAZON','COMM_AJIO_PPMP','COMM_AJIO_CC','GT_SLABS','GT_DATA',
+                       'GT_CAT_DATA','REV_SLABS','REVERSE_FEES','REV_CAT_DATA','COLL_SLABS',
+                       'COLL_CAT_SLABS','COLL_FEE_DATA']) {
+        expect(HTML, `CFG_REG is missing ${k}`).toContain(`  ${k}:`);
+      }
+    });
+
+    it('config sections stay closed under indexing (tests/calc/calc-sku.test.js)', () => {
+      // A bounds array and every rate array indexed by it MUST share a
+      // section, or a brand could override bounds while inheriting rates and
+      // the Math.min clamps would silently return the wrong band.
+      expect(HTML).toContain(
+        "  comm:['COMM_MODE','COMM_SLABS','COMM_SLAB_ONLY','COMM_MYNTRA','COMM_CAT_SLABS','COMM_SLAB_CAT','COMM_AMAZON','COMM_AJIO_PPMP','COMM_AJIO_CC'],"
+      );
+      expect(HTML).toContain("  fwd :['GT_SLABS','GT_DATA','GT_CAT_DATA','myn_fwd_mode','myn_fwd_fixed'],");
+      expect(HTML).toContain("  ret :['REV_SLABS','REVERSE_FEES','REV_CAT_DATA','myn_ret_mode','myn_ret_fixed','amz_ret'],");
+      expect(HTML).toContain("  coll:['COLL_SLABS','COLL_CAT_SLABS','COLL_FEE_DATA'],");
+      expect(HTML).toContain("  fees:['myn_pg_fee','ajio_fwd','ajio_ret','ajio_platform_fee','amz_fba','amz_close'],");
+    });
+
+    it('showCalcModal uses the same brand scope as calcSKU (no contradiction)', () => {
+      expect(HTML).toContain('const result=withBrandCfg(brand.id,()=>runWFEngine(mp,inputs));');
+    });
+
+    it('brand config resolver is unchanged (tests/calc/brand-config.test.js)', () => {
+      expect(HTML).toContain('function resolveBrandCfg(brandId){');
+      expect(HTML).toContain('function _buildBrandCfg(brandId){');
+      expect(HTML).toContain('function _sanitizeBrandCfg(out,brandId){');
+      // A section is applied whole — this `continue` is what makes an absent
+      // section inherit rather than partially apply.
+      expect(HTML).toContain('    if(!sec||typeof sec!==\'object\') continue; // section absent ⇒ inherit');
+      // Per-key merge for category/level-keyed maps.
+      expect(HTML).toContain(
+        '        out[k]=Object.assign({},base&&typeof base===\'object\'?base:{},v);'
+      );
+      expect(HTML).toContain('  const resolved=_sanitizeBrandCfg(out,brandId);');
+      expect(HTML).toContain('  return Object.keys(resolved).length?resolved:null;');
+      // Rate rows must be resized to their bounds, or Math.min silently
+      // returns the wrong band.
+      expect(HTML).toContain('  const fit=(row,n)=>{');
+      expect(HTML).toContain('      const want=bounds.length+1;');
+    });
+
+    it('brand config is memoized and cleared with the calc cache', () => {
+      expect(HTML).toContain(
+        'function invalidateCalcCache(){ _calcCacheVersion++; _calcCache = new Map(); _brandCfgCache = new Map(); }'
+      );
+      expect(HTML).toContain("  const ck=brandId+'|'+_calcCacheVersion;");
+    });
+
+    it('brand row mappers carry config both ways (else it vanishes on save)', () => {
+      expect(HTML).toContain('    config:(b.config&&Object.keys(b.config).length)?b.config:null,');
+      expect(HTML).toContain("    config:(r.config&&typeof r.config==='object')?r.config:null");
+    });
+
+    it('brand scope cannot leak into the global settings', () => {
+      // If any of these guards is removed, editing one brand's settings and
+      // then saving normally would overwrite the defaults for EVERY brand.
+      // That is the single most destructive bug this feature could have.
+      expect(HTML).toContain("  if(_editScope) return saveBrandScope('Commission');");
+      expect(HTML).toContain("  if(_editScope){ _readScopedLogisticsInputs(); saveBrandScope('Shipping & fees'); return; }");
+      expect(HTML).toContain("  if(_editScope){ saveBrandScope('Collection fee'); return; }");
+      expect(HTML).toContain(
+        "  if(_editScope) throw new Error('_syncMynLogisticsSettings called while editing brand settings');"
+      );
+      // nav() must end the scope, and endScope must restore every key.
+      expect(HTML).toContain("  if(_editScope&&p!=='commission'&&p!=='logistics'){");
+      expect(HTML).toContain('  for(const k in baseline) CFG_REG[k].set(baseline[k]);');
+      // Renders that would present one brand's settings as the defaults.
+      expect(HTML).toContain('  if(_editScope) return;\n  if(!_dataReady){');
+    });
+
+    it('taxonomy actions are blocked while a brand scope is active', () => {
+      // Categories and levels are global structure; "deleting a category for
+      // one brand" must not remove it for everyone.
+      expect(HTML).toContain("  if(_blockIfScoped('Adding a category')) return;");
+      expect(HTML).toContain("  if(_blockIfScoped('Deleting a category')) return;");
+    });
+
+    it('category changes fan out to brands that overrode category maps', () => {
+      // Without this a new category silently falls back to the hardcoded
+      // defaults inside the fee helpers for every customised brand.
+      expect(HTML).toContain('  const fanned=_fanOutCategoryToBrands(name);');
+      expect(HTML).toContain('  const _brandsTouched=_purgeCategoryFromBrands(cat);');
+    });
+
+    it('calcSKU marketplace dispatch is unchanged (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain("if(mp==='myntra'){");
+      expect(HTML).toContain("} else if(mp==='ajio-ppmp'||mp==='ajio-cc'){");
+      expect(HTML).toContain(
+        'const v2=calcMyntraFull(s.cost,s.markup,s.discount??0,level,s.category,0,0);'
+      );
+    });
+
+    it('calcSKU Ajio branch arithmetic is unchanged (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain('const profitInclCost=Math.round(s.cost + s.cost * s.markup / 100);');
+      expect(HTML).toContain('const gstRate=grossSale>2500?0.18:0.05;');
+      expect(HTML).toContain('const gstValue=grossSale*gstRate/(1+gstRate);');
+      expect(HTML).toContain('const purchasePrice=mrpRnd-discAmt-gstValue-commAmt;');
+      expect(HTML).toContain('const marketingContr=invoiceValue*0.03;');
+      expect(HTML).toContain(
+        'const logistic=(LOGISTICS_SETTINGS.ajio_fwd||70)+(LOGISTICS_SETTINGS.ajio_ret||70);'
+      );
+    });
+
+    it('calcSKU Amazon branch arithmetic is unchanged (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain('sp=Math.round(mrp*3/100)*100||mrp*3;');
+      expect(HTML).toContain('else comm=COMM_AMAZON[s.category]||17;');
+      expect(HTML).toContain(
+        'const fba=LOGISTICS_SETTINGS.amz_fba,close=LOGISTICS_SETTINGS.amz_close,allFees=commAmt+close+fba,gstAmt2=allFees*gst;'
+      );
+      expect(HTML).toContain('payout=sp-allFees-gstAmt2;');
+    });
+
+    it('calcSKU result shape is unchanged (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain(
+        'const result={mrp,sp,custPaid,comm,payout,profitRs,profitPct,isBreach,threshold,ifDelivered,grossSettlement};'
+      );
+      expect(HTML).toContain('const isBreach=!s.ignoreThreshold&&profitRs<threshold;');
+    });
+
+    it('calcMyntraFull signature + global-reading fallbacks unchanged (tests/calc/myntra-full-wrapper.test.js)', () => {
+      expect(HTML).toContain(
+        'function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){'
+      );
+      // These three read globals OUTSIDE the WF engine, so they are the
+      // fallbacks a per-brand config swap must also cover.
+      expect(HTML).toContain('const ret      = result.retFee   ?? REVERSE_FEES[level] ?? 218;');
+      expect(HTML).toContain('const coll     = result.collFee  ?? getMynColl(cat, sellerPrice);');
+      expect(HTML).toContain(
+        'const pg       = result.pgFee    ?? LOGISTICS_SETTINGS.myn_pg_fee ?? 50.22;'
+      );
+      expect(HTML).toContain(
+        'const grossSettlement = result.grossSettlement ?? (sellerPrice - commAmt - (coll * 1.18));'
+      );
+    });
+
+    it('runWFEngine dispatch + compile path unchanged (tests/calc/wf-engine.test.js)', () => {
+      expect(HTML).toContain('function runWFEngine(marketplace, inputs){');
+      expect(HTML).toContain('const rows = WF[marketplace] || [];');
+      expect(HTML).toContain(
+        'ctx[row.var] = WF_LOOKUPS[row.fn] ? WF_LOOKUPS[row.fn](ctx) : null;'
+      );
+      expect(HTML).toContain('const validIdRe = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;');
+      expect(HTML).toContain('const fn = _wfCompile(keys, row.expr);');
+      expect(HTML).toContain(
+        'ctx[row.var] = (typeof r === \'number\' && isNaN(r)) || r == null ? null : r;'
+      );
+    });
+  });
+
   describe('inline lookup tables', () => {
     it('SLABS derivation is unchanged (tests/calc/myntra-commission.test.js)', () => {
       expect(HTML).toContain('let COMM_SLABS=[300,500,1000,2000];');

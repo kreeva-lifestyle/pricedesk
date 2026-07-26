@@ -2,17 +2,17 @@ import { describe, it, expect, beforeEach } from 'vitest';
 
 // SYNC NOTE: Functions and default fixtures below are copied verbatim
 // from index.html. Update both places if any change.
-//   - GT_DATA:         index.html:3085
-//   - REVERSE_FEES:    index.html:3091
-//   - COLL_FEE_DATA:   index.html:3130
-//   - GT_SLABS:        index.html:3065
-//   - REV_SLABS:       index.html:3068
-//   - COLL_SLABS:      index.html:3070
-//   - slabPick:        index.html:3095
-//   - gtSlabValue:     index.html:3104
-//   - getMynFwd:       index.html:3105
-//   - getMynRet:       index.html:3111
-//   - getMynColl:      index.html:3117
+//   - GT_DATA:         index.html:3480
+//   - REVERSE_FEES:    index.html:3486
+//   - COLL_FEE_DATA:   index.html:3490
+//   - GT_SLABS:        index.html:3506
+//   - REV_SLABS:       index.html:3509
+//   - COLL_SLABS:      index.html:3512
+//   - slabPick:        index.html:3555
+//   - gtSlabValue:     index.html:3564
+//   - getMynFwd:       index.html:3565
+//   - getMynRet:       index.html:3571
+//   - getMynColl:      index.html:3577
 //
 // GT_DATA, REVERSE_FEES, COLL_FEE_DATA, the slab bounds, and the
 // mode settings are user-editable from the Logistics page at runtime —

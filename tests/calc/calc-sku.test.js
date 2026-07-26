@@ -1,20 +1,22 @@
 import { describe, it, expect } from 'vitest';
 
-// SYNC NOTE: calcSKU is copied verbatim from index.html:3017 below,
+// SYNC NOTE: calcSKU is copied verbatim from index.html:3600 below,
 // along with the globals and helpers it reads. If you change any of
 // these in index.html, update this file too.
 //
-// Scope of this PR: only the Amazon and Ajio (PPMP, CC) branches are
+// Scope of this file: only the Amazon and Ajio (PPMP, CC) branches are
 // exercised. The Myntra branch calls calcMyntraFull() (the WF engine,
-// hundreds of lines) and is left for a follow-up PR that takes a
-// different testing approach.
+// hundreds of lines) and is covered at the engine/wrapper level in
+// wf-engine.test.js and myntra-full-wrapper.test.js instead.
 //
-//   - autoGST:           index.html:2951
-//   - COMM_AMAZON:       index.html:2918
-//   - LOGISTICS_SETTINGS:index.html:2980
-//   - CAT_LEVEL:         index.html:2897
-//   - THRESHOLDS:        index.html:2923
-//   - calcSKU:           index.html:3017
+//   - autoGST:           index.html:3457
+//   - COMM_AMAZON:       index.html:3414
+//   - LOGISTICS_SETTINGS:index.html:3519
+//   - CAT_LEVEL:         index.html:3368
+//   - THRESHOLDS:        index.html:3419
+//   - resolveBrandCfg:   index.html:3620
+//   - withBrandCfg:      index.html:3624
+//   - calcSKU:           index.html:3683
 
 const CAT_LEVEL = {
   'Kurtas':         'Level 2',
@@ -27,7 +29,9 @@ const CAT_LEVEL = {
   'Tops':           'Level 1',
   'Dresses':        'Level 1',
 };
-const COMM_AMAZON = {
+// `let`, not `const` — production declares these with `let` so CFG_REG can
+// swap them for a brand-scoped calculation and restore them afterwards.
+let COMM_AMAZON = {
   'Kurta Sets':17.0,'Lehenga Choli':19.0,'Ethnic Dresses':17.0,'Sarees':17.0,
   'Co-Ords':17.0,'Jumpsuit':17.0,'Tops':17.0,'Kurtas':17.0,
 };
@@ -55,18 +59,71 @@ function calcMyntraFull() {
   throw new Error('Myntra branch not tested in this file');
 }
 
-// ── calcSKU copied verbatim from index.html:3017 ─────────────
+// ── per-brand config scope, copied from index.html:3620 ──────
+// In production resolveBrandCfg reads brand.config; here _brandCfgOverrides
+// stands in for that store so the tests below can drive both the inherit
+// path (null — today's only case) and a real override.
+let _cfgDepth = 0;
+let _brandCfgOverrides = null;
+
+function resolveBrandCfg(brandId) {
+  return _brandCfgOverrides ? _brandCfgOverrides[brandId] || null : null;
+}
+
+function withBrandCfg(brandId, fn) {
+  const ov = resolveBrandCfg(brandId);
+  if (!ov) return fn();
+  if (_cfgDepth) throw new Error('withBrandCfg: nested config scope — calculations must not nest');
+  const saved = {};
+  for (const k in ov) {
+    const slot = CFG_REG[k];
+    if (!slot) continue;
+    saved[k] = slot.get();
+    slot.set(ov[k]);
+  }
+  _cfgDepth++;
+  try { return fn(); }
+  finally {
+    _cfgDepth--;
+    for (const k in saved) CFG_REG[k].set(saved[k]);
+  }
+}
+
+// Minimal registry mirroring index.html's CFG_REG for the globals this
+// file actually reads. The production registry covers 29 keys; the getters
+// must be closures (not snapshots) exactly as they are in production.
+const CFG_REG = {
+  COMM_AMAZON: { get: () => COMM_AMAZON, set: v => { COMM_AMAZON = v; } },
+  amz_fba: { get: () => LOGISTICS_SETTINGS.amz_fba, set: v => { LOGISTICS_SETTINGS.amz_fba = v; } },
+};
+
+// ── calcSKU copied verbatim from index.html:3600 ─────────────
 function calcSKU(s){
   const cacheKey = s.id + '|' + _calcCacheVersion;
   const cached = _calcCache.get(cacheKey);
   if(cached) return cached;
 
-  const brand=brands.find(b=>b.id===s.brandId)||{model:'myntra',commOverride:null};
+  const realBrand=brands.find(b=>b.id===s.brandId);
+  // A dangling brandId (brand deleted in another tab, or legacy data) would
+  // otherwise be silently repriced as Myntra-zero-commission. Warn once so
+  // it's diagnosable rather than a silent wrong number.
+  if(!realBrand&&s.brandId){
+    if(!calcSKU._warnedBrands) calcSKU._warnedBrands=new Set();
+    if(!calcSKU._warnedBrands.has(s.brandId)){
+      calcSKU._warnedBrands.add(s.brandId);
+      console.warn(`SKU ${s.sku||s.id} references missing brand ${s.brandId} — priced as Myntra fallback`);
+    }
+  }
+  const brand=realBrand||{model:'myntra',commOverride:null};
   const mp = brand.model || 'myntra';
+  // Auto-derive level from category
   const level = CAT_LEVEL[s.category] || s.level || 'Level 2';
 
   let mrp, sp, comm, payout, profitRs, ifDelivered=0, grossSettlement=0, custPaid=0;
 
+  // Price under this brand's own commission/shipping/fee settings. With no
+  // overrides (the default) this is a plain synchronous call through.
+  withBrandCfg(brand.id, ()=>{
   if(mp==='myntra'){
     const v2=calcMyntraFull(s.cost,s.markup,s.discount??0,level,s.category,0,0);
     mrp=v2.mrpRnd??v2.mrp??0;
@@ -118,6 +175,7 @@ function calcSKU(s){
     profitRs=payout-s.cost;
     ifDelivered=profitRs;
   }
+  });
   const profitPct=sp>0?(profitRs/sp*100).toFixed(1):'0';
   const threshold=THRESHOLDS[s.category]||0;
   const isBreach=!s.ignoreThreshold&&profitRs<threshold;
@@ -311,5 +369,68 @@ describe('calcSKU — brand resolution', () => {
     // calcSKU dispatched cleanly (no throw); level was used internally
     // for level resolution but Amazon branch doesn't surface it directly.
     expect(r.comm).toBe(17); // unknown category → 17% fallback
+  });
+});
+
+// ════════════════════════════════════════════════════════════
+// The zero-diff guarantee for per-brand settings rests on this: a brand
+// with no overrides must make withBrandCfg a plain call through, so every
+// existing SKU prices exactly as it did before the scope layer existed.
+describe('withBrandCfg — structural zero-diff proof', () => {
+  it('inherit path calls fn exactly once and touches no registry value', () => {
+    _brandCfgOverrides = null;
+    const before = { COMM_AMAZON: CFG_REG.COMM_AMAZON.get(), amz_fba: CFG_REG.amz_fba.get() };
+    let calls = 0;
+    const out = withBrandCfg('b-any', () => { calls++; return 'sentinel'; });
+    expect(calls).toBe(1);
+    expect(out).toBe('sentinel');
+    // identity, not just equality — nothing was cloned or rebuilt
+    expect(CFG_REG.COMM_AMAZON.get()).toBe(before.COMM_AMAZON);
+    expect(CFG_REG.amz_fba.get()).toBe(before.amz_fba);
+  });
+
+  it('a brand with no overrides prices identically to no scope layer at all', () => {
+    _brandCfgOverrides = null;
+    brands = [{ id: 'b-amz', model: 'amazon', commOverride: null }];
+    const sku = { id: freshId(), brandId: 'b-amz', cost: 1000, markup: 50, discount: 0, category: 'Tops' };
+    const scoped = calcSKU(sku);
+    // Same inputs, computed with the wrapper bypassed entirely.
+    const bare = withBrandCfg(null, () => ({
+      comm: COMM_AMAZON['Tops'], fba: LOGISTICS_SETTINGS.amz_fba,
+    }));
+    expect(scoped.comm).toBe(bare.comm);
+    expect(scoped.payout).toBeCloseTo(4500 - (4500 * 17 / 100 + 15 + 55) * 0.18 - (4500 * 17 / 100 + 15 + 55), 6);
+  });
+
+  it('override is applied inside the scope and fully restored after', () => {
+    const original = CFG_REG.COMM_AMAZON.get();
+    const originalFba = CFG_REG.amz_fba.get();
+    _brandCfgOverrides = { 'b-x': { COMM_AMAZON: { Tops: 25 }, amz_fba: 99 } };
+    const seen = withBrandCfg('b-x', () => ({
+      comm: COMM_AMAZON['Tops'], fba: LOGISTICS_SETTINGS.amz_fba,
+    }));
+    expect(seen).toEqual({ comm: 25, fba: 99 });
+    expect(CFG_REG.COMM_AMAZON.get()).toBe(original);
+    expect(CFG_REG.amz_fba.get()).toBe(originalFba);
+    _brandCfgOverrides = null;
+  });
+
+  it('restores the baseline even when fn throws', () => {
+    const original = CFG_REG.COMM_AMAZON.get();
+    _brandCfgOverrides = { 'b-x': { COMM_AMAZON: { Tops: 25 } } };
+    expect(() => withBrandCfg('b-x', () => { throw new Error('boom'); })).toThrow('boom');
+    expect(CFG_REG.COMM_AMAZON.get()).toBe(original);
+    expect(_cfgDepth).toBe(0);
+    _brandCfgOverrides = null;
+  });
+
+  it('refuses to nest rather than corrupting the saved baseline', () => {
+    _brandCfgOverrides = { 'b-x': { COMM_AMAZON: { Tops: 25 } }, 'b-y': { COMM_AMAZON: { Tops: 30 } } };
+    const original = CFG_REG.COMM_AMAZON.get();
+    expect(() => withBrandCfg('b-x', () => withBrandCfg('b-y', () => 1)))
+      .toThrow(/nested config scope/);
+    expect(CFG_REG.COMM_AMAZON.get()).toBe(original);
+    expect(_cfgDepth).toBe(0);
+    _brandCfgOverrides = null;
   });
 });

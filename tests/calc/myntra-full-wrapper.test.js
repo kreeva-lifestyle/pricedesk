@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 
-// SYNC NOTE: calcMyntraFull is copied verbatim from index.html:6776.
+// SYNC NOTE: calcMyntraFull is copied verbatim from index.html:8763.
 // It's the thin wrapper between the WF engine (already tested in
 // wf-engine.test.js) and the Myntra branch of calcSKU. We test its
 // result-mapping fallback logic by stubbing runWFEngine to return
 // minimal results and asserting that the wrapper fills the right
 // defaults via the ?? chain.
 //
-//   - calcMyntraFull:   index.html:6776
+//   - calcMyntraFull:   index.html:8763
 //
 // The user-editable WF.myntra rules are not exercised here (those
 // run inside runWFEngine which is tested separately with synthetic
@@ -37,7 +37,7 @@ function getMynColl(cat, sellerPrice) {
 let stubResult = {};
 function runWFEngine() { return stubResult; }
 
-// ── calcMyntraFull copied verbatim from index.html:6776 ─────────────
+// ── calcMyntraFull copied verbatim from index.html:8763 ─────────────
 function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){
   const result = runWFEngine('myntra', {
     cost, margin: markup, markup, discount: discPct||0,
