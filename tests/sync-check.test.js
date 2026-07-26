@@ -115,6 +115,86 @@ describe('source drift detection — production strings must match test copies',
     });
   });
 
+  // The three biggest calc functions are copied wholesale into tests/calc/,
+  // but until now nothing asserted those copies stayed in sync — which is
+  // exactly how calc-sku.test.js drifted from the dangling-brand warning
+  // without a single test going red. Whole-body literals for functions this
+  // size would be unmaintainable, so assert the load-bearing slices: the
+  // branch dispatch, the money arithmetic, and the fallbacks that read
+  // globals directly.
+  describe('large calc functions (slice assertions)', () => {
+    it('calcSKU brand resolution + fallback is unchanged (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain('const realBrand=brands.find(b=>b.id===s.brandId);');
+      expect(HTML).toContain("const brand=realBrand||{model:'myntra',commOverride:null};");
+      expect(HTML).toContain("const mp = brand.model || 'myntra';");
+      expect(HTML).toContain("const level = CAT_LEVEL[s.category] || s.level || 'Level 2';");
+    });
+
+    it('calcSKU marketplace dispatch is unchanged (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain("if(mp==='myntra'){");
+      expect(HTML).toContain("} else if(mp==='ajio-ppmp'||mp==='ajio-cc'){");
+      expect(HTML).toContain(
+        'const v2=calcMyntraFull(s.cost,s.markup,s.discount??0,level,s.category,0,0);'
+      );
+    });
+
+    it('calcSKU Ajio branch arithmetic is unchanged (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain('const profitInclCost=Math.round(s.cost + s.cost * s.markup / 100);');
+      expect(HTML).toContain('const gstRate=grossSale>2500?0.18:0.05;');
+      expect(HTML).toContain('const gstValue=grossSale*gstRate/(1+gstRate);');
+      expect(HTML).toContain('const purchasePrice=mrpRnd-discAmt-gstValue-commAmt;');
+      expect(HTML).toContain('const marketingContr=invoiceValue*0.03;');
+      expect(HTML).toContain(
+        'const logistic=(LOGISTICS_SETTINGS.ajio_fwd||70)+(LOGISTICS_SETTINGS.ajio_ret||70);'
+      );
+    });
+
+    it('calcSKU Amazon branch arithmetic is unchanged (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain('sp=Math.round(mrp*3/100)*100||mrp*3;');
+      expect(HTML).toContain('else comm=COMM_AMAZON[s.category]||17;');
+      expect(HTML).toContain(
+        'const fba=LOGISTICS_SETTINGS.amz_fba,close=LOGISTICS_SETTINGS.amz_close,allFees=commAmt+close+fba,gstAmt2=allFees*gst;'
+      );
+      expect(HTML).toContain('payout=sp-allFees-gstAmt2;');
+    });
+
+    it('calcSKU result shape is unchanged (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain(
+        'const result={mrp,sp,custPaid,comm,payout,profitRs,profitPct,isBreach,threshold,ifDelivered,grossSettlement};'
+      );
+      expect(HTML).toContain('const isBreach=!s.ignoreThreshold&&profitRs<threshold;');
+    });
+
+    it('calcMyntraFull signature + global-reading fallbacks unchanged (tests/calc/myntra-full-wrapper.test.js)', () => {
+      expect(HTML).toContain(
+        'function calcMyntraFull(cost, markup, discPct, level, cat, incPct, retPct){'
+      );
+      // These three read globals OUTSIDE the WF engine, so they are the
+      // fallbacks a per-brand config swap must also cover.
+      expect(HTML).toContain('const ret      = result.retFee   ?? REVERSE_FEES[level] ?? 218;');
+      expect(HTML).toContain('const coll     = result.collFee  ?? getMynColl(cat, sellerPrice);');
+      expect(HTML).toContain(
+        'const pg       = result.pgFee    ?? LOGISTICS_SETTINGS.myn_pg_fee ?? 50.22;'
+      );
+      expect(HTML).toContain(
+        'const grossSettlement = result.grossSettlement ?? (sellerPrice - commAmt - (coll * 1.18));'
+      );
+    });
+
+    it('runWFEngine dispatch + compile path unchanged (tests/calc/wf-engine.test.js)', () => {
+      expect(HTML).toContain('function runWFEngine(marketplace, inputs){');
+      expect(HTML).toContain('const rows = WF[marketplace] || [];');
+      expect(HTML).toContain(
+        'ctx[row.var] = WF_LOOKUPS[row.fn] ? WF_LOOKUPS[row.fn](ctx) : null;'
+      );
+      expect(HTML).toContain('const validIdRe = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;');
+      expect(HTML).toContain('const fn = _wfCompile(keys, row.expr);');
+      expect(HTML).toContain(
+        'ctx[row.var] = (typeof r === \'number\' && isNaN(r)) || r == null ? null : r;'
+      );
+    });
+  });
+
   describe('inline lookup tables', () => {
     it('SLABS derivation is unchanged (tests/calc/myntra-commission.test.js)', () => {
       expect(HTML).toContain('let COMM_SLABS=[300,500,1000,2000];');

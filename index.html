@@ -4750,17 +4750,36 @@ function openBrandModal(id){
   updateBrandModelNote();
 }
 
+// `marketplace` is a display label only; `model` is what actually drives
+// pricing in calcSKU. Keep them in lockstep so a brand can never read
+// "Myntra" on the card while pricing through the Amazon branch.
+const MP_FOR_MODEL={'myntra':'Myntra','ajio-ppmp':'Ajio','ajio-cc':'Ajio','amazon':'Amazon'};
+
 function updateBrandModelNote(){
   const model=el('bn-model')?.value;
+  const mpSel=el('bn-mp');
+  if(mpSel&&MP_FOR_MODEL[model]) mpSel.value=MP_FOR_MODEL[model];
   const note=el('bn-model-note');if(!note)return;
   const notes={'myntra':'Myntra: Commission varies by category + price slab. Logistics apply.','ajio-ppmp':'Ajio PPMP: Commission is per-brand (set via Commission Override). Logistics + marketing apply.','ajio-cc':'Ajio CC: Commission is per-brand (set via Commission Override). No logistics, only marketing deducted.','amazon':'Amazon: Fixed referral % + FBA + closing fee per order.'};
   note.textContent=notes[model]||'';
 }
 
 function saveBrand(eid){
-  const name=el('bn-name')?.value.trim();const mp=el('bn-mp')?.value;const model=el('bn-model')?.value;
-  const commVal=el('bn-comm')?.value;const comm=commVal===''?null:parseFloat(commVal);
+  const name=el('bn-name')?.value.trim();let mp=el('bn-mp')?.value;const model=el('bn-model')?.value;
+  const commVal=(el('bn-comm')?.value||'').trim();
   if(!name){toast('Brand name required','red');return;}
+  // Duplicate names make the brand picker, SKU list and chips ambiguous.
+  const clash=brands.find(b=>b.id!==eid&&(b.name||'').trim().toLowerCase()===name.toLowerCase());
+  if(clash){toast(`A brand named "${name}" already exists`,'red');return;}
+  if(!MP_FOR_MODEL[model]){toast('Pick a commission model','red');return;}
+  mp=MP_FOR_MODEL[model]; // authoritative — never let the label drift from the model
+  // parseFloat('abc') yields NaN, which used to reach the NUMERIC column unchecked.
+  let comm=null;
+  if(commVal!==''){
+    comm=Number(commVal);
+    if(!isFinite(comm)){toast('Commission override must be a number','red');return;}
+    if(comm<0||comm>100){toast('Commission override must be between 0 and 100','red');return;}
+  }
   if(eid){const b=brands.find(x=>x.id===eid);if(b)Object.assign(b,{name,marketplace:mp,model,commOverride:comm,updatedAt:new Date().toISOString()});audit('brand_edit',`${name} updated (${model})`);toast(`${name} updated`,'green');}
   else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});audit('brand_add',`${name} added (${model})`);toast(`${name} added`,'green');}
   closeModal();renderBrands();populateFilters();renderSKUs();save('brands').catch(e=>toast('Brand save failed: '+e.message,'red'));
@@ -8632,13 +8651,6 @@ function populateLogisticsInputs(){
 // Executes WF rows in order, each row's expr populates its var
 // Complex formulas (TCS, TDS, custom charges) all supported
 // ═══════════════════════════════════════════════════════
-
-// Available functions inside expr strings
-const WF_FUNCTIONS = {
-  getMynFwd, getMynRet, getMyntraComm, autoGST,
-  Math, REVERSE_FEES: ()=>REVERSE_FEES,
-  LOGISTICS_SETTINGS: ()=>LOGISTICS_SETTINGS,
-};
 
 // Built-in lookup functions — these can never be edited or broken
 const WF_LOOKUPS = {

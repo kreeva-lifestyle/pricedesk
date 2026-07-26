@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // SYNC NOTE: Functions below are copied verbatim from index.html.
-//   - sanitizeExpr:  index.html:1606
-//   - runWFEngine:   index.html:6728
+//   - sanitizeExpr:  index.html:1967
+//   - runWFEngine:   index.html:8705
 //
 // We deliberately do NOT copy WF.myntra or the calcMyntraFull
 // wrapper. Those depend on user-editable wireframe rules and

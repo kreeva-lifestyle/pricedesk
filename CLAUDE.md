@@ -1,9 +1,9 @@
 # PriceDesk — Development Notes
 
 ## Architecture
-- Single-file SPA: `index.html` (~7,900 lines)
+- Single-file SPA: `index.html` (~10,800 lines)
 - Build: Vite (`npm run build` → `dist/`) — GitHub Pages serves `dist/`
-- Tests: Vitest (`npm test`) — 222+ unit tests in `tests/`
+- Tests: Vitest (`npm test`) — 376+ unit tests in `tests/`
 - CI: `.github/workflows/ci.yml` runs tests + build on every PR; deploy on merge to `main`
 - Backend: Supabase (PostgreSQL + Realtime + Edge Functions)
 - SKU storage: `pd_skus_v2` (per-row)
@@ -65,7 +65,7 @@
 - `_dataReady` must be true in ALL init paths (login, reset, valid session)
 
 ## Testing
-- `npm test` runs all 222+ Vitest tests
+- `npm test` runs all 376+ Vitest tests
 - Tests in `tests/calc/` use copy-of-source pattern with `SYNC NOTE` comments pointing at the production line in `index.html`
 - `tests/sync-check.test.js` enforces those copies stay in sync by asserting the production strings literally appear in `index.html`
 - `tests/edge-functions/` tests Deno Edge Function code via the extracted pure-JS helpers (e.g., `validate.ts`)
@@ -87,3 +87,4 @@
 - Use `event: '*'` on Supabase Realtime for app_data (WAL bloat)
 - Write to `app_data` blobs for normalized data (brands, categories, commissions, thresholds, SKUs) — the per-row tables are the source of truth
 - Hand-edit copied functions in `tests/calc/` without also updating the source in `index.html`; `tests/sync-check.test.js` will fail loudly if they drift
+- Edit `calcSKU` / `calcMyntraFull` / `runWFEngine` without mirroring the change into the copies in `tests/calc/` **and** the slice assertions in `tests/sync-check.test.js` — these three are the only calc functions big enough that a whole-body literal is impractical, so their guards are slice-based and must be extended alongside the code

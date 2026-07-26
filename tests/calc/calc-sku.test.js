@@ -1,20 +1,20 @@
 import { describe, it, expect } from 'vitest';
 
-// SYNC NOTE: calcSKU is copied verbatim from index.html:3017 below,
+// SYNC NOTE: calcSKU is copied verbatim from index.html:3600 below,
 // along with the globals and helpers it reads. If you change any of
 // these in index.html, update this file too.
 //
-// Scope of this PR: only the Amazon and Ajio (PPMP, CC) branches are
+// Scope of this file: only the Amazon and Ajio (PPMP, CC) branches are
 // exercised. The Myntra branch calls calcMyntraFull() (the WF engine,
-// hundreds of lines) and is left for a follow-up PR that takes a
-// different testing approach.
+// hundreds of lines) and is covered at the engine/wrapper level in
+// wf-engine.test.js and myntra-full-wrapper.test.js instead.
 //
-//   - autoGST:           index.html:2951
-//   - COMM_AMAZON:       index.html:2918
-//   - LOGISTICS_SETTINGS:index.html:2980
-//   - CAT_LEVEL:         index.html:2897
-//   - THRESHOLDS:        index.html:2923
-//   - calcSKU:           index.html:3017
+//   - autoGST:           index.html:3457
+//   - COMM_AMAZON:       index.html:3414
+//   - LOGISTICS_SETTINGS:index.html:3519
+//   - CAT_LEVEL:         index.html:3368
+//   - THRESHOLDS:        index.html:3419
+//   - calcSKU:           index.html:3600
 
 const CAT_LEVEL = {
   'Kurtas':         'Level 2',
@@ -55,14 +55,26 @@ function calcMyntraFull() {
   throw new Error('Myntra branch not tested in this file');
 }
 
-// ── calcSKU copied verbatim from index.html:3017 ─────────────
+// ── calcSKU copied verbatim from index.html:3600 ─────────────
 function calcSKU(s){
   const cacheKey = s.id + '|' + _calcCacheVersion;
   const cached = _calcCache.get(cacheKey);
   if(cached) return cached;
 
-  const brand=brands.find(b=>b.id===s.brandId)||{model:'myntra',commOverride:null};
+  const realBrand=brands.find(b=>b.id===s.brandId);
+  // A dangling brandId (brand deleted in another tab, or legacy data) would
+  // otherwise be silently repriced as Myntra-zero-commission. Warn once so
+  // it's diagnosable rather than a silent wrong number.
+  if(!realBrand&&s.brandId){
+    if(!calcSKU._warnedBrands) calcSKU._warnedBrands=new Set();
+    if(!calcSKU._warnedBrands.has(s.brandId)){
+      calcSKU._warnedBrands.add(s.brandId);
+      console.warn(`SKU ${s.sku||s.id} references missing brand ${s.brandId} — priced as Myntra fallback`);
+    }
+  }
+  const brand=realBrand||{model:'myntra',commOverride:null};
   const mp = brand.model || 'myntra';
+  // Auto-derive level from category
   const level = CAT_LEVEL[s.category] || s.level || 'Level 2';
 
   let mrp, sp, comm, payout, profitRs, ifDelivered=0, grossSettlement=0, custPaid=0;

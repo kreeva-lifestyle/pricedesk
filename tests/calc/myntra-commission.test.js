@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // SYNC NOTE: The fixtures and function below mirror index.html.
-//   - COMM_SLABS:       index.html:2976 (editable slab bounds)
-//   - _slabsFromBounds: index.html:2977
-//   - SLABS:            index.html:2983 (derived from COMM_SLABS)
-//   - COMM_MODE:        index.html:2986 ('level_slab' | 'slab')
-//   - COMM_SLAB_ONLY:   index.html:2987 (slab-only mode rates)
-//   - COMM_MYNTRA:      index.html:2993 (default values; user-editable
+//   - COMM_SLABS:       index.html:3383 (editable slab bounds)
+//   - _slabsFromBounds: index.html:3384
+//   - SLABS:            index.html:3390 (derived from COMM_SLABS)
+//   - COMM_MODE:        index.html:3393 ('level_slab' | 'slab')
+//   - COMM_SLAB_ONLY:   index.html:3394 (slab-only mode rates)
+//   - COMM_MYNTRA:      index.html:3411 (default values; user-editable
 //                       from the Commission page at runtime)
-//   - getMyntraComm:    index.html:3030
+//   - getMyntraComm:    index.html:3459
 // If you change any of these in index.html, update this file too or
 // these tests will silently pass while live behavior diverges.
 
@@ -26,7 +26,7 @@ let SLABS = _slabsFromBounds(COMM_SLABS);
 let COMM_MYNTRA;
 let COMM_MODE = 'level_slab';
 let COMM_SLAB_ONLY = [0, 0, 21.24, 17.70, 18.88];
-// Optional per-category band cut-points (index.html:~3294). Absent category
+// Optional per-category band cut-points (index.html:3400). Absent category
 // ⇒ global SLABS. Reset before each per-category-slab test to avoid leakage.
 let COMM_CAT_SLABS = {};
 // Slab-only mode per-category overrides ({cat: {bounds, rates}}); a category
