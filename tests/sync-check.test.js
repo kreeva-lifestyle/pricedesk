@@ -229,6 +229,53 @@ describe('source drift detection — production strings must match test copies',
       expect(HTML).toContain('  if(_editScope) return;\n  if(!_dataReady){');
     });
 
+    it('save() itself refuses shared-config types while scoped (the backstop)', () => {
+      // Guarding individual savers missed eight call sites — the slab editors,
+      // the mode radios and level management all wrote one brand's buffer over
+      // the shared defaults. The guard has to live at the chokepoint.
+      expect(HTML).toContain(
+        "const SHARED_CONFIG_TYPES=new Set(['logistics','comm_myntra','comm_ppmp','comm_cc',"
+      );
+      expect(HTML).toContain('  if(_editScope&&SHARED_CONFIG_TYPES.has(type)){');
+    });
+
+    it('every settings control routes or blocks while scoped', () => {
+      expect(HTML).toContain("  if(_editScope){ invalidateCalcCache();buildCommMyntra();saveBrandScope('Commission');return; }");
+      expect(HTML).toContain("  if(_editScope){ invalidateCalcCache();saveBrandScope('Shipping & fees');return; }");
+      expect(HTML).toContain("    if(_editScope){ invalidateCalcCache();renderCollTable();renderCollCustom?.();saveBrandScope('Collection fee');return; }");
+      expect(HTML).toContain("  if(_editScope){ invalidateCalcCache();renderGTTable();renderGTCatTable();saveBrandScope('Shipping & fees');return; }");
+      expect(HTML).toContain("  if(_editScope){ invalidateCalcCache();renderRetTable();renderRetCatTable();saveBrandScope('Shipping & fees');return; }");
+      for (const w of ['Adding a level', 'Deleting a level', 'Restoring a level']) {
+        expect(HTML, `level action not blocked: ${w}`).toContain(`  if(_blockIfScoped('${w}')) return;`);
+      }
+    });
+
+    it('the scope buffer survives a settings-page render', () => {
+      // hydrateLogisticsDerived re-reads the globals from the shared blob. Left
+      // unguarded it discarded the buffer, so every per-brand shipping edit
+      // silently became an edit of everyone's defaults.
+      expect(HTML).toContain('  if(_editScope) return;\n  const s=LOGISTICS_SETTINGS;');
+    });
+
+    it('the brand being edited resolves to no override (preview shows the edit)', () => {
+      expect(HTML).toContain('  if(_editScope&&_editScope.brandId===brandId) return null;');
+    });
+
+    it('baseline stays pristine so leaving a scope restores the real defaults', () => {
+      // baseline = pristine globals (restore target); saved = last persisted
+      // (change detection). Conflating them wrote brand edits into the globals.
+      expect(HTML).toContain('  const saved={};');
+      expect(HTML).toContain('        if(CFG_REG[k]) _editScope.saved[k]=_cloneCfgVal(CFG_REG[k].get());');
+      expect(HTML).toContain("      if(JSON.stringify(CFG_REG[k].get())!==JSON.stringify(_editScope.saved[k])){ differs=true; break; }");
+      expect(HTML).toContain('  for(const k in baseline) CFG_REG[k].set(baseline[k]);');
+    });
+
+    it('a whole-catalogue repaint is skipped while scoped', () => {
+      // updateAlerts prices every SKU; doing that against one brand's buffer
+      // caches wrong profits for every other brand.
+      expect(HTML).toContain('  if(_editScope){ _rerenderScopedPage(); return; }');
+    });
+
     it('taxonomy actions are blocked while a brand scope is active', () => {
       // Categories and levels are global structure; "deleting a category for
       // one brand" must not remove it for everyone.

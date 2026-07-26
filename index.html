@@ -3096,7 +3096,20 @@ async function _doSaveSKUs(){
 
 // ── Save individual data types to DB ─────────────────
 // Each data type gets its own DB row — completely independent
+// Config types that describe the SHARED defaults. While a brand scope is
+// active the corresponding globals hold that brand's edit buffer, so
+// persisting any of them would write one brand's settings over everyone's.
+const SHARED_CONFIG_TYPES=new Set(['logistics','comm_myntra','comm_ppmp','comm_cc',
+  'comm_amazon','cat_levels','categories','levels','thresholds']);
+
 async function save(type, opts){
+  // Backstop at the chokepoint rather than at each caller. Guarding individual
+  // savers missed eight call sites (slab editors, mode radios, level
+  // management), each of which silently overwrote the shared defaults. Throwing
+  // here turns any future miss into a loud error instead of lost money.
+  if(_editScope&&SHARED_CONFIG_TYPES.has(type)){
+    throw new Error(`save('${type}') blocked: "${_editScope.name}" settings are being edited. Route through saveBrandScope() or block the action with _blockIfScoped().`);
+  }
   if(!type){
     // Save ALL data types sequentially
     const types=['skus','brands','users','thresholds','cat_levels',
@@ -3606,6 +3619,11 @@ let LOGISTICS_SETTINGS = {
 };
 // Pull derived structures out of LOGISTICS_SETTINGS after any load/sync
 function hydrateLogisticsDerived(){
+  // While a brand's settings are being edited these globals ARE the brand's
+  // buffer. Re-reading them from the shared blob would silently discard the
+  // buffer, leave the globals aliased to the defaults, and turn every
+  // subsequent cell edit into an edit of everyone's settings.
+  if(_editScope) return;
   const s=LOGISTICS_SETTINGS;
   if(s.coll_fee_data) COLL_FEE_DATA=s.coll_fee_data;
   if(s.gt_cat_data)   GT_CAT_DATA=s.gt_cat_data;
@@ -3712,6 +3730,10 @@ let _brandCfgCache=new Map();
 // version so it is rebuilt whenever any config or brand changes.
 function resolveBrandCfg(brandId){
   if(!brandId) return null;
+  // While this brand is being edited its buffer is already in the globals.
+  // Re-applying the SAVED config on top would price with the stored values and
+  // make the live preview ignore the edit in front of the user.
+  if(_editScope&&_editScope.brandId===brandId) return null;
   const ck=brandId+'|'+_calcCacheVersion;
   if(_brandCfgCache.has(ck)) return _brandCfgCache.get(ck);
   const out=_buildBrandCfg(brandId);
@@ -3841,7 +3863,11 @@ function _sanitizeBrandCfg(out,brandId){
 //     whole job is to write these values into the shared logistics blob
 //   - renderSKUs/triggerRecalc no-op while scoped, since the globals then
 //     describe one brand rather than the defaults
-let _editScope=null;   // {brandId, name, baseline:{key:value}, custom:Set<section>}
+// baseline — the PRISTINE globals, captured on entry and never reassigned.
+//             This is what endScope restores; conflating it with the
+//             change-detection snapshot leaked brand edits into the defaults.
+// saved     — the buffer as last persisted, for unsaved-change detection.
+let _editScope=null;   // {brandId, name, baseline, saved, custom:Set<section>}
 
 function isBrandScoped(){ return !!_editScope; }
 function scopedBrandName(){ return _editScope?_editScope.name:null; }
@@ -3875,7 +3901,9 @@ function beginScope(brandId){
     // Deep-clone so edits can never reach through into the global objects.
     slot.set(_cloneCfgVal(k in eff?eff[k]:slot.get()));
   }
-  _editScope={brandId,name:b.name,baseline,custom:new Set(Object.keys(b.config||{}))};
+  const saved={};
+  for(const k in baseline) saved[k]=_cloneCfgVal(CFG_REG[k].get());
+  _editScope={brandId,name:b.name,baseline,saved,custom:new Set(Object.keys(b.config||{}))};
   invalidateCalcCache();
   return true;
 }
@@ -3892,8 +3920,8 @@ function endScope(){
 async function saveBrandScope(what){
   if(!_editScope) throw new Error('saveBrandScope called with no brand scope active');
   const {brandId,name,baseline,custom}=_editScope;
-  const b=brands.find(x=>x.id===brandId);
-  if(!b){ endScope(); toast('That brand was deleted — nothing saved','red'); return; }
+  const brand=brands.find(x=>x.id===brandId);
+  if(!brand){ endScope(); toast('That brand was deleted — nothing saved','red'); return; }
   const cfg={};
   for(const[section,keys]of Object.entries(CFG_SECTIONS)){
     let differs=false;
@@ -3908,15 +3936,37 @@ async function saveBrandScope(what){
     // silently move this brand too, which is the opposite of "custom".
     if(differs||custom.has(section)) cfg[section]=sec;
   }
-  b.config=Object.keys(cfg).length?cfg:null;
+  const prevConfig=brand.config;
+  brand.config=Object.keys(cfg).length?cfg:null;
   const sections=Object.keys(cfg);
-  endScope();
   try{
-    await save('brands');
+    const res=await save('brands');
+    // Saving must NOT eject you from the scope. It used to, while leaving the
+    // "editing X only" banner on screen — so the next round of edits silently
+    // went to the shared defaults. Stay scoped and re-baseline instead, so
+    // _scopeHasChanges() is false and a second save still targets the brand.
+    if(_editScope&&_editScope.brandId===brandId){
+      // Update only the "last saved" snapshot. baseline stays pristine so
+      // endScope still restores the real defaults.
+      for(const keys of Object.values(CFG_SECTIONS)) for(const k of keys){
+        if(CFG_REG[k]) _editScope.saved[k]=_cloneCfgVal(CFG_REG[k].get());
+      }
+      _editScope.custom=new Set(sections);
+    }
     audit('brand_settings',`${name}: ${sections.length?sections.join(', ')+' customised':'settings reset to default'}`);
-    toast(sections.length?`${what} saved for ${name}`:`${name} now uses the default settings`,'green');
-  }catch(e){ toast('Save failed: '+e.message,'red'); }
-  _repaintForCalcChange();
+    if(res&&res.configDropped){
+      toast(`${name} saved, but per-brand settings need a database update — see Settings → Database Setup`,'red');
+    } else {
+      toast(sections.length?`${what} saved for ${name}`:`${name} now uses the default settings`,'green');
+    }
+  }catch(e){
+    // Leave memory matching the database so the user can retry, rather than
+    // pricing with settings the server never accepted.
+    brand.config=prevConfig;
+    toast('Save failed — nothing was changed: '+e.message,'red');
+  }
+  invalidateCalcCache();
+  _rerenderScopedPage();
 }
 
 // Read the logistics DOM inputs into the buffer while scoped. Only
@@ -3959,7 +4009,7 @@ function _scopeHasChanges(){
     const wasCustom=!!stored[section], isCustom=_editScope.custom.has(section);
     let differs=false;
     for(const k of keys){
-      if(JSON.stringify(CFG_REG[k].get())!==JSON.stringify(_editScope.baseline[k])){ differs=true; break; }
+      if(JSON.stringify(CFG_REG[k].get())!==JSON.stringify(_editScope.saved[k])){ differs=true; break; }
     }
     if(differs||wasCustom!==isCustom) return true;
   }
@@ -4229,6 +4279,10 @@ function invalidateCalcCache(){ _calcCacheVersion++; _calcCache = new Map(); _br
 // events, so a remote edit can never leave stale prices on screen.
 // invalidateCalcCache() clears the cache; this puts fresh numbers on screen.
 function _repaintForCalcChange(type){
+  // The globals currently describe ONE brand. Pricing every SKU against them
+  // (updateAlerts does exactly that) would cache wrong profits for every other
+  // brand. The scoped page repaints through _rerenderScopedPage instead.
+  if(_editScope){ _rerenderScopedPage(); return; }
   const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
   updateAlerts();
   if(activePage==='skus') renderSKUs();
@@ -4710,6 +4764,7 @@ function commSlabEditBands(cat){
 
 function setCommMode(mode){
   COMM_MODE=(mode==='slab')?'slab':'level_slab';
+  if(_editScope){ invalidateCalcCache();buildCommMyntra();saveBrandScope('Commission');return; }
   LOGISTICS_SETTINGS.comm_mode=COMM_MODE;
   LOGISTICS_SETTINGS.comm_slab_only=COMM_SLAB_ONLY;
   LOGISTICS_SETTINGS.comm_slab_cat=COMM_SLAB_CAT;
@@ -7611,6 +7666,7 @@ function logMode(name,mode){
   if(!key) return;
   LOGISTICS_SETTINGS[key]=mode;
   if(mode==='cat'){ if(name==='mfwd') renderGTCatTable(); else renderRetCatTable(); }
+  if(_editScope){ invalidateCalcCache();saveBrandScope('Shipping & fees');return; }
   LOGISTICS_SETTINGS.gt_cat_data=GT_CAT_DATA;
   LOGISTICS_SETTINGS.rev_cat_data=REV_CAT_DATA;
   invalidateCalcCache();
@@ -9456,6 +9512,7 @@ function applyCollSlabs(bounds){
   if(JSON.stringify(COLL_SLABS)!==JSON.stringify(bounds)){
     remapCollFees(COLL_SLABS,bounds);
     COLL_SLABS=bounds;
+    if(_editScope){ invalidateCalcCache();renderCollTable();renderCollCustom?.();saveBrandScope('Collection fee');return; }
     LOGISTICS_SETTINGS.coll_slabs=COLL_SLABS;
     LOGISTICS_SETTINGS.coll_fee_data=COLL_FEE_DATA;
     invalidateCalcCache();
@@ -9481,6 +9538,7 @@ function applyGTSlabs(bounds){
   Object.keys(GT_DATA).forEach(l=>{GT_DATA[l]=remapRow(GT_DATA[l]||[]);});
   Object.keys(GT_CAT_DATA).forEach(c=>{GT_CAT_DATA[c]=remapRow(GT_CAT_DATA[c]||[]);});
   GT_SLABS=bounds;
+  if(_editScope){ invalidateCalcCache();renderGTTable();renderGTCatTable();saveBrandScope('Shipping & fees');return; }
   LOGISTICS_SETTINGS.gt_slabs=GT_SLABS;
   LOGISTICS_SETTINGS.gt_cat_data=GT_CAT_DATA;
   invalidateCalcCache();
@@ -9508,6 +9566,7 @@ function applyRevSlabs(bounds){
   Object.keys(REVERSE_FEES).forEach(l=>{REVERSE_FEES[l]=remapVal(REVERSE_FEES[l]);});
   Object.keys(REV_CAT_DATA).forEach(c=>{REV_CAT_DATA[c]=remapVal(REV_CAT_DATA[c]);});
   REV_SLABS=bounds;
+  if(_editScope){ invalidateCalcCache();renderRetTable();renderRetCatTable();saveBrandScope('Shipping & fees');return; }
   LOGISTICS_SETTINGS.rev_slabs=REV_SLABS;
   LOGISTICS_SETTINGS.rev_cat_data=REV_CAT_DATA;
   invalidateCalcCache();
@@ -9565,6 +9624,7 @@ function openAddLevelModal(){
   setTimeout(()=>el('new-level-name')?.focus(),50);
 }
 async function addLevel(){
+  if(_blockIfScoped('Adding a level')) return;
   const name=(el('new-level-name')?.value||'').trim();
   const gtVal=parseFloat(el('new-level-gt')?.value)||0;
   const revVal=parseFloat(el('new-level-rev')?.value)||0;
@@ -9584,6 +9644,7 @@ async function addLevel(){
   closeModal();
 }
 async function deleteLevel(lvl){
+  if(_blockIfScoped('Deleting a level')) return;
   if(LEVELS.length<=1){toast('Cannot delete the last level','red');return;}
   const usedCats=Object.entries(CAT_LEVEL).filter(([,l])=>l===lvl).map(([c])=>c);
   if(usedCats.length){toast(`Cannot delete "${lvl}" — ${usedCats.length} categor${usedCats.length>1?'ies':'y'} assigned: ${usedCats.join(', ')}`,'red');return;}
@@ -9604,6 +9665,7 @@ async function deleteLevel(lvl){
   },50);
 }
 async function _reinstateLevel(name){
+  if(_blockIfScoped('Restoring a level')) return;
   const stashed=_deletedLevels.find(d=>d.name===name);
   if(!stashed){toast('Cannot reinstate — data expired','red');return;}
   if(LEVELS.includes(name)){toast(`"${name}" already exists`,'red');return;}
