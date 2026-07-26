@@ -3550,6 +3550,97 @@ function hydrateLogisticsDerived(){
   if(s.comm_slab_cat&&typeof s.comm_slab_cat==='object') COMM_SLAB_CAT=s.comm_slab_cat;
 }
 
+// ═══════════════════════════════════════════════════════
+// PER-BRAND CONFIG SCOPE
+// ═══════════════════════════════════════════════════════
+// Commission, shipping, collection fee and fixed fees can be overridden per
+// brand. Rather than threading a config object through every fee helper
+// (getMynFwd / getMynRet / getMynColl / getMyntraComm) and the WF engine, a
+// brand's overrides are swapped INTO these globals for the duration of one
+// calculation and restored in a finally block. Threading was considered and
+// rejected: it would miss calcMyntraFull's `??` fallbacks and showCalcModal,
+// both of which read the globals outside the engine, and it would churn five
+// function signatures that tests/sync-check.test.js pins byte-for-byte.
+//
+// Invariants:
+//   - `fn` MUST be synchronous. calcSKU and runWFEngine contain no await; an
+//     async callback would let another calculation observe swapped globals.
+//   - Never nest — _cfgDepth throws rather than corrupt the saved baseline.
+//   - A brand with no overrides resolves to null, so withBrandCfg degenerates
+//     to `fn()` and is identical to not being in the call path at all.
+//
+// Sections are closed under indexing: a slab-bounds array and every rate
+// array indexed by it live in the SAME section. Splitting them would let a
+// brand override bounds while inheriting rates, and the Math.min clamps in
+// getMyntraComm / getMynColl would silently return the wrong band.
+const CFG_SECTIONS={
+  comm:['COMM_MODE','COMM_SLABS','COMM_SLAB_ONLY','COMM_MYNTRA','COMM_CAT_SLABS','COMM_SLAB_CAT','COMM_AMAZON','COMM_AJIO_PPMP','COMM_AJIO_CC'],
+  fwd :['GT_SLABS','GT_DATA','GT_CAT_DATA','myn_fwd_mode','myn_fwd_fixed'],
+  ret :['REV_SLABS','REVERSE_FEES','REV_CAT_DATA','myn_ret_mode','myn_ret_fixed','amz_ret'],
+  coll:['COLL_SLABS','COLL_CAT_SLABS','COLL_FEE_DATA'],
+  fees:['myn_pg_fee','ajio_fwd','ajio_ret','ajio_platform_fee','amz_fba','amz_close'],
+};
+
+// Getter/setter pairs over every swappable config value. Getters are closures
+// (not snapshots) because each of these globals is reassigned wholesale on
+// load, realtime sync and import — a captured value would go stale.
+const _lsKey=k=>({get:()=>LOGISTICS_SETTINGS[k],set:v=>{LOGISTICS_SETTINGS[k]=v;}});
+const CFG_REG={
+  COMM_MODE:      {get:()=>COMM_MODE,      set:v=>{COMM_MODE=v;}},
+  // SLABS is derived from COMM_SLABS and must be rebuilt with it.
+  COMM_SLABS:     {get:()=>COMM_SLABS,     set:v=>{COMM_SLABS=v;SLABS=_slabsFromBounds(v);}},
+  COMM_SLAB_ONLY: {get:()=>COMM_SLAB_ONLY, set:v=>{COMM_SLAB_ONLY=v;}},
+  COMM_MYNTRA:    {get:()=>COMM_MYNTRA,    set:v=>{COMM_MYNTRA=v;}},
+  COMM_CAT_SLABS: {get:()=>COMM_CAT_SLABS, set:v=>{COMM_CAT_SLABS=v;}},
+  COMM_SLAB_CAT:  {get:()=>COMM_SLAB_CAT,  set:v=>{COMM_SLAB_CAT=v;}},
+  COMM_AMAZON:    {get:()=>COMM_AMAZON,    set:v=>{COMM_AMAZON=v;}},
+  COMM_AJIO_PPMP: {get:()=>COMM_AJIO_PPMP, set:v=>{COMM_AJIO_PPMP=v;}},
+  COMM_AJIO_CC:   {get:()=>COMM_AJIO_CC,   set:v=>{COMM_AJIO_CC=v;}},
+  GT_SLABS:       {get:()=>GT_SLABS,       set:v=>{GT_SLABS=v;}},
+  GT_DATA:        {get:()=>GT_DATA,        set:v=>{GT_DATA=v;}},
+  GT_CAT_DATA:    {get:()=>GT_CAT_DATA,    set:v=>{GT_CAT_DATA=v;}},
+  REV_SLABS:      {get:()=>REV_SLABS,      set:v=>{REV_SLABS=v;}},
+  REVERSE_FEES:   {get:()=>REVERSE_FEES,   set:v=>{REVERSE_FEES=v;}},
+  REV_CAT_DATA:   {get:()=>REV_CAT_DATA,   set:v=>{REV_CAT_DATA=v;}},
+  COLL_SLABS:     {get:()=>COLL_SLABS,     set:v=>{COLL_SLABS=v;}},
+  COLL_CAT_SLABS: {get:()=>COLL_CAT_SLABS, set:v=>{COLL_CAT_SLABS=v;}},
+  COLL_FEE_DATA:  {get:()=>COLL_FEE_DATA,  set:v=>{COLL_FEE_DATA=v;}},
+  myn_fwd_mode:_lsKey('myn_fwd_mode'),   myn_fwd_fixed:_lsKey('myn_fwd_fixed'),
+  myn_ret_mode:_lsKey('myn_ret_mode'),   myn_ret_fixed:_lsKey('myn_ret_fixed'),
+  amz_ret:_lsKey('amz_ret'),             myn_pg_fee:_lsKey('myn_pg_fee'),
+  ajio_fwd:_lsKey('ajio_fwd'),           ajio_ret:_lsKey('ajio_ret'),
+  ajio_platform_fee:_lsKey('ajio_platform_fee'),
+  amz_fba:_lsKey('amz_fba'),             amz_close:_lsKey('amz_close'),
+};
+
+let _cfgDepth=0;
+
+// Resolve a brand's effective overrides as a flat {REGISTRY_KEY: value} map,
+// or null when the brand inherits everything (the only case today — no brand
+// carries a config yet, so every calculation is provably unchanged).
+function resolveBrandCfg(brandId){
+  return null;
+}
+
+function withBrandCfg(brandId, fn){
+  const ov=resolveBrandCfg(brandId);
+  if(!ov) return fn();
+  if(_cfgDepth) throw new Error('withBrandCfg: nested config scope — calculations must not nest');
+  const saved={};
+  for(const k in ov){
+    const slot=CFG_REG[k];
+    if(!slot) continue;
+    saved[k]=slot.get();
+    slot.set(ov[k]);
+  }
+  _cfgDepth++;
+  try{ return fn(); }
+  finally{
+    _cfgDepth--;
+    for(const k in saved) CFG_REG[k].set(saved[k]);
+  }
+}
+
 // Pick a value from a per-price-slab array using upper-bound list `bounds`.
 // Scalars pass through (legacy flat fees); index clamps to array length.
 function slabPick(bounds, values, price){
@@ -3620,6 +3711,9 @@ function calcSKU(s){
 
   let mrp, sp, comm, payout, profitRs, ifDelivered=0, grossSettlement=0, custPaid=0;
 
+  // Price under this brand's own commission/shipping/fee settings. With no
+  // overrides (the default) this is a plain synchronous call through.
+  withBrandCfg(brand.id, ()=>{
   if(mp==='myntra'){
     // Use WF engine for full Myntra calculation
     const v2=calcMyntraFull(s.cost,s.markup,s.discount??0,level,s.category,0,0);
@@ -3676,6 +3770,7 @@ function calcSKU(s){
     profitRs=payout-s.cost;
     ifDelivered=profitRs;
   }
+  });
   const profitPct=sp>0?(profitRs/sp*100).toFixed(1):'0';
   const threshold=THRESHOLDS[s.category]||0;
   const isBreach=!s.ignoreThreshold&&profitRs<threshold;
@@ -5909,7 +6004,9 @@ function showCalcModal(skuId){
     else if(mp==='ajio-ppmp') inputs.commPct=COMM_AJIO_PPMP[s.category]||18.88;
     else inputs.commPct=COMM_AJIO_CC[s.category]||18.88;
   }
-  const result=runWFEngine(mp,inputs);
+  // Must use the SAME brand-scoped config as calcSKU, or this breakdown would
+  // contradict the profit shown in the grid for a brand with its own fees.
+  const result=withBrandCfg(brand.id,()=>runWFEngine(mp,inputs));
   const rows=WF[mp]||[];
   // Build table rows
   let tableHtml='';

@@ -130,6 +130,57 @@ describe('source drift detection — production strings must match test copies',
       expect(HTML).toContain("const level = CAT_LEVEL[s.category] || s.level || 'Level 2';");
     });
 
+    it('withBrandCfg swap/restore is unchanged (tests/calc/calc-sku.test.js)', () => {
+      // The zero-diff guarantee depends on the inherit path being a plain
+      // call through, and on the finally-block restore being unconditional.
+      expect(HTML).toContain('function withBrandCfg(brandId, fn){');
+      expect(HTML).toContain('  const ov=resolveBrandCfg(brandId);');
+      expect(HTML).toContain('  if(!ov) return fn();');
+      expect(HTML).toContain(
+        "  if(_cfgDepth) throw new Error('withBrandCfg: nested config scope — calculations must not nest');"
+      );
+      expect(HTML).toContain('  try{ return fn(); }');
+      expect(HTML).toContain('    for(const k in saved) CFG_REG[k].set(saved[k]);');
+    });
+
+    it('calcSKU prices inside the brand config scope (tests/calc/calc-sku.test.js)', () => {
+      expect(HTML).toContain('withBrandCfg(brand.id, ()=>{');
+    });
+
+    it('CFG_REG covers every swappable config global (tests/calc/calc-sku.test.js)', () => {
+      // Getters must be closures — these globals are reassigned wholesale on
+      // load/realtime/import, so a captured snapshot would go stale.
+      expect(HTML).toContain(
+        '  COMM_SLABS:     {get:()=>COMM_SLABS,     set:v=>{COMM_SLABS=v;SLABS=_slabsFromBounds(v);}},'
+      );
+      expect(HTML).toContain(
+        "const _lsKey=k=>({get:()=>LOGISTICS_SETTINGS[k],set:v=>{LOGISTICS_SETTINGS[k]=v;}});"
+      );
+      for (const k of ['COMM_MODE','COMM_SLAB_ONLY','COMM_MYNTRA','COMM_CAT_SLABS','COMM_SLAB_CAT',
+                       'COMM_AMAZON','COMM_AJIO_PPMP','COMM_AJIO_CC','GT_SLABS','GT_DATA',
+                       'GT_CAT_DATA','REV_SLABS','REVERSE_FEES','REV_CAT_DATA','COLL_SLABS',
+                       'COLL_CAT_SLABS','COLL_FEE_DATA']) {
+        expect(HTML, `CFG_REG is missing ${k}`).toContain(`  ${k}:`);
+      }
+    });
+
+    it('config sections stay closed under indexing (tests/calc/calc-sku.test.js)', () => {
+      // A bounds array and every rate array indexed by it MUST share a
+      // section, or a brand could override bounds while inheriting rates and
+      // the Math.min clamps would silently return the wrong band.
+      expect(HTML).toContain(
+        "  comm:['COMM_MODE','COMM_SLABS','COMM_SLAB_ONLY','COMM_MYNTRA','COMM_CAT_SLABS','COMM_SLAB_CAT','COMM_AMAZON','COMM_AJIO_PPMP','COMM_AJIO_CC'],"
+      );
+      expect(HTML).toContain("  fwd :['GT_SLABS','GT_DATA','GT_CAT_DATA','myn_fwd_mode','myn_fwd_fixed'],");
+      expect(HTML).toContain("  ret :['REV_SLABS','REVERSE_FEES','REV_CAT_DATA','myn_ret_mode','myn_ret_fixed','amz_ret'],");
+      expect(HTML).toContain("  coll:['COLL_SLABS','COLL_CAT_SLABS','COLL_FEE_DATA'],");
+      expect(HTML).toContain("  fees:['myn_pg_fee','ajio_fwd','ajio_ret','ajio_platform_fee','amz_fba','amz_close'],");
+    });
+
+    it('showCalcModal uses the same brand scope as calcSKU (no contradiction)', () => {
+      expect(HTML).toContain('const result=withBrandCfg(brand.id,()=>runWFEngine(mp,inputs));');
+    });
+
     it('calcSKU marketplace dispatch is unchanged (tests/calc/calc-sku.test.js)', () => {
       expect(HTML).toContain("if(mp==='myntra'){");
       expect(HTML).toContain("} else if(mp==='ajio-ppmp'||mp==='ajio-cc'){");
