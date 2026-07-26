@@ -1269,6 +1269,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
   <div id="mp-myntra">
     <div class="flexb mb12">
       <div class="st" style="text-transform:uppercase;letter-spacing:1px">Live Calculator</div>
+      <select class="fi" id="brand-sel-myntra" style="width:170px;padding:5px 9px;font-size:12px;margin-right:8px" onchange="onCalcBrandChange('myntra')"><option value="">Default settings</option></select>
       <select class="fi" id="cat-sel-myntra" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('myntra')">
         <option value="">Select Category</option>
       </select>
@@ -1278,12 +1279,14 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
   <div id="mp-ajio-ppmp" style="display:none">
     <div class="flexb mb12">
       <div><div style="font-size:13px;font-weight:600">Ajio — PPMP</div><div class="st">Commission (per brand) + Logistics + Marketing</div></div>
+      <select class="fi" id="brand-sel-ajio-ppmp" style="width:170px;padding:5px 9px;font-size:12px" onchange="onCalcBrandChange('ajio-ppmp')"><option value="">Default settings</option></select>
     </div>
     <div class="card"><div style="padding:0"><table class="ct" id="ct-ajio-ppmp"></table></div></div>
   </div>
   <div id="mp-ajio-cc" style="display:none">
     <div class="flexb mb12">
       <div><div style="font-size:13px;font-weight:600">Ajio — CC</div><div class="st">Commission (per brand) + Marketing — No logistics</div></div>
+      <select class="fi" id="brand-sel-ajio-cc" style="width:170px;padding:5px 9px;font-size:12px" onchange="onCalcBrandChange('ajio-cc')"><option value="">Default settings</option></select>
     </div>
     <div class="card"><div style="padding:0"><table class="ct" id="ct-ajio-cc"></table></div></div>
     <div class="success" style="margin-top:10px">CC Model: No logistics charged. Only commission + marketing deducted.</div>
@@ -1291,6 +1294,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
   <div id="mp-amazon" style="display:none">
     <div class="flexb mb12">
       <div class="st" style="text-transform:uppercase;letter-spacing:1px">Live Calculator</div>
+      <select class="fi" id="brand-sel-amazon" style="width:170px;padding:5px 9px;font-size:12px;margin-right:8px" onchange="onCalcBrandChange('amazon')"><option value="">Default settings</option></select>
       <select class="fi" id="cat-sel-amazon" style="width:155px;padding:5px 9px;font-size:12px" onchange="onCatChange('amazon')"><option value="">Select Category</option></select>
     </div>
     <div class="card"><div style="padding:0"><table class="ct" id="ct-amazon"></table></div></div>
@@ -3959,6 +3963,14 @@ function _rerenderScopedPage(){
   else if(page==='logistics'){ renderGTTable?.();renderRetTable?.();renderGTCatTable?.();renderRetCatTable?.();renderCollTable?.();renderCollCustom?.();populateLogisticsInputs?.();renderScopeBar('logistics'); }
 }
 
+// Any edit to a settings table ends in triggerRecalc(); while scoped that is
+// the signal to refresh the live preview with the new numbers.
+function _refreshScopePreviewSoon(){
+  if(!_editScope) return;
+  clearTimeout(_scopePreviewTimer);
+  _scopePreviewTimer=setTimeout(_updateScopePreviewVals,120);
+}
+
 // Which sections each settings page owns — used for its Inherit/Custom chips.
 const SCOPE_PAGE_SECTIONS={commission:['comm'],logistics:['fwd','ret','coll','fees']};
 const SCOPE_SECTION_LABEL={comm:'Commission',fwd:'Forward shipping',ret:'Returns',coll:'Collection fee',fees:'Fixed fees'};
@@ -3990,10 +4002,79 @@ function renderScopeBar(page){
         ${_editScope?`<span class="bdg bi">editing ${esc(_editScope.name)} only</span>`:''}
       </div>
       ${_editScope?`<div class="flex gap8" style="flex-wrap:wrap;margin-top:8px">${chips}</div>
-        <div class="st" style="margin-top:7px">Changes here apply to <strong>${esc(_editScope.name)}</strong> only — the default settings and every other brand are untouched. Formula Builder rules stay shared across brands.</div>`
+        <div class="st" style="margin-top:7px">Changes here apply to <strong>${esc(_editScope.name)}</strong> only — the default settings and every other brand are untouched. Formula Builder rules stay shared across brands.</div>
+        <div id="scope-preview-${page}"></div>`
       :`<div class="st" style="margin-top:6px">Editing the defaults. Every brand that hasn't been customised uses these.</div>`}
     </div>`;
   hydrateIcons(host);
+  if(_editScope) renderScopePreview(page);
+}
+
+// ── Live calc while editing a brand's settings ──────────
+// Shows what a sample product earns under the settings currently on screen,
+// so the effect of a rate change is visible immediately instead of only after
+// saving and going back to the SKU list.
+let _scopeSample={cost:1000,markup:60,discount:50,cat:null};
+let _scopePreviewTimer=null;
+
+function scopeSampleChange(field,val){
+  // `cat` is a string; the rest are numbers.
+  _scopeSample[field]= field==='cat' ? val : (isFinite(+val)?+val:0);
+  clearTimeout(_scopePreviewTimer);
+  // Debounced, and only the RESULT is repainted — re-rendering the inputs
+  // would steal focus mid-keystroke.
+  _scopePreviewTimer=setTimeout(_updateScopePreviewVals,120);
+}
+
+function _scopePreviewCat(){
+  return _scopeSample.cat&&CATS.includes(_scopeSample.cat)?_scopeSample.cat:(CATS[0]||'Kurta Sets');
+}
+
+function renderScopePreview(page){
+  const box=el('scope-preview-'+page); if(!box||!_editScope) return;
+  const {cost,markup,discount}=_scopeSample;
+  const cat=_scopePreviewCat();
+  const lbl=t=>`<div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);font-weight:600;margin-bottom:3px">${t}</div>`;
+  box.innerHTML=`
+    <div class="skf-preview" style="margin-top:11px">
+      <div class="flex gap8" style="flex-wrap:wrap;align-items:flex-end;margin-bottom:11px">
+        <div>${lbl('Cost ₹')}<input class="fi" style="width:88px;padding:5px 8px;font-size:12px" type="number" value="${cost}" oninput="scopeSampleChange('cost',this.value)"></div>
+        <div>${lbl('Markup %')}<input class="fi" style="width:78px;padding:5px 8px;font-size:12px" type="number" value="${markup}" oninput="scopeSampleChange('markup',this.value)"></div>
+        <div>${lbl('Discount %')}<input class="fi" style="width:82px;padding:5px 8px;font-size:12px" type="number" value="${discount}" oninput="scopeSampleChange('discount',this.value)"></div>
+        <div>${lbl('Category')}<select class="fi" style="width:140px;padding:5px 8px;font-size:12px" onchange="scopeSampleChange('cat',this.value)">
+          ${CATS.map(c=>`<option${c===cat?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
+      </div>
+      <div id="scope-preview-vals"></div>
+      <div class="st" style="margin-top:8px">Updates as you edit the tables below. A sample only — no SKU is changed.</div>
+    </div>`;
+  _updateScopePreviewVals();
+}
+
+// Recompute against whatever is currently on screen. The globals already hold
+// this brand's buffer while scoped, so calcSKU prices with exactly the values
+// being edited.
+function _updateScopePreviewVals(){
+  const box=el('scope-preview-vals'); if(!box||!_editScope) return;
+  const b=brands.find(x=>x.id===_editScope.brandId);
+  const cat=_scopePreviewCat();
+  let r;
+  try{
+    r=calcSKU({id:'__scope_preview__',brandId:_editScope.brandId,
+      cost:_scopeSample.cost,markup:_scopeSample.markup,discount:_scopeSample.discount,
+      category:cat,level:CAT_LEVEL[cat]});
+  }catch(e){ box.innerHTML=`<div class="warn">Preview unavailable: ${esc(e.message)}</div>`; return; }
+  // Never let the throwaway sample linger in the shared calc cache.
+  invalidateCalcCache();
+  const money=v=>'₹'+Math.round(v||0).toLocaleString('en-IN');
+  const cell=(l,v)=>`<div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);font-weight:600">${l}</div><div class="mono" style="font-size:13px;font-weight:600">${v}</div></div>`;
+  box.innerHTML=`
+    <div class="skf-hero"><span>Net profit for ${esc(_editScope.name)}</span>
+      <b style="color:${r.profitRs<0?'var(--re)':(r.isBreach?'var(--ac)':'var(--gr)')}">${money(r.profitRs)}</b></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:10px">
+      ${cell('MRP',money(r.mrp))}${cell('Cust. paid',money(r.custPaid))}${cell('Seller price',money(r.sp))}
+      ${cell('Commission',(+r.comm||0).toFixed(2)+'%')}${cell('Payout',money(r.payout))}
+      ${(b?.model||'myntra')==='myntra'?cell('Gross sett.',money(r.grossSettlement)):''}
+    </div>`;
 }
 
 function _sectionDiffersFromBaseline(sec){
@@ -4243,6 +4324,9 @@ function calcSKU(s){
 // CALC STATE
 // ═══════════════════════════════════════════════════════
 // CD keys match WF var names so dynamic renderer can read/write them directly
+// Which brand each marketplace calculator is currently previewing
+// ('' = the shared default settings).
+const CD_BRAND={myntra:'','ajio-ppmp':'','ajio-cc':'',amazon:''};
 const CD={
   myntra:      {cost:1300, margin:79, discount:54, cat:'Kurta Sets', level:'Level 4'},
   'ajio-ppmp': {cost:2100, markup:52, discount:50, commPct:20, cat:'Kurta Sets', level:'Level 2'},
@@ -4282,7 +4366,9 @@ function renderDynamicCalc(mp){
 
   // Run WF engine with CD values as inputs
   const inputs = {...d, _mp:mp};
-  const result = runWFEngine(mp, inputs);
+  // Price this marketplace's sample under the brand selected above, so the
+  // calculator can be used to compare brands, not just marketplaces.
+  const result = withBrandCfg(CD_BRAND[mp]||null, ()=>runWFEngine(mp, inputs));
 
   // Find output var for threshold check
   const outputRow = rows.find(r=>r.t==='output');
@@ -4367,6 +4453,31 @@ function renderAjioPPMP(){ renderDynamicCalc('ajio-ppmp'); }
 function renderAjioCC(){ renderDynamicCalc('ajio-cc'); }
 function renderAmazon(){ renderDynamicCalc('amazon'); }
 
+// Fill each marketplace calculator's brand picker with the brands that
+// actually use that marketplace — comparing a Myntra brand on the Amazon
+// calculator would be meaningless.
+function populateCalcBrandSelects(){
+  for(const mp of['myntra','ajio-ppmp','ajio-cc','amazon']){
+    const sel=el('brand-sel-'+mp); if(!sel) continue;
+    const mine=brands.filter(b=>b.model===mp);
+    const cur=CD_BRAND[mp]||'';
+    sel.innerHTML=`<option value="">Default settings</option>`+
+      mine.map(b=>`<option value="${escAttr(b.id)}">${esc(b.name)}${b.config?' ·  custom':''}</option>`).join('');
+    // A brand may have been deleted or renamed since this was last set.
+    sel.value=mine.some(b=>b.id===cur)?cur:'';
+    CD_BRAND[mp]=sel.value;
+    // Nothing to choose between when a marketplace has no customised brand.
+    const wrap=sel.parentElement;
+    if(wrap) sel.style.display=mine.length?'':'none';
+  }
+}
+
+function onCalcBrandChange(mp){
+  const sel=el('brand-sel-'+mp); if(!sel) return;
+  CD_BRAND[mp]=sel.value||'';
+  renderDynamicCalc(mp);
+}
+
 function onCatChange(mp){
   const sel=el('cat-sel-'+mp);if(!sel)return;
   const cat=sel.value||(CATS[0]||'Kurta Sets');
@@ -4382,8 +4493,8 @@ function triggerRecalc(){
   invalidateCalcCache();
   // While a brand's settings are being edited the globals hold that brand's
   // copy, so repainting the marketplace calculators would present its numbers
-  // as if they were the defaults.
-  if(_editScope) return;
+  // as if they were the defaults — but the live preview should follow along.
+  if(_editScope){ _refreshScopePreviewSoon(); return; }
   ['myntra','ajio-ppmp','ajio-cc','amazon'].forEach(mp=>renderDynamicCalc(mp));
 }
 
@@ -7188,6 +7299,7 @@ function nav(p){
   try{sessionStorage.setItem('pd_current_page',p);}catch(e){}
   if(p==='pricing'){
     populateFilters();
+    populateCalcBrandSelects();
     // Sync dropdowns to match calculator defaults
     ['myntra','ajio-ppmp','ajio-cc','amazon'].forEach(mp=>{
       const s=el('cat-sel-'+mp);if(s&&CD[mp])s.value=CD[mp].cat;
