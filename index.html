@@ -310,6 +310,16 @@ html{overflow-y:scroll;color-scheme:dark}/* Prevent layout shift + render native
 .sku-mp-tab{padding:7px 16px;font-size:12px;font-weight:600;color:var(--tx3);cursor:pointer;border:1px solid transparent;border-radius:999px;margin:0 2px 6px 0;transition:all .15s var(--ease-out)}
 .sku-mp-tab:hover{color:var(--tx);background:rgba(255,255,255,.05)}
 .sku-mp-tab.active{color:var(--ac);background:rgba(245,166,35,.12);border-color:rgba(245,166,35,.3)}
+/* Brand chips under the marketplace tabs. Scrolls sideways on mobile, where
+   the Brand column is hidden and these are the only brand affordance. */
+.brand-chips{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
+.brand-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--tx3);cursor:pointer;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(255,255,255,.03);white-space:nowrap;transition:all .15s var(--ease-out)}
+.brand-chip:hover{color:var(--tx);background:rgba(255,255,255,.07)}
+.brand-chip.active{color:var(--ac);background:rgba(245,166,35,.12);border-color:rgba(245,166,35,.32)}
+.brand-chip .bc-n{font-family:var(--mono);font-size:10px;opacity:.75}
+.brand-chip.bc-warn{color:var(--re);border-color:rgba(245,87,92,.35);background:rgba(245,87,92,.08)}
+.brand-chip .bc-mp{font-size:9px;text-transform:uppercase;letter-spacing:.4px;opacity:.6}
+@media(max-width:768px){.brand-chips{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;scrollbar-width:none}.brand-chips::-webkit-scrollbar{display:none}}
 .filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.06);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%)}
 @supports not (backdrop-filter:blur(1px)){.filter-bar{background:var(--s)}}
 /* Brand settings scope bar. No backdrop-filter: the select popup and any
@@ -1484,6 +1494,7 @@ body:has(.movl) #ai-chat-btn,body:has(.movl) #ai-chat-panel{display:none!importa
       <div class="sku-mp-tab" data-mp="ajio-cc" onclick="switchSKUTab(this,'ajio-cc')">Ajio CC</div>
       <div class="sku-mp-tab" data-mp="amazon" onclick="switchSKUTab(this,'amazon')">Amazon</div>
     </div>
+    <div id="sku-brand-chips" class="brand-chips"></div>
     <div class="sku-actions-wrap" style="display:flex;gap:6px;align-items:center">
       <div class="btn bg bsm" onclick="requestLivePriceFetch()" title="Ask a laptop running the fetcher to refresh live Myntra prices"><span class="ic-h" data-icon="refresh" data-size="12"></span> Update Myntra ₹</div>
       <div class="btn bp bsm" onclick="addRow()">+ Add SKU</div>
@@ -5705,7 +5716,9 @@ function applySKUSort(list){
 
 function filteredSKUs(opts){
   const q=(el('f-search')?.value||'').toLowerCase();
-  const fBrand=el('f-brand')?.value||'';
+  // skipBrand: used by renderBrandChips to count what each brand chip WOULD
+  // show (every other filter applied, the brand one ignored).
+  const fBrand=(opts&&opts.skipBrand)?'':(el('f-brand')?.value||'');
   const fCat=el('f-cat')?.value||'';
   const fStatus=el('f-status')?.value||'';
   const fTag=el('f-tag')?.value||'';
@@ -5836,11 +5849,48 @@ function updateImportMenu(){
   }
 }
 
+// Brand chips under the marketplace tabs — the "Brand + Marketplace" view.
+// These are a VIEW of #f-brand, not a second filter: clicking one just sets
+// that select. filteredSKUs() therefore needs no changes, and there is no
+// way for two brand selections to disagree.
+function renderBrandChips(){
+  const host=el('sku-brand-chips'); if(!host) return;
+  const fBrand=el('f-brand');
+  const active=fBrand?fBrand.value:'';
+  const mine=_skuMPTab?brands.filter(b=>b.model===_skuMPTab):brands;
+  // Count against the same predicate the list uses, minus the brand clause,
+  // so a chip's number always matches what clicking it will show.
+  const base=filteredSKUs({skipBrand:true});
+  const counts={};
+  for(const s of base) counts[s.brandId]=(counts[s.brandId]||0)+1;
+  const known=new Set(brands.map(b=>b.id));
+  const orphans=base.filter(s=>s.brandId&&!known.has(s.brandId)).length;
+
+  // Nothing to choose between with a single brand and no strays.
+  if(mine.length<2&&!orphans){ host.innerHTML=''; host.style.display='none'; return; }
+  host.style.display='';
+  const chip=(val,label,count,cls)=>`<div class="brand-chip${val===active?' active':''}${cls||''}" onclick="pickBrandChip('${escAttr(val)}')">${label}${count!=null?` <span class="bc-n">${count}</span>`:''}</div>`;
+  host.innerHTML=
+    chip('','All brands',base.length)+
+    mine.map(b=>chip(b.id,
+      `${esc(b.name)}${_skuMPTab?'':` <span class="bc-mp">${esc(_MP_LABELS[b.model]||b.model)}</span>`}`,
+      counts[b.id]||0)).join('')+
+    (orphans?`<div class="brand-chip bc-warn" title="These SKUs point at a brand that no longer exists — their profit is wrong until reassigned. Fix in Settings → Data health." onclick="nav('settings')">⚠ ${orphans} unassigned</div>`:'');
+}
+
+function pickBrandChip(id){
+  const fBrand=el('f-brand'); if(!fBrand) return;
+  fBrand.value=id||'';
+  renderSKUs();
+}
+
 function switchSKUTab(tab, mp){
   _skuMPTab = mp;
   document.querySelectorAll('.sku-mp-tab').forEach(t=>t.classList.remove('active'));
   tab.classList.add('active');
-  // Hide brand filter when a specific marketplace tab is active (redundant)
+  // The chip row replaces the brand dropdown once a marketplace is chosen —
+  // but #f-brand stays the single source of truth for the filter, so there is
+  // never a second brand selection that can disagree with it.
   const fBrand=el('f-brand');
   if(fBrand){
     fBrand.parentElement.style.display = mp ? 'none' : '';
@@ -5962,6 +6012,7 @@ function renderSKUs(){
   }
   updateFilterCount();
   updateLiveFilterCounts();
+  renderBrandChips();
   t.querySelectorAll('[data-lc]').forEach(e=>e.addEventListener('input',()=>liveCalcRow(e.closest('tr'))));
   // Update archive nav badge
   const navCount=el('nav-archive-count');
