@@ -1,0 +1,27 @@
+-- Per-brand pricing settings.
+--
+-- Commission, shipping (forward + return), collection fee and fixed fees can
+-- be overridden per brand. Overrides are stored sparsely: only the sections a
+-- brand actually customises are present, and an absent section means "inherit
+-- the global settings". Existing brands get NULL, so their prices are
+-- unchanged.
+--
+-- Shape:
+--   {
+--     "comm": { "COMM_MODE": "...", "COMM_SLABS": [...], "COMM_MYNTRA": {...}, ... },
+--     "fwd":  { "GT_SLABS": [...], "GT_DATA": {...}, "myn_fwd_mode": "...", ... },
+--     "ret":  { "REV_SLABS": [...], "REVERSE_FEES": {...}, ... },
+--     "coll": { "COLL_SLABS": [...], "COLL_CAT_SLABS": {...}, "COLL_FEE_DATA": {...} },
+--     "fees": { "myn_pg_fee": 50.22, "ajio_fwd": 70, ... }
+--   }
+--
+-- Sections are closed under indexing: a slab-bounds array and every rate array
+-- indexed by it live in the SAME section, so a brand can never override the
+-- bounds while inheriting the rates.
+--
+-- This lives on pd_brands rather than in a child table so that the existing
+-- realtime channel, calc-cache invalidation, backup (select=*) and
+-- export/import paths all carry it with no further changes, and so deleting a
+-- brand drops its settings automatically.
+
+ALTER TABLE pd_brands ADD COLUMN IF NOT EXISTS config JSONB;

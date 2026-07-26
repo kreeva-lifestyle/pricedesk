@@ -2197,9 +2197,14 @@ CREATE TABLE IF NOT EXISTS pd_brands (
   marketplace     TEXT,
   model           TEXT NOT NULL DEFAULT 'myntra',
   comm_override   NUMERIC,
+  -- Sparse per-brand overrides for commission / shipping / collection fee /
+  -- fixed fees. NULL (the default) means "inherit the global settings", so
+  -- existing brands price exactly as they always have.
+  config          JSONB,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE pd_brands ADD COLUMN IF NOT EXISTS config JSONB;
 ALTER TABLE pd_brands ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all_brands" ON pd_brands FOR ALL USING (true) WITH CHECK (true);
 ALTER PUBLICATION supabase_realtime ADD TABLE pd_brands;
@@ -2499,21 +2504,42 @@ function _brandToRow(b){
   return{
     id:b.id, name:b.name||'', marketplace:b.marketplace||null,
     model:b.model||'myntra', comm_override:b.commOverride!=null?b.commOverride:null,
+    // Sparse per-brand pricing overrides; null = inherit the global settings.
+    config:(b.config&&Object.keys(b.config).length)?b.config:null,
     updated_at:new Date().toISOString()
   };
 }
 function _rowToBrand(r){
   return{
     id:r.id, name:r.name||'', marketplace:r.marketplace||'',
-    model:r.model||'myntra', commOverride:r.comm_override!=null?r.comm_override:null
+    model:r.model||'myntra', commOverride:r.comm_override!=null?r.comm_override:null,
+    // Normalize to null so `undefined` never round-trips through export/import.
+    config:(r.config&&typeof r.config==='object')?r.config:null
   };
 }
+
+// True once we've seen the database reject `config`, so we stop retrying it
+// on every save. Reset only by a reload (i.e. after the migration is run).
+let _brandConfigColumnMissing=false;
 
 async function dbSaveBrands(brandsArr){
   const db=getDB();if(!db)throw new Error('No DB');
   _lastWriteTs=Date.now();
   const rows=brandsArr.map(_brandToRow);
-  const{error}=await db.from('pd_brands').upsert(rows,{onConflict:'id'});
+  const strip=r=>{const{config,...rest}=r;return rest;};
+  let{error}=await db.from('pd_brands').upsert(_brandConfigColumnMissing?rows.map(strip):rows,{onConflict:'id'});
+  // The `config` column ships with a migration. If this database hasn't run it
+  // yet, saving every OTHER brand field must still work — otherwise adding or
+  // renaming a brand would break entirely. Retry without it and say so plainly
+  // rather than failing the whole save or silently dropping settings.
+  if(error&&!_brandConfigColumnMissing&&/config/i.test(error.message||'')&&/column|schema|does not exist|find/i.test(error.message||'')){
+    _brandConfigColumnMissing=true;
+    console.warn('pd_brands.config is missing — saving without per-brand settings. Run the database update in Settings.');
+    ({error}=await db.from('pd_brands').upsert(rows.map(strip),{onConflict:'id'}));
+    if(!error&&brandsArr.some(b=>b.config&&Object.keys(b.config).length)){
+      toast('Brand saved, but per-brand settings need a database update — see Settings → Database Setup','red');
+    }
+  }
   if(error)throw new Error(`Brand save failed: ${error.message}`);
   _useBrandTable=true;
   console.log(`✓ Saved ${rows.length} brand(s) to pd_brands`);
@@ -3615,11 +3641,130 @@ const CFG_REG={
 
 let _cfgDepth=0;
 
-// Resolve a brand's effective overrides as a flat {REGISTRY_KEY: value} map,
-// or null when the brand inherits everything (the only case today — no brand
-// carries a config yet, so every calculation is provably unchanged).
+// Registry keys whose values are maps keyed by CATEGORY. These merge per key
+// against the global, so a category added after a brand customised its rates
+// still resolves (rather than silently falling back to a hardcoded default
+// deep inside getMyntraComm / getMynColl).
+const CFG_CAT_KEYED=new Set(['COMM_MYNTRA','COMM_AMAZON','COMM_AJIO_PPMP','COMM_AJIO_CC',
+  'COMM_CAT_SLABS','COMM_SLAB_CAT','GT_CAT_DATA','REV_CAT_DATA','COLL_FEE_DATA','COLL_CAT_SLABS']);
+// Keyed by LEVEL rather than category, but merged the same way.
+const CFG_LEVEL_KEYED=new Set(['GT_DATA','REVERSE_FEES']);
+
+let _brandCfgCache=new Map();
+
+// Resolve a brand's effective overrides to a flat {REGISTRY_KEY: value} map,
+// or null when the brand inherits everything. Memoized on the calc-cache
+// version so it is rebuilt whenever any config or brand changes.
 function resolveBrandCfg(brandId){
-  return null;
+  if(!brandId) return null;
+  const ck=brandId+'|'+_calcCacheVersion;
+  if(_brandCfgCache.has(ck)) return _brandCfgCache.get(ck);
+  const out=_buildBrandCfg(brandId);
+  _brandCfgCache.set(ck,out);
+  return out;
+}
+
+function _buildBrandCfg(brandId){
+  const b=brands.find(x=>x.id===brandId);
+  const cfg=b&&b.config;
+  if(!cfg||typeof cfg!=='object') return null;
+  const out={};
+  for(const[section,keys]of Object.entries(CFG_SECTIONS)){
+    const sec=cfg[section];
+    if(!sec||typeof sec!=='object') continue; // section absent ⇒ inherit
+    // A section is applied whole: every key it owns is resolved together, so
+    // bounds and the rate arrays indexed by them can never come from
+    // different sources (see CFG_SECTIONS).
+    for(const k of keys){
+      const slot=CFG_REG[k];
+      if(!slot) continue;
+      const base=slot.get();
+      let v=sec[k];
+      if(v===undefined||v===null){ out[k]=base; continue; }
+      if(CFG_CAT_KEYED.has(k)||CFG_LEVEL_KEYED.has(k)){
+        if(typeof v!=='object'||Array.isArray(v)){ out[k]=base; continue; }
+        // Per-key merge: brand entries win, everything else inherits.
+        out[k]=Object.assign({},base&&typeof base==='object'?base:{},v);
+      } else {
+        out[k]=v;
+      }
+    }
+  }
+  const resolved=_sanitizeBrandCfg(out,brandId);
+  return Object.keys(resolved).length?resolved:null;
+}
+
+// A brand config arrives from the database and could be stale, hand-edited or
+// corrupted by a bad import. It must never be able to break pricing, so drop
+// anything malformed and fall back to the global for that key. Mirrors the
+// coll_cat_slabs validation in hydrateLogisticsDerived.
+function _sanitizeBrandCfg(out,brandId){
+  const warn=m=>{
+    if(!_sanitizeBrandCfg._warned) _sanitizeBrandCfg._warned=new Set();
+    const k=brandId+'|'+m;
+    if(_sanitizeBrandCfg._warned.has(k)) return;
+    _sanitizeBrandCfg._warned.add(k);
+    console.warn(`Brand ${brandId} config: ${m}`);
+  };
+  const ascending=a=>Array.isArray(a)&&a.every((v,i)=>typeof v==='number'&&isFinite(v)&&v>0&&(i===0||v>a[i-1]));
+  for(const k of ['COMM_SLABS','GT_SLABS','COLL_SLABS']){
+    if(k in out&&!(ascending(out[k])&&out[k].length)){ warn(`${k} is not an ascending list of positive numbers — using the global instead`); out[k]=CFG_REG[k].get(); }
+  }
+  // REV_SLABS may legitimately be empty (one flat fee per level/category).
+  if('REV_SLABS' in out&&!(Array.isArray(out.REV_SLABS)&&(out.REV_SLABS.length===0||ascending(out.REV_SLABS)))){
+    warn('REV_SLABS is not an ascending list — using the global instead'); out.REV_SLABS=CFG_REG.REV_SLABS.get();
+  }
+  for(const k of ['COLL_CAT_SLABS','COMM_CAT_SLABS']){
+    if(!(k in out)||!out[k]||typeof out[k]!=='object') continue;
+    const clean={};
+    for(const[cat,bnd]of Object.entries(out[k])){
+      if(Array.isArray(bnd)&&(bnd.length===0||ascending(bnd))) clean[cat]=bnd;
+      else warn(`${k}["${cat}"] is malformed — that category falls back to the global bounds`);
+    }
+    out[k]=clean;
+  }
+  if('COMM_MODE'in out&&out.COMM_MODE!=='slab'&&out.COMM_MODE!=='level_slab'){
+    warn('COMM_MODE is not "slab" or "level_slab" — using the global instead'); out.COMM_MODE=CFG_REG.COMM_MODE.get();
+  }
+  // Scalar fees must be finite numbers, never NaN or a string.
+  for(const k of ['myn_pg_fee','myn_fwd_fixed','myn_ret_fixed','ajio_fwd','ajio_ret',
+                  'ajio_platform_fee','amz_fba','amz_close','amz_ret']){
+    if(k in out&&!(typeof out[k]==='number'&&isFinite(out[k]))){ warn(`${k} is not a number — using the global instead`); out[k]=CFG_REG[k].get(); }
+  }
+  for(const k of ['myn_fwd_mode','myn_ret_mode']){
+    if(k in out&&!['level','fixed','cat'].includes(out[k])){ warn(`${k} is not level/fixed/cat — using the global instead`); out[k]=CFG_REG[k].get(); }
+  }
+  // Rate rows must line up with the bounds that index them, or the Math.min
+  // clamps in getMyntraComm/getMynColl would silently return a wrong band.
+  const fit=(row,n)=>{
+    if(!Array.isArray(row)) return row;
+    const r=row.slice(0,n);
+    while(r.length<n) r.push(r.length?r[r.length-1]:0);
+    return r;
+  };
+  if(out.COMM_MYNTRA&&typeof out.COMM_MYNTRA==='object'){
+    const gBounds=out.COMM_SLABS||CFG_REG.COMM_SLABS.get();
+    const fixed={};
+    for(const[cat,row]of Object.entries(out.COMM_MYNTRA)){
+      const bounds=(out.COMM_CAT_SLABS&&out.COMM_CAT_SLABS[cat])||gBounds;
+      const want=bounds.length+1;
+      if(Array.isArray(row)&&row.length!==want) warn(`COMM_MYNTRA["${cat}"] has ${row.length} rates for ${want} bands — resized to fit`);
+      fixed[cat]=fit(row,want);
+    }
+    out.COMM_MYNTRA=fixed;
+  }
+  if(out.COLL_FEE_DATA&&typeof out.COLL_FEE_DATA==='object'){
+    const gBounds=out.COLL_SLABS||CFG_REG.COLL_SLABS.get();
+    const fixed={};
+    for(const[cat,row]of Object.entries(out.COLL_FEE_DATA)){
+      const cb=out.COLL_CAT_SLABS&&out.COLL_CAT_SLABS[cat];
+      const want=Array.isArray(cb)?cb.length+1:gBounds.length+1;
+      if(Array.isArray(row)&&row.length!==want) warn(`COLL_FEE_DATA["${cat}"] has ${row.length} fees for ${want} bands — resized to fit`);
+      fixed[cat]=fit(row,want);
+    }
+    out.COLL_FEE_DATA=fixed;
+  }
+  return out;
 }
 
 function withBrandCfg(brandId, fn){
@@ -3686,7 +3831,23 @@ function el(id){return document.getElementById(id);}
 // ── calcSKU cache — invalidated on any data change ────
 let _calcCache = new Map();
 let _calcCacheVersion = 0;
-function invalidateCalcCache(){ _calcCacheVersion++; _calcCache = new Map(); }
+function invalidateCalcCache(){ _calcCacheVersion++; _calcCache = new Map(); _brandCfgCache = new Map(); }
+
+// Repaint whatever the user is currently looking at after a change that moves
+// calculated numbers. Shared by pd_sync updates and the per-row pd_brands
+// events, so a remote edit can never leave stale prices on screen.
+// invalidateCalcCache() clears the cache; this puts fresh numbers on screen.
+function _repaintForCalcChange(type){
+  const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
+  updateAlerts();
+  if(activePage==='skus') renderSKUs();
+  if(activePage==='archive') renderArchivedSKUs();
+  if(activePage==='dashboard'){renderBrandSummary();renderDashboardWidgets();}
+  if(activePage==='thresholds'){renderBreachList?.();}
+  if(activePage==='commission'){buildCommMyntra();buildCommAjioBrands();buildCommAmazon();}
+  if(activePage==='logistics'&&type==='logistics'){renderGTTable?.();renderRetTable?.();renderGTCatTable?.();renderRetCatTable?.();renderCollTable?.();}
+  if(activePage==='wireframe'&&type==='wireframe'){renderWFBuilder?.();}
+}
 
 function calcSKU(s){
   const cacheKey = s.id + '|' + _calcCacheVersion;
@@ -10310,7 +10471,7 @@ function setupRealtime(){
         if(Date.now() - _lastWriteTs < 10000) return;
         const r=payload.new;if(!r)return;
         const b=_rowToBrand(r);
-        if(!brands.find(x=>x.id===b.id)){brands.push(b);invalidateCalcCache();populateFilters();toast('New brand from another device','blue');}
+        if(!brands.find(x=>x.id===b.id)){brands.push(b);invalidateCalcCache();populateFilters();_repaintForCalcChange();toast('New brand from another device','blue');}
       }
     )
     .on('postgres_changes',
@@ -10320,7 +10481,11 @@ function setupRealtime(){
         const r=payload.new;if(!r)return;
         const b=_rowToBrand(r);
         const idx=brands.findIndex(x=>x.id===b.id);
-        if(idx>=0){brands[idx]=b;invalidateCalcCache();populateFilters();}
+        // A brand now carries its own commission/shipping/fee settings, so a
+        // remote edit changes prices. Invalidating the cache alone would leave
+        // the already-painted numbers on screen until the next render, so
+        // repaint whatever the user is looking at (mirrors handleRealtimeUpdate).
+        if(idx>=0){brands[idx]=b;invalidateCalcCache();populateFilters();_repaintForCalcChange();}
       }
     )
     .on('postgres_changes',
@@ -10328,7 +10493,7 @@ function setupRealtime(){
       (payload) => {
         if(Date.now() - _lastWriteTs < 10000) return;
         const id=payload.old?.id;if(!id)return;
-        brands=brands.filter(x=>x.id!==id);invalidateCalcCache();populateFilters();
+        brands=brands.filter(x=>x.id!==id);invalidateCalcCache();populateFilters();_repaintForCalcChange();
       }
     )
     .subscribe((status)=>{
@@ -10409,18 +10574,13 @@ async function handleRealtimeUpdate(key, newValue){
   // calc cache — otherwise this device keeps serving the pre-change payout/
   // profit/breach numbers from cache until some unrelated local edit
   // happens to invalidate it (stale calculations).
-  const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
   const CALC_INPUT_TYPES=['skus','brands','thresholds','categories','levels','cat_levels','comm_myntra','comm_ppmp','comm_cc','comm_amazon','logistics','wireframe'];
+  // NOTE: invalidateCalcCache() alone only clears the cache — it does not
+  // repaint. Anything that changes calculated numbers must also call
+  // _repaintForCalcChange(), or the stale figures stay on screen.
   if(CALC_INPUT_TYPES.includes(type)){
     invalidateCalcCache();
-    updateAlerts();
-    if(activePage==='skus') renderSKUs();
-    if(activePage==='archive') renderArchivedSKUs();
-    if(activePage==='dashboard'){renderBrandSummary();renderDashboardWidgets();}
-    if(activePage==='thresholds'){renderBreachList?.();}
-    if(activePage==='commission'){buildCommMyntra();buildCommAjioBrands();buildCommAmazon();}
-    if(activePage==='logistics'&&type==='logistics'){renderGTTable?.();renderRetTable?.();renderGTCatTable?.();renderRetCatTable?.();renderCollTable?.();}
-    if(activePage==='wireframe'&&type==='wireframe'){renderWFBuilder?.();}
+    _repaintForCalcChange(type);
   }
   if(type==='brands'){
     if(activePage==='brands') renderBrands();

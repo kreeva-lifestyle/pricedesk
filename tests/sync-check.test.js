@@ -181,6 +181,37 @@ describe('source drift detection — production strings must match test copies',
       expect(HTML).toContain('const result=withBrandCfg(brand.id,()=>runWFEngine(mp,inputs));');
     });
 
+    it('brand config resolver is unchanged (tests/calc/brand-config.test.js)', () => {
+      expect(HTML).toContain('function resolveBrandCfg(brandId){');
+      expect(HTML).toContain('function _buildBrandCfg(brandId){');
+      expect(HTML).toContain('function _sanitizeBrandCfg(out,brandId){');
+      // A section is applied whole — this `continue` is what makes an absent
+      // section inherit rather than partially apply.
+      expect(HTML).toContain('    if(!sec||typeof sec!==\'object\') continue; // section absent ⇒ inherit');
+      // Per-key merge for category/level-keyed maps.
+      expect(HTML).toContain(
+        '        out[k]=Object.assign({},base&&typeof base===\'object\'?base:{},v);'
+      );
+      expect(HTML).toContain('  const resolved=_sanitizeBrandCfg(out,brandId);');
+      expect(HTML).toContain('  return Object.keys(resolved).length?resolved:null;');
+      // Rate rows must be resized to their bounds, or Math.min silently
+      // returns the wrong band.
+      expect(HTML).toContain('  const fit=(row,n)=>{');
+      expect(HTML).toContain('      const want=bounds.length+1;');
+    });
+
+    it('brand config is memoized and cleared with the calc cache', () => {
+      expect(HTML).toContain(
+        'function invalidateCalcCache(){ _calcCacheVersion++; _calcCache = new Map(); _brandCfgCache = new Map(); }'
+      );
+      expect(HTML).toContain("  const ck=brandId+'|'+_calcCacheVersion;");
+    });
+
+    it('brand row mappers carry config both ways (else it vanishes on save)', () => {
+      expect(HTML).toContain('    config:(b.config&&Object.keys(b.config).length)?b.config:null,');
+      expect(HTML).toContain("    config:(r.config&&typeof r.config==='object')?r.config:null");
+    });
+
     it('calcSKU marketplace dispatch is unchanged (tests/calc/calc-sku.test.js)', () => {
       expect(HTML).toContain("if(mp==='myntra'){");
       expect(HTML).toContain("} else if(mp==='ajio-ppmp'||mp==='ajio-cc'){");
