@@ -31,7 +31,7 @@
 
 ## Database Tables
 - `pd_skus_v2`: Individual SKU rows (primary source of truth)
-- `pd_brands`, `pd_categories`, `pd_commissions`, `pd_thresholds`: normalized per-row config (replaces same-named keys in `app_data`)
+- `pd_brands`, `pd_categories`, `pd_commissions`, `pd_thresholds`: normalized per-row config (replaces same-named keys in `app_data`). `pd_brands.config` (JSONB) holds sparse per-brand pricing overrides; `pd_skus_v2.brand_id` has a FK to it with `ON DELETE RESTRICT`
 - `pd_audit_log`: append-only audit trail (RLS restricts to INSERT+SELECT for anon)
 - `pd_sku_history`: per-change SKU history
 - `app_data`: Key-value config (remaining keys: `pd_logistics`, `pd_wireframe`, `pd_users`, `pd_sessions`, `pd_passkeys`, `pd_webauthn_challenges`, `pd_live_prices`, `pd_live_status`, `pd_live_command`, etc.)
@@ -53,6 +53,15 @@
 - Trigger from the app: the **Update Myntra ₹** button (`requestLivePriceFetch`) writes `pd_live_command` (`LIVE_COMMAND`, `{requestedAt,requestedBy}`); the laptop tool's **watch mode** (`node fetch-prices.mjs --watch`, npm `watch`) polls it and runs when `shouldRunCommand` (pure, in `config.mjs`, unit-tested) says so (soft-claim via `pd_live_status` avoids double-runs). The banner shows "waiting for a laptop" then "no laptop online" after `LIVE_CMD_WAIT_MS`. Also out of `CALC_INPUT_TYPES`.
 - iPhone backup fetcher: `tools/myntra-fetch/scriptable-myntra-fetch.js` — single self-contained script for the Scriptable iOS app (no npm; Supabase via REST; parser is a copy of `parse.mjs`, drift-guarded + offline-E2E'd in `tests/edge-functions/myntra-fetch-scriptable.test.js`). One-shot foreground runs only (iOS kills background work); writes the same `pd_live_prices`/`pd_live_status` + `pd_sync` pings with `source:"iPhone (…)"`.
 - Progress banner: the fetcher also writes `pd_live_status` (`LIVE_STATUS`, `{running,total,done,ok,fail,startedAt,finishedAt,source,ts}`); `renderLiveStatusBanner()` on the SKUs page shows live progress while running, "last updated N ago" when idle, an **"update didn't finish — laptop may have turned off"** warning when a run's heartbeat (`ts`) goes stale mid-run (`LIVE_STALL_MS`), and a "prices may be outdated" nudge when the last run is >2 days old. Also display-only (out of `CALC_INPUT_TYPES`).
+
+## Per-brand settings (commission / shipping / collection fee / fixed fees)
+- Stored **sparsely** in `pd_brands.config` (JSONB). Sections: `comm`, `fwd`, `ret`, `coll`, `fees` (`CFG_SECTIONS`). An absent section means **inherit the global default**; `config = NULL` means inherit everything (the state every brand starts in, so prices are unchanged)
+- **Sections are closed under indexing**: a slab-bounds array and every rate array indexed by it live in the SAME section. Splitting them would let a brand override bounds while inheriting rates, and the `Math.min` clamps in `getMyntraComm`/`getMynColl` would silently return the WRONG band
+- **Reading**: `withBrandCfg(brandId, fn)` swaps the brand's resolved overrides into the config globals for one synchronous call and restores them in a `finally`. `CFG_REG` is the getter/setter registry over all 29 swappable values. `fn` MUST be synchronous; nesting throws (`_cfgDepth`). Wrapped at three sites: `calcSKU`, `showCalcModal`, `renderDynamicCalc`. `WF_LOOKUPS` needs no changes — it reads globals, so it becomes brand-aware for free, and `WF` stays keyed by marketplace
+- `resolveBrandCfg(brandId)` merges category/level-keyed maps **per key** (so a category added later still resolves) and validates on read — bad bounds, invalid mode, non-numeric fees each fall back to the global and warn once
+- **Editing**: `beginScope(brandId)` clones the brand's effective settings into the globals so every existing Commission/Shipping renderer and inline handler edits that buffer unchanged; `saveBrandScope()` diffs against the baseline and stores only differing sections; `endScope()` restores. Scope switcher lives on the Commission and Shipping & Fees pages
+- Adding/deleting a category **fans out** to brands that overrode category-keyed maps (`_fanOutCategoryToBrands` / `_purgeCategoryFromBrands`), else a new category silently falls back to the hardcoded `18.88` / `[15,17,27,…]` defaults for those brands
+- `brand.commOverride` is legacy and **Myntra-only-inconsistent**: it changes the reported commission but not the payout. Detected in Settings → Data health with an opt-in convert. Still the ONLY commission source for Ajio — never remove it
 
 ## Critical Code Patterns
 - Per-row save functions (`dbSaveBrands`, `dbSaveCategories`, `dbSaveThresholds`, `dbSaveCommissions`, `dbSaveSKU`, `dbDeleteSKU`) write directly to their tables; failures throw rather than silently writing to blobs
@@ -80,7 +89,9 @@
 - Myntra branch of `calcSKU` is tested at the WF-engine and wrapper level, but specific output values depend on the user's editable wireframe rules so end-to-end Myntra calcs aren't snapshot-tested
 
 ## Do NOT
-- Remove `invalidateCalcCache()` calls before render functions
+- Remove `invalidateCalcCache()` calls before render functions (it only clears the cache — call `_repaintForCalcChange()` too when numbers must repaint)
+- Call `_syncMynLogisticsSettings()` or `save('logistics')` while a brand scope is active — it would write one brand's values into the shared logistics blob and reprice every brand. The savers route to `saveBrandScope()` and `_syncMynLogisticsSettings` throws
+- Pass an `async` callback to `withBrandCfg` — another calculation could observe the swapped globals
 - Make saves fire-and-forget for critical operations (delete, archive, add)
 - Set `_dataReady=true` before migrations complete
 - Store images in the database (feature removed)

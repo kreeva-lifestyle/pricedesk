@@ -5436,13 +5436,69 @@ function openBrandModal(id){
         <input class="fi" id="bn-comm" type="number" step="0.01" placeholder="Leave blank for auto" value="${b.commOverride!=null?b.commOverride:''}">
       </div>
       <div class="info" id="bn-model-note" style="margin-top:0"></div>
+      <div class="nav-sec" style="margin:16px 0 8px">Pricing settings</div>
+      <div class="fg">
+        <label class="fl">Start from</label>
+        <select class="fi" id="bn-copy" style="appearance:none" onchange="updateBrandSettingsHint()">
+          <option value="">The default settings</option>
+          ${brands.filter(x=>x.id!==b.id).map(x=>`<option value="${escAttr(x.id)}">Copy from ${esc(_brandLabel(x))}${x.config?' (customised)':''}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">This brand has its own</label>
+        <div class="flex gap8" style="flex-wrap:wrap">
+          ${Object.entries(SCOPE_SECTION_LABEL).map(([sec,lbl])=>`
+            <label class="brand-chip" style="cursor:pointer">
+              <input type="checkbox" class="bn-sec" value="${sec}" ${b.config&&b.config[sec]?'checked':''} onchange="updateBrandSettingsHint()" style="margin:0"> ${esc(lbl)}
+            </label>`).join('')}
+        </div>
+        <div class="st" id="bn-settings-hint" style="margin-top:7px"></div>
+      </div>
     </div>
     <div class="mfoot">
       ${isEdit?`<button class="btn br bsm" onclick="deleteBrand('${escAttr(b.id)}').then(ok=>{if(ok)closeModal()})" style="margin-right:auto">Delete</button>`:''}
       <button class="btn bg" onclick="closeModal()">Cancel</button>
-      <button class="btn bp" onclick="saveBrand('${isEdit?escAttr(b.id):''}')">Save Brand</button>
+      <button class="btn bp" onclick="saveBrand('${isEdit?escAttr(b.id):''}')" id="bn-save">Save Brand</button>
     </div>`);
   updateBrandModelNote();
+  updateBrandSettingsHint();
+}
+
+// Explain, in plain terms, what the chosen settings structure will do — and
+// relabel the save button when it will continue into the settings editor.
+function updateBrandSettingsHint(){
+  const hint=el('bn-settings-hint'); if(!hint) return;
+  const picked=[...document.querySelectorAll('.bn-sec:checked')].map(c=>c.value);
+  const src=el('bn-copy')?.value||'';
+  const srcName=src?(brands.find(x=>x.id===src)?.name||'another brand'):null;
+  const btn=el('bn-save');
+  if(!picked.length){
+    hint.textContent=`Uses the shared default settings for everything. Change the defaults later and this brand follows along.`;
+    if(btn) btn.textContent='Save Brand';
+  } else {
+    const names=picked.map(p=>SCOPE_SECTION_LABEL[p].toLowerCase()).join(', ');
+    hint.innerHTML=`Its own <strong>${esc(names)}</strong>, started from ${srcName?`<strong>${esc(srcName)}</strong>`:'the defaults'}. Later changes to the defaults won't affect ${picked.length>1?'these':'this'}.`;
+    if(btn) btn.textContent='Save & Set Up Settings →';
+  }
+}
+
+// Build a brand's starting config from the chosen source. Copying uses the
+// SOURCE's effective settings; starting from the defaults pins today's global
+// values, which is what "its own" means — it stops following the defaults.
+function _brandStartingConfig(sections,srcId){
+  if(!sections.length) return null;
+  const src=srcId?(resolveBrandCfg(srcId)||{}):{};
+  const cfg={};
+  for(const sec of sections){
+    const keys=CFG_SECTIONS[sec]; if(!keys) continue;
+    const out={};
+    for(const k of keys){
+      const slot=CFG_REG[k]; if(!slot) continue;
+      out[k]=_cloneCfgVal(k in src?src[k]:slot.get());
+    }
+    cfg[sec]=out;
+  }
+  return cfg;
 }
 
 // `marketplace` is a display label only; `model` is what actually drives
@@ -5475,9 +5531,45 @@ function saveBrand(eid){
     if(!isFinite(comm)){toast('Commission override must be a number','red');return;}
     if(comm<0||comm>100){toast('Commission override must be between 0 and 100','red');return;}
   }
-  if(eid){const b=brands.find(x=>x.id===eid);if(b)Object.assign(b,{name,marketplace:mp,model,commOverride:comm,updatedAt:new Date().toISOString()});audit('brand_edit',`${name} updated (${model})`);toast(`${name} updated`,'green');}
-  else{brands.push({id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});audit('brand_add',`${name} added (${model})`);toast(`${name} added`,'green');}
-  closeModal();renderBrands();populateFilters();renderSKUs();save('brands').catch(e=>toast('Brand save failed: '+e.message,'red'));
+  // Which settings structure the user chose for this brand.
+  const secEls=[...document.querySelectorAll('.bn-sec')];
+  const picked=secEls.filter(c=>c.checked).map(c=>c.value);
+  const srcId=el('bn-copy')?.value||'';
+  let target;
+  if(eid){
+    target=brands.find(x=>x.id===eid);
+    if(target){
+      Object.assign(target,{name,marketplace:mp,model,commOverride:comm,updatedAt:new Date().toISOString()});
+      // Only rebuild config for sections the user just turned ON; keep what a
+      // section already had so editing the name can't wipe tuned settings.
+      if(secEls.length){
+        const existing=target.config||{};
+        const added=picked.filter(sec=>!existing[sec]);
+        const kept={};
+        for(const sec of picked) if(existing[sec]) kept[sec]=existing[sec];
+        target.config={...kept,...(added.length?_brandStartingConfig(added,srcId):{})};
+        if(!Object.keys(target.config).length) target.config=null;
+      }
+    }
+    audit('brand_edit',`${name} updated (${model})`);toast(`${name} updated`,'green');
+  }
+  else{
+    target={id:'b'+Date.now(),name,marketplace:mp,model,commOverride:comm,
+      config:_brandStartingConfig(picked,srcId),
+      createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+    brands.push(target);
+    audit('brand_add',`${name} added (${model})${picked.length?` — own ${picked.join(', ')}`:''}`);
+    toast(`${name} added`,'green');
+  }
+  closeModal();invalidateCalcCache();renderBrands();populateFilters();renderSKUs();
+  save('brands').catch(e=>toast('Brand save failed: '+e.message,'red'));
+  // Step 2: drop straight into the settings the user just said this brand owns.
+  if(picked.length&&target){
+    const page=picked.includes('comm')&&picked.length===1?'commission':'logistics';
+    nav(page);
+    switchScope(target.id);
+    toast(`Step 2 of 2 — tune ${esc(name)}'s settings, then Save`,'blue');
+  }
 }
 // Count SKUs referencing a brand IN THE DATABASE, not just in memory.
 // skuDB is this tab's snapshot: another device may have added SKUs to the
@@ -5561,6 +5653,46 @@ function findOrphanSKUs(){
   return skuDB.filter(s=>s.brandId&&!ids.has(s.brandId));
 }
 
+// Myntra brands whose commOverride is set are in a genuinely inconsistent
+// state: calcSKU reports that percentage but the payout was already computed
+// by the formula engine using the category rate (index.html, Myntra branch).
+// So the commission shown and the profit shown disagree. Ajio and Amazon
+// don't have this — they compute the payout from the override directly.
+// Rather than silently changing anyone's numbers, detect and offer a fix.
+function findMyntraOverrideBrands(){
+  return brands.filter(b=>b.model==='myntra'&&b.commOverride!=null);
+}
+
+// Move the override into a real per-brand commission, where it feeds the
+// payout properly, and clear the override.
+async function convertMyntraOverride(id){
+  const b=brands.find(x=>x.id===id); if(!b||b.commOverride==null) return;
+  const rate=+b.commOverride;
+  const before=skuDB.filter(s=>s.brandId===id&&!s.archived).slice(0,200).map(s=>({id:s.id,p:calcSKU(s).profitRs}));
+  const cfg=b.config?JSON.parse(JSON.stringify(b.config)):{};
+  const eff=resolveBrandCfg(id)||{};
+  const comm={};
+  for(const k of CFG_SECTIONS.comm) comm[k]=_cloneCfgVal(k in eff?eff[k]:CFG_REG[k].get());
+  // Slab-only mode with one flat rate is the faithful reading of "this brand
+  // charges X% regardless of category".
+  comm.COMM_MODE='slab';
+  comm.COMM_SLAB_ONLY=new Array((comm.COMM_SLABS||CFG_REG.COMM_SLABS.get()).length+1).fill(rate);
+  comm.COMM_SLAB_CAT={};
+  cfg.comm=comm;
+  b.config=cfg;
+  b.commOverride=null;
+  invalidateCalcCache();
+  const after=before.map(x=>({...x,q:calcSKU(skuDB.find(s=>s.id===x.id)).profitRs}));
+  const moved=after.filter(x=>Math.abs(x.p-x.q)>0.5).length;
+  try{
+    await save('brands');
+    audit('brand_settings',`${b.name}: Myntra commission override ${rate}% converted to per-brand commission`);
+    toast(`${b.name} now charges ${rate}% through the calculation — ${moved} SKU${moved===1?'':'s'} changed profit`,'green');
+  }catch(e){ toast('Save failed: '+e.message,'red'); }
+  _repaintForCalcChange();
+  runDataHealthCheck();
+}
+
 async function runDataHealthCheck(){
   const box=el('data-health-result');if(!box)return;
   box.innerHTML='<div class="st">Checking…</div>';
@@ -5584,11 +5716,21 @@ async function runDataHealthCheck(){
     console.warn('Skipping the database orphan check — a brand id contains characters that are unsafe in a filter.');
   }
   const total=dbOrphans?Math.max(orphans.length,dbOrphans.length):orphans.length;
-  if(!total&&!unassigned.length){
-    box.innerHTML=`<div class="success">✓ No problems found — every SKU points at a brand that exists.</div>`;
+  const mynOv=findMyntraOverrideBrands();
+  if(!total&&!unassigned.length&&!mynOv.length){
+    box.innerHTML=`<div class="success">✓ No problems found — every SKU points at a brand that exists, and no brand has inconsistent commission settings.</div>`;
     return;
   }
   let h='';
+  if(mynOv.length){
+    h+=`<div class="warn mb12">⚠ ${mynOv.length===1?'A Myntra brand has':`${mynOv.length} Myntra brands have`} a Commission Override set.
+      On Myntra the override changes the commission <em>shown</em> but not the profit, which is calculated from the category rate — so the two disagree.
+      Converting moves the rate into this brand's own commission settings, where it feeds the profit properly.</div>
+      ${mynOv.map(b=>`<div class="flex gap8" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)">
+        <span>${esc(b.name)} <span class="mono st">${b.commOverride}%</span></span>
+        <button class="btn bp bxs" onclick="convertMyntraOverride('${escAttr(b.id)}')">Convert</button></div>`).join('')}
+      <div class="st" style="margin:7px 0 14px">Converting will change the profit shown for that brand's SKUs — that is the point, the current figure is wrong.</div>`;
+  }
   if(total){
     const names=[...new Set((dbOrphans||[]).map(r=>r.brand_id).concat(orphans.map(s=>s.brandId)))];
     h+=`<div class="warn mb12">⚠ <strong>${total} SKU${total>1?'s':''}</strong> reference ${names.length>1?'brands':'a brand'} that no longer exist${names.length>1?'':'s'} (<span class="mono">${names.slice(0,4).map(esc).join(', ')}${names.length>4?'…':''}</span>).
