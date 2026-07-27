@@ -2576,6 +2576,9 @@ function _rowToBrand(r){
 // True once we've seen the database reject `config`, so we stop retrying it
 // on every save. Reset only by a reload (i.e. after the migration is run).
 let _brandConfigColumnMissing=false;
+// Set when a brand save had to fall back to the legacy blob, so callers can
+// report "saved, but not where it should be" instead of a clean success.
+let _lastBrandSaveDegraded=null;
 
 async function dbSaveBrands(brandsArr){
   const db=getDB();if(!db)throw new Error('No DB');
@@ -2591,13 +2594,14 @@ async function dbSaveBrands(brandsArr){
     _brandConfigColumnMissing=true;
     console.warn('pd_brands.config is missing — saving without per-brand settings. Run the database update in Settings.');
     ({error}=await db.from('pd_brands').upsert(rows.map(strip),{onConflict:'id'}));
-    if(!error&&brandsArr.some(b=>b.config&&Object.keys(b.config).length)){
-      toast('Brand saved, but per-brand settings need a database update — see Settings → Database Setup','red');
-    }
   }
   if(error)throw new Error(`Brand save failed: ${error.message}`);
   _useBrandTable=true;
   console.log(`✓ Saved ${rows.length} brand(s) to pd_brands`);
+  // Report on EVERY save, not just the first. Reporting once meant later saves
+  // toasted green while silently discarding the brand's settings.
+  const configDropped=_brandConfigColumnMissing&&brandsArr.some(b=>b.config&&Object.keys(b.config).length);
+  return {configDropped};
 }
 
 async function dbDeleteBrand(id){
@@ -3096,7 +3100,20 @@ async function _doSaveSKUs(){
 
 // ── Save individual data types to DB ─────────────────
 // Each data type gets its own DB row — completely independent
+// Config types that describe the SHARED defaults. While a brand scope is
+// active the corresponding globals hold that brand's edit buffer, so
+// persisting any of them would write one brand's settings over everyone's.
+const SHARED_CONFIG_TYPES=new Set(['logistics','comm_myntra','comm_ppmp','comm_cc',
+  'comm_amazon','cat_levels','categories','levels','thresholds']);
+
 async function save(type, opts){
+  // Backstop at the chokepoint rather than at each caller. Guarding individual
+  // savers missed eight call sites (slab editors, mode radios, level
+  // management), each of which silently overwrote the shared defaults. Throwing
+  // here turns any future miss into a loud error instead of lost money.
+  if(_editScope&&SHARED_CONFIG_TYPES.has(type)){
+    throw new Error(`save('${type}') blocked: "${_editScope.name}" settings are being edited. Route through saveBrandScope() or block the action with _blockIfScoped().`);
+  }
   if(!type){
     // Save ALL data types sequentially
     const types=['skus','brands','users','thresholds','cat_levels',
@@ -3122,17 +3139,20 @@ async function save(type, opts){
   // Brands: use per-row table if available
   if(type==='brands'){
     _lastWriteTs=Date.now();
+    _lastBrandSaveDegraded=null;
     try{
       if(_useBrandTable){
-        await dbSaveBrands(brands);
+        const res=await dbSaveBrands(brands);
         updateSyncBadge(true);
-        return;
+        // Tells the caller the per-brand `config` was dropped because the
+        // column is missing, so it can warn instead of reporting success.
+        return res;
       }
     }catch(e){
       console.warn('Brand table save failed, falling back to blob:',e.message);
       updateSyncBadge(false, `Brand save failed: ${e.message}`);
-      toast(`Brand save failed (saved locally): ${e.message}`,'red');
-      /* fall through to blob save */
+      _lastBrandSaveDegraded=e.message;
+      /* fall through to blob save — the caller reports the degradation */
     }
   }
   // Categories + cat_levels: use per-row table if available
@@ -3606,6 +3626,11 @@ let LOGISTICS_SETTINGS = {
 };
 // Pull derived structures out of LOGISTICS_SETTINGS after any load/sync
 function hydrateLogisticsDerived(){
+  // While a brand's settings are being edited these globals ARE the brand's
+  // buffer. Re-reading them from the shared blob would silently discard the
+  // buffer, leave the globals aliased to the defaults, and turn every
+  // subsequent cell edit into an edit of everyone's settings.
+  if(_editScope) return;
   const s=LOGISTICS_SETTINGS;
   if(s.coll_fee_data) COLL_FEE_DATA=s.coll_fee_data;
   if(s.gt_cat_data)   GT_CAT_DATA=s.gt_cat_data;
@@ -3712,6 +3737,10 @@ let _brandCfgCache=new Map();
 // version so it is rebuilt whenever any config or brand changes.
 function resolveBrandCfg(brandId){
   if(!brandId) return null;
+  // While this brand is being edited its buffer is already in the globals.
+  // Re-applying the SAVED config on top would price with the stored values and
+  // make the live preview ignore the edit in front of the user.
+  if(_editScope&&_editScope.brandId===brandId) return null;
   const ck=brandId+'|'+_calcCacheVersion;
   if(_brandCfgCache.has(ck)) return _brandCfgCache.get(ck);
   const out=_buildBrandCfg(brandId);
@@ -3790,35 +3819,68 @@ function _sanitizeBrandCfg(out,brandId){
     if(k in out&&!['level','fixed','cat'].includes(out[k])){ warn(`${k} is not level/fixed/cat — using the global instead`); out[k]=CFG_REG[k].get(); }
   }
   // Rate rows must line up with the bounds that index them, or the Math.min
-  // clamps in getMyntraComm/getMynColl would silently return a wrong band.
+  // clamps in getMyntraComm / getMynColl / slabPick silently return a WRONG
+  // band instead of failing. This runs last, after the bound fallbacks above,
+  // so a row is always fitted to the bounds actually in force.
   const fit=(row,n)=>{
-    if(!Array.isArray(row)) return row;
+    if(!Array.isArray(row)) return row;   // scalars are legitimate flat fees
     const r=row.slice(0,n);
     while(r.length<n) r.push(r.length?r[r.length-1]:0);
     return r;
   };
-  if(out.COMM_MYNTRA&&typeof out.COMM_MYNTRA==='object'){
-    const gBounds=out.COMM_SLABS||CFG_REG.COMM_SLABS.get();
+  // Per-category bounds win over the global ones — but only when non-empty.
+  // An empty array means "one fixed fee" for collection fees; for commission
+  // getMyntraComm ignores it (`cb && cb.length`), so treating it as bounds
+  // would truncate the row to a single rate and return the FIRST band's rate,
+  // usually 0%, at every price.
+  const boundsFor=(perCat,cat,gBounds)=>{
+    const cb=perCat&&perCat[cat];
+    return Array.isArray(cb)&&cb.length?cb:gBounds;
+  };
+  const fitMap=(key,gBounds,perCat,allowEmptyPerCat)=>{
+    const map=out[key];
+    if(!map||typeof map!=='object'||Array.isArray(map)) return;
     const fixed={};
-    for(const[cat,row]of Object.entries(out.COMM_MYNTRA)){
-      const bounds=(out.COMM_CAT_SLABS&&out.COMM_CAT_SLABS[cat])||gBounds;
-      const want=bounds.length+1;
-      if(Array.isArray(row)&&row.length!==want) warn(`COMM_MYNTRA["${cat}"] has ${row.length} rates for ${want} bands — resized to fit`);
-      fixed[cat]=fit(row,want);
+    for(const[k,row]of Object.entries(map)){
+      let want;
+      if(allowEmptyPerCat&&perCat&&Array.isArray(perCat[k])) want=perCat[k].length+1; // [] ⇒ 1 fixed fee
+      else want=boundsFor(perCat,k,gBounds).length+1;
+      if(Array.isArray(row)&&row.length!==want) warn(`${key}["${k}"] has ${row.length} entries for ${want} bands — resized to fit`);
+      fixed[k]=fit(row,want);
     }
-    out.COMM_MYNTRA=fixed;
-  }
-  if(out.COLL_FEE_DATA&&typeof out.COLL_FEE_DATA==='object'){
-    const gBounds=out.COLL_SLABS||CFG_REG.COLL_SLABS.get();
-    const fixed={};
-    for(const[cat,row]of Object.entries(out.COLL_FEE_DATA)){
-      const cb=out.COLL_CAT_SLABS&&out.COLL_CAT_SLABS[cat];
-      const want=Array.isArray(cb)?cb.length+1:gBounds.length+1;
-      if(Array.isArray(row)&&row.length!==want) warn(`COLL_FEE_DATA["${cat}"] has ${row.length} fees for ${want} bands — resized to fit`);
-      fixed[cat]=fit(row,want);
+    out[key]=fixed;
+  };
+
+  const commBounds=out.COMM_SLABS||CFG_REG.COMM_SLABS.get();
+  fitMap('COMM_MYNTRA',commBounds,out.COMM_CAT_SLABS,false);
+  if('COMM_SLAB_ONLY'in out) out.COMM_SLAB_ONLY=fit(out.COMM_SLAB_ONLY,commBounds.length+1);
+  // COMM_SLAB_CAT carries its own bounds alongside its rates; drop the entry
+  // rather than guess if the pair is malformed.
+  if(out.COMM_SLAB_CAT&&typeof out.COMM_SLAB_CAT==='object'){
+    const clean={};
+    for(const[cat,o]of Object.entries(out.COMM_SLAB_CAT)){
+      if(o&&Array.isArray(o.bounds)&&o.bounds.length&&Array.isArray(o.rates)&&o.rates.length){
+        clean[cat]={bounds:o.bounds,rates:fit(o.rates,o.bounds.length+1)};
+      } else warn(`COMM_SLAB_CAT["${cat}"] is malformed — that category falls back to the standard bands`);
     }
-    out.COLL_FEE_DATA=fixed;
+    out.COMM_SLAB_CAT=clean;
   }
+
+  const gtBounds=out.GT_SLABS||CFG_REG.GT_SLABS.get();
+  fitMap('GT_DATA',gtBounds,null,false);
+  fitMap('GT_CAT_DATA',gtBounds,null,false);
+
+  // Reverse fees are per-slab arrays only when REV_SLABS has bounds; with an
+  // empty REV_SLABS they are flat scalars, which fit() passes through.
+  const revBounds=out.REV_SLABS!==undefined?out.REV_SLABS:CFG_REG.REV_SLABS.get();
+  if(Array.isArray(revBounds)&&revBounds.length){
+    fitMap('REVERSE_FEES',revBounds,null,false);
+    fitMap('REV_CAT_DATA',revBounds,null,false);
+  }
+
+  const collBounds=out.COLL_SLABS||CFG_REG.COLL_SLABS.get();
+  fitMap('COLL_FEE_DATA',collBounds,out.COLL_CAT_SLABS,true);
+
   return out;
 }
 
@@ -3841,7 +3903,11 @@ function _sanitizeBrandCfg(out,brandId){
 //     whole job is to write these values into the shared logistics blob
 //   - renderSKUs/triggerRecalc no-op while scoped, since the globals then
 //     describe one brand rather than the defaults
-let _editScope=null;   // {brandId, name, baseline:{key:value}, custom:Set<section>}
+// baseline — the PRISTINE globals, captured on entry and never reassigned.
+//             This is what endScope restores; conflating it with the
+//             change-detection snapshot leaked brand edits into the defaults.
+// saved     — the buffer as last persisted, for unsaved-change detection.
+let _editScope=null;   // {brandId, name, baseline, saved, custom:Set<section>}
 
 function isBrandScoped(){ return !!_editScope; }
 function scopedBrandName(){ return _editScope?_editScope.name:null; }
@@ -3875,7 +3941,9 @@ function beginScope(brandId){
     // Deep-clone so edits can never reach through into the global objects.
     slot.set(_cloneCfgVal(k in eff?eff[k]:slot.get()));
   }
-  _editScope={brandId,name:b.name,baseline,custom:new Set(Object.keys(b.config||{}))};
+  const saved={};
+  for(const k in baseline) saved[k]=_cloneCfgVal(CFG_REG[k].get());
+  _editScope={brandId,name:b.name,baseline,saved,custom:new Set(Object.keys(b.config||{}))};
   invalidateCalcCache();
   return true;
 }
@@ -3892,8 +3960,8 @@ function endScope(){
 async function saveBrandScope(what){
   if(!_editScope) throw new Error('saveBrandScope called with no brand scope active');
   const {brandId,name,baseline,custom}=_editScope;
-  const b=brands.find(x=>x.id===brandId);
-  if(!b){ endScope(); toast('That brand was deleted — nothing saved','red'); return; }
+  const brand=brands.find(x=>x.id===brandId);
+  if(!brand){ endScope(); toast('That brand was deleted — nothing saved','red'); return; }
   const cfg={};
   for(const[section,keys]of Object.entries(CFG_SECTIONS)){
     let differs=false;
@@ -3908,15 +3976,39 @@ async function saveBrandScope(what){
     // silently move this brand too, which is the opposite of "custom".
     if(differs||custom.has(section)) cfg[section]=sec;
   }
-  b.config=Object.keys(cfg).length?cfg:null;
+  const prevConfig=brand.config;
+  brand.config=Object.keys(cfg).length?cfg:null;
   const sections=Object.keys(cfg);
-  endScope();
   try{
-    await save('brands');
+    const res=await save('brands');
+    // Saving must NOT eject you from the scope. It used to, while leaving the
+    // "editing X only" banner on screen — so the next round of edits silently
+    // went to the shared defaults. Stay scoped and re-baseline instead, so
+    // _scopeHasChanges() is false and a second save still targets the brand.
+    if(_editScope&&_editScope.brandId===brandId){
+      // Update only the "last saved" snapshot. baseline stays pristine so
+      // endScope still restores the real defaults.
+      for(const keys of Object.values(CFG_SECTIONS)) for(const k of keys){
+        if(CFG_REG[k]) _editScope.saved[k]=_cloneCfgVal(CFG_REG[k].get());
+      }
+      _editScope.custom=new Set(sections);
+    }
     audit('brand_settings',`${name}: ${sections.length?sections.join(', ')+' customised':'settings reset to default'}`);
-    toast(sections.length?`${what} saved for ${name}`:`${name} now uses the default settings`,'green');
-  }catch(e){ toast('Save failed: '+e.message,'red'); }
-  _repaintForCalcChange();
+    if(res&&res.configDropped){
+      toast(`${name} saved, but per-brand settings need a database update — see Settings → Database Setup`,'red');
+    } else if(_lastBrandSaveDegraded){
+      toast(`${name} saved locally only — the database rejected it: ${_lastBrandSaveDegraded}`,'red');
+    } else {
+      toast(sections.length?`${what} saved for ${name}`:`${name} now uses the default settings`,'green');
+    }
+  }catch(e){
+    // Leave memory matching the database so the user can retry, rather than
+    // pricing with settings the server never accepted.
+    brand.config=prevConfig;
+    toast('Save failed — nothing was changed: '+e.message,'red');
+  }
+  invalidateCalcCache();
+  _rerenderScopedPage();
 }
 
 // Read the logistics DOM inputs into the buffer while scoped. Only
@@ -3959,7 +4051,7 @@ function _scopeHasChanges(){
     const wasCustom=!!stored[section], isCustom=_editScope.custom.has(section);
     let differs=false;
     for(const k of keys){
-      if(JSON.stringify(CFG_REG[k].get())!==JSON.stringify(_editScope.baseline[k])){ differs=true; break; }
+      if(JSON.stringify(CFG_REG[k].get())!==JSON.stringify(_editScope.saved[k])){ differs=true; break; }
     }
     if(differs||wasCustom!==isCustom) return true;
   }
@@ -4229,6 +4321,10 @@ function invalidateCalcCache(){ _calcCacheVersion++; _calcCache = new Map(); _br
 // events, so a remote edit can never leave stale prices on screen.
 // invalidateCalcCache() clears the cache; this puts fresh numbers on screen.
 function _repaintForCalcChange(type){
+  // The globals currently describe ONE brand. Pricing every SKU against them
+  // (updateAlerts does exactly that) would cache wrong profits for every other
+  // brand. The scoped page repaints through _rerenderScopedPage instead.
+  if(_editScope){ _rerenderScopedPage(); return; }
   const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
   updateAlerts();
   if(activePage==='skus') renderSKUs();
@@ -4710,6 +4806,7 @@ function commSlabEditBands(cat){
 
 function setCommMode(mode){
   COMM_MODE=(mode==='slab')?'slab':'level_slab';
+  if(_editScope){ invalidateCalcCache();buildCommMyntra();saveBrandScope('Commission');return; }
   LOGISTICS_SETTINGS.comm_mode=COMM_MODE;
   LOGISTICS_SETTINGS.comm_slab_only=COMM_SLAB_ONLY;
   LOGISTICS_SETTINGS.comm_slab_cat=COMM_SLAB_CAT;
@@ -4796,6 +4893,7 @@ async function addCategory(){
   COMM_MYNTRA[name]=COMM_MYNTRA[name]||_normSlabArr([0,0,18.88,18.88,18.88],SLABS.length,18.88);
   COMM_AMAZON[name]=COMM_AMAZON[name]||17;
   const fanned=_fanOutCategoryToBrands(name);
+  invalidateCalcCache();
   for(const t of['categories','cat_levels','comm_myntra','comm_amazon'])await save(t);
   if(fanned) await save('brands');
   buildCommMyntra();buildCommAmazon();populateFilters();
@@ -5062,7 +5160,7 @@ function renderBrands(){
         </div>
         <div class="flex gap8">
           <button class="btn bg bxs" onclick="openBrandModal('${escAttr(b.id)}')" aria-label="Edit brand">${icon('edit',{size:13})}</button>
-          <button class="row-del" style="padding:6px 8px" onclick="deleteBrand('${escAttr(b.id)}')" aria-label="Delete brand">${icon('x',{size:13})}</button>
+          <button class="row-del" style="padding:6px 8px" onclick="deleteBrand('${escAttr(b.id)}').catch(e=>toast('Delete failed: '+e.message,'red'))" aria-label="Delete brand">${icon('x',{size:13})}</button>
         </div>
       </div>
       ${b.commOverride!=null?`<div class="st mb8">${icon('lock',{size:12})} Commission override: <span class="mono" style="color:var(--ac)">${b.commOverride}%</span></div>`:'<div class="st mb8">Auto commission from settings</div>'}
@@ -5456,7 +5554,7 @@ function openBrandModal(id){
       </div>
     </div>
     <div class="mfoot">
-      ${isEdit?`<button class="btn br bsm" onclick="deleteBrand('${escAttr(b.id)}').then(ok=>{if(ok)closeModal()})" style="margin-right:auto">Delete</button>`:''}
+      ${isEdit?`<button class="btn br bsm" onclick="deleteBrand('${escAttr(b.id)}').then(ok=>{if(ok)closeModal()}).catch(e=>toast('Delete failed: '+e.message,'red'))" style="margin-right:auto">Delete</button>`:''}
       <button class="btn bg" onclick="closeModal()">Cancel</button>
       <button class="btn bp" onclick="saveBrand('${isEdit?escAttr(b.id):''}')" id="bn-save">Save Brand</button>
     </div>`);
@@ -5588,6 +5686,12 @@ async function deleteBrand(id){
   const b=brands.find(x=>x.id===id);
   const local=skuDB.filter(s=>s.brandId===id);
   const remote=await dbCountSKUsForBrand(id);
+  // null means we could not check. Treating that as zero would delete a brand
+  // whose SKUs simply aren't loaded in this tab.
+  if(remote==null&&!local.length){
+    toast(`Couldn't check with the database whether "${b?.name||id}" still has SKUs — try again when you're back online.`,'red');
+    return false;
+  }
   // Trust whichever source says there are MORE references — deleting a brand
   // that still has SKUs strands them with a dangling brandId, and calcSKU
   // then silently reprices them as Myntra-with-no-override. That shows a
@@ -5678,6 +5782,7 @@ async function convertMyntraOverride(id){
   comm.COMM_MODE='slab';
   comm.COMM_SLAB_ONLY=new Array((comm.COMM_SLABS||CFG_REG.COMM_SLABS.get()).length+1).fill(rate);
   comm.COMM_SLAB_CAT={};
+  const prevConfig=b.config, prevOverride=b.commOverride;
   cfg.comm=comm;
   b.config=cfg;
   b.commOverride=null;
@@ -5687,8 +5792,15 @@ async function convertMyntraOverride(id){
   try{
     await save('brands');
     audit('brand_settings',`${b.name}: Myntra commission override ${rate}% converted to per-brand commission`);
-    toast(`${b.name} now charges ${rate}% through the calculation — ${moved} SKU${moved===1?'':'s'} changed profit`,'green');
-  }catch(e){ toast('Save failed: '+e.message,'red'); }
+    if(_lastBrandSaveDegraded) toast(`${b.name} converted, but saved locally only — the database rejected it: ${_lastBrandSaveDegraded}`,'red');
+    else toast(`${b.name} now charges ${rate}% through the calculation — ${moved} SKU${moved===1?'':'s'} changed profit`,'green');
+  }catch(e){
+    // Without this the brand no longer matches findMyntraOverrideBrands(), so
+    // it vanishes from the list and can never be converted again.
+    b.config=prevConfig; b.commOverride=prevOverride;
+    invalidateCalcCache();
+    toast('Conversion failed — nothing was changed, try again: '+e.message,'red');
+  }
   _repaintForCalcChange();
   runDataHealthCheck();
 }
@@ -5758,6 +5870,11 @@ async function repairOrphanSKUs(){
   if(!target||!brands.find(b=>b.id===target)){toast('Pick a brand to reassign to','red');return;}
   const orphans=findOrphanSKUs();
   if(!orphans.length){toast('Nothing to repair','blue');return;}
+  // Reassign in memory first so the write has something to send, but keep the
+  // previous ids: without a rollback a failed save leaves no local orphans, so
+  // the health check reports "nothing to repair" while the database is still
+  // broken — and the user has no way to retry.
+  const prev=orphans.map(s=>[s,s.brandId]);
   orphans.forEach(s=>{s.brandId=target;});
   try{
     await dbSaveSKU(...orphans);
@@ -5765,7 +5882,11 @@ async function repairOrphanSKUs(){
     const name=brands.find(b=>b.id===target)?.name||target;
     audit('sku_repair',`${orphans.length} orphaned SKU(s) reassigned to ${name}`);
     toast(`${orphans.length} SKU${orphans.length>1?'s':''} reassigned to ${name}`,'green');
-  }catch(e){ toast('Repair failed: '+e.message,'red'); }
+  }catch(e){
+    prev.forEach(([s,id])=>{s.brandId=id;});
+    invalidateCalcCache();renderSKUs();
+    toast('Repair failed — nothing was changed, try again: '+e.message,'red');
+  }
   runDataHealthCheck();
 }
 
@@ -5785,9 +5906,21 @@ async function _doDeleteBrand(id,target){
     invalidateCalcCache();renderSKUs();
     return false;
   }
+  // Delete first, then drop it locally. The reverse order meant a failure —
+  // now genuinely possible with the ON DELETE RESTRICT foreign key — left the
+  // brand gone from the UI but present in the database.
+  try{
+    if(_useBrandTable){await dbDeleteBrand(id);}else{
+      brands=brands.filter(x=>x.id!==id);
+      await save('brands');
+    }
+  }catch(e){
+    toast(`Couldn't delete "${b?.name||id}": ${e.message}`,'red');
+    invalidateCalcCache();renderBrands();populateFilters();renderSKUs();
+    return false;
+  }
   brands=brands.filter(x=>x.id!==id);
   invalidateCalcCache();renderBrands();populateFilters();renderSKUs();
-  if(_useBrandTable){await dbDeleteBrand(id);}else{await save('brands');}
   const tName=target?brands.find(x=>x.id===target)?.name:null;
   audit('brand_delete',`${b?.name||id} deleted${affected.length&&target?` (${affected.length} SKU${affected.length>1?'s':''} moved to ${tName||target})`:''}`);
   toast(`Brand deleted${affected.length&&target?` — ${affected.length} SKU${affected.length>1?'s':''} → ${esc(tName||target)}`:''}`,'red');
@@ -6942,15 +7075,18 @@ function showCalcModal(skuId){
   const level=CAT_LEVEL[s.category]||s.level||'Level 2';
   // Run wireframe engine
   const inputs={cost:s.cost,margin:s.markup,markup:s.markup,discount:s.discount||0,level,cat:s.category,retPct:0,_mp:mp};
-  // For Ajio PPMP/CC, pass brand commission
-  if(mp==='ajio-ppmp'||mp==='ajio-cc'){
-    if(brand.commOverride!=null) inputs.commPct=brand.commOverride;
-    else if(mp==='ajio-ppmp') inputs.commPct=COMM_AJIO_PPMP[s.category]||18.88;
-    else inputs.commPct=COMM_AJIO_CC[s.category]||18.88;
-  }
   // Must use the SAME brand-scoped config as calcSKU, or this breakdown would
   // contradict the profit shown in the grid for a brand with its own fees.
-  const result=withBrandCfg(brand.id,()=>runWFEngine(mp,inputs));
+  // The Ajio commission lookup has to happen INSIDE the scope too, or an Ajio
+  // brand's own rates never reach the breakdown.
+  const result=withBrandCfg(brand.id,()=>{
+    if(mp==='ajio-ppmp'||mp==='ajio-cc'){
+      if(brand.commOverride!=null) inputs.commPct=brand.commOverride;
+      else if(mp==='ajio-ppmp') inputs.commPct=COMM_AJIO_PPMP[s.category]||18.88;
+      else inputs.commPct=COMM_AJIO_CC[s.category]||18.88;
+    }
+    return runWFEngine(mp,inputs);
+  });
   const rows=WF[mp]||[];
   // Build table rows
   let tableHtml='';
@@ -7611,6 +7747,7 @@ function logMode(name,mode){
   if(!key) return;
   LOGISTICS_SETTINGS[key]=mode;
   if(mode==='cat'){ if(name==='mfwd') renderGTCatTable(); else renderRetCatTable(); }
+  if(_editScope){ invalidateCalcCache();saveBrandScope('Shipping & fees');return; }
   LOGISTICS_SETTINGS.gt_cat_data=GT_CAT_DATA;
   LOGISTICS_SETTINGS.rev_cat_data=REV_CAT_DATA;
   invalidateCalcCache();
@@ -9456,6 +9593,7 @@ function applyCollSlabs(bounds){
   if(JSON.stringify(COLL_SLABS)!==JSON.stringify(bounds)){
     remapCollFees(COLL_SLABS,bounds);
     COLL_SLABS=bounds;
+    if(_editScope){ invalidateCalcCache();renderCollTable();renderCollCustom?.();saveBrandScope('Collection fee');return; }
     LOGISTICS_SETTINGS.coll_slabs=COLL_SLABS;
     LOGISTICS_SETTINGS.coll_fee_data=COLL_FEE_DATA;
     invalidateCalcCache();
@@ -9481,6 +9619,7 @@ function applyGTSlabs(bounds){
   Object.keys(GT_DATA).forEach(l=>{GT_DATA[l]=remapRow(GT_DATA[l]||[]);});
   Object.keys(GT_CAT_DATA).forEach(c=>{GT_CAT_DATA[c]=remapRow(GT_CAT_DATA[c]||[]);});
   GT_SLABS=bounds;
+  if(_editScope){ invalidateCalcCache();renderGTTable();renderGTCatTable();saveBrandScope('Shipping & fees');return; }
   LOGISTICS_SETTINGS.gt_slabs=GT_SLABS;
   LOGISTICS_SETTINGS.gt_cat_data=GT_CAT_DATA;
   invalidateCalcCache();
@@ -9508,6 +9647,7 @@ function applyRevSlabs(bounds){
   Object.keys(REVERSE_FEES).forEach(l=>{REVERSE_FEES[l]=remapVal(REVERSE_FEES[l]);});
   Object.keys(REV_CAT_DATA).forEach(c=>{REV_CAT_DATA[c]=remapVal(REV_CAT_DATA[c]);});
   REV_SLABS=bounds;
+  if(_editScope){ invalidateCalcCache();renderRetTable();renderRetCatTable();saveBrandScope('Shipping & fees');return; }
   LOGISTICS_SETTINGS.rev_slabs=REV_SLABS;
   LOGISTICS_SETTINGS.rev_cat_data=REV_CAT_DATA;
   invalidateCalcCache();
@@ -9565,6 +9705,7 @@ function openAddLevelModal(){
   setTimeout(()=>el('new-level-name')?.focus(),50);
 }
 async function addLevel(){
+  if(_blockIfScoped('Adding a level')) return;
   const name=(el('new-level-name')?.value||'').trim();
   const gtVal=parseFloat(el('new-level-gt')?.value)||0;
   const revVal=parseFloat(el('new-level-rev')?.value)||0;
@@ -9584,6 +9725,7 @@ async function addLevel(){
   closeModal();
 }
 async function deleteLevel(lvl){
+  if(_blockIfScoped('Deleting a level')) return;
   if(LEVELS.length<=1){toast('Cannot delete the last level','red');return;}
   const usedCats=Object.entries(CAT_LEVEL).filter(([,l])=>l===lvl).map(([c])=>c);
   if(usedCats.length){toast(`Cannot delete "${lvl}" — ${usedCats.length} categor${usedCats.length>1?'ies':'y'} assigned: ${usedCats.join(', ')}`,'red');return;}
@@ -9604,6 +9746,7 @@ async function deleteLevel(lvl){
   },50);
 }
 async function _reinstateLevel(name){
+  if(_blockIfScoped('Restoring a level')) return;
   const stashed=_deletedLevels.find(d=>d.name===name);
   if(!stashed){toast('Cannot reinstate — data expired','red');return;}
   if(LEVELS.includes(name)){toast(`"${name}" already exists`,'red');return;}

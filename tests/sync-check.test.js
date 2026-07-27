@@ -178,7 +178,11 @@ describe('source drift detection — production strings must match test copies',
     });
 
     it('showCalcModal uses the same brand scope as calcSKU (no contradiction)', () => {
-      expect(HTML).toContain('const result=withBrandCfg(brand.id,()=>runWFEngine(mp,inputs));');
+      expect(HTML).toContain('  const result=withBrandCfg(brand.id,()=>{');
+      // The Ajio commission lookup must be INSIDE the scope, or an Ajio
+      // brand's own rates never reach the breakdown.
+      expect(HTML).toContain("      else if(mp==='ajio-ppmp') inputs.commPct=COMM_AJIO_PPMP[s.category]||18.88;");
+      expect(HTML).toContain('    return runWFEngine(mp,inputs);');
     });
 
     it('brand config resolver is unchanged (tests/calc/brand-config.test.js)', () => {
@@ -194,10 +198,19 @@ describe('source drift detection — production strings must match test copies',
       );
       expect(HTML).toContain('  const resolved=_sanitizeBrandCfg(out,brandId);');
       expect(HTML).toContain('  return Object.keys(resolved).length?resolved:null;');
-      // Rate rows must be resized to their bounds, or Math.min silently
-      // returns the wrong band.
+      // Every rate array must be resized to the bounds actually in force, or
+      // Math.min silently returns the wrong band.
       expect(HTML).toContain('  const fit=(row,n)=>{');
-      expect(HTML).toContain('      const want=bounds.length+1;');
+      expect(HTML).toContain('    return Array.isArray(cb)&&cb.length?cb:gBounds;');
+      expect(HTML).toContain('  const fitMap=(key,gBounds,perCat,allowEmptyPerCat)=>{');
+      for (const call of [
+        "  fitMap('COMM_MYNTRA',commBounds,out.COMM_CAT_SLABS,false);",
+        "  fitMap('GT_DATA',gtBounds,null,false);",
+        "  fitMap('GT_CAT_DATA',gtBounds,null,false);",
+        "    fitMap('REVERSE_FEES',revBounds,null,false);",
+        "    fitMap('REV_CAT_DATA',revBounds,null,false);",
+        "  fitMap('COLL_FEE_DATA',collBounds,out.COLL_CAT_SLABS,true);",
+      ]) expect(HTML, `missing fit for ${call.trim()}`).toContain(call);
     });
 
     it('brand config is memoized and cleared with the calc cache', () => {
@@ -227,6 +240,53 @@ describe('source drift detection — production strings must match test copies',
       expect(HTML).toContain('  for(const k in baseline) CFG_REG[k].set(baseline[k]);');
       // Renders that would present one brand's settings as the defaults.
       expect(HTML).toContain('  if(_editScope) return;\n  if(!_dataReady){');
+    });
+
+    it('save() itself refuses shared-config types while scoped (the backstop)', () => {
+      // Guarding individual savers missed eight call sites — the slab editors,
+      // the mode radios and level management all wrote one brand's buffer over
+      // the shared defaults. The guard has to live at the chokepoint.
+      expect(HTML).toContain(
+        "const SHARED_CONFIG_TYPES=new Set(['logistics','comm_myntra','comm_ppmp','comm_cc',"
+      );
+      expect(HTML).toContain('  if(_editScope&&SHARED_CONFIG_TYPES.has(type)){');
+    });
+
+    it('every settings control routes or blocks while scoped', () => {
+      expect(HTML).toContain("  if(_editScope){ invalidateCalcCache();buildCommMyntra();saveBrandScope('Commission');return; }");
+      expect(HTML).toContain("  if(_editScope){ invalidateCalcCache();saveBrandScope('Shipping & fees');return; }");
+      expect(HTML).toContain("    if(_editScope){ invalidateCalcCache();renderCollTable();renderCollCustom?.();saveBrandScope('Collection fee');return; }");
+      expect(HTML).toContain("  if(_editScope){ invalidateCalcCache();renderGTTable();renderGTCatTable();saveBrandScope('Shipping & fees');return; }");
+      expect(HTML).toContain("  if(_editScope){ invalidateCalcCache();renderRetTable();renderRetCatTable();saveBrandScope('Shipping & fees');return; }");
+      for (const w of ['Adding a level', 'Deleting a level', 'Restoring a level']) {
+        expect(HTML, `level action not blocked: ${w}`).toContain(`  if(_blockIfScoped('${w}')) return;`);
+      }
+    });
+
+    it('the scope buffer survives a settings-page render', () => {
+      // hydrateLogisticsDerived re-reads the globals from the shared blob. Left
+      // unguarded it discarded the buffer, so every per-brand shipping edit
+      // silently became an edit of everyone's defaults.
+      expect(HTML).toContain('  if(_editScope) return;\n  const s=LOGISTICS_SETTINGS;');
+    });
+
+    it('the brand being edited resolves to no override (preview shows the edit)', () => {
+      expect(HTML).toContain('  if(_editScope&&_editScope.brandId===brandId) return null;');
+    });
+
+    it('baseline stays pristine so leaving a scope restores the real defaults', () => {
+      // baseline = pristine globals (restore target); saved = last persisted
+      // (change detection). Conflating them wrote brand edits into the globals.
+      expect(HTML).toContain('  const saved={};');
+      expect(HTML).toContain('        if(CFG_REG[k]) _editScope.saved[k]=_cloneCfgVal(CFG_REG[k].get());');
+      expect(HTML).toContain("      if(JSON.stringify(CFG_REG[k].get())!==JSON.stringify(_editScope.saved[k])){ differs=true; break; }");
+      expect(HTML).toContain('  for(const k in baseline) CFG_REG[k].set(baseline[k]);');
+    });
+
+    it('a whole-catalogue repaint is skipped while scoped', () => {
+      // updateAlerts prices every SKU; doing that against one brand's buffer
+      // caches wrong profits for every other brand.
+      expect(HTML).toContain('  if(_editScope){ _rerenderScopedPage(); return; }');
     });
 
     it('taxonomy actions are blocked while a brand scope is active', () => {
